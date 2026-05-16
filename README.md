@@ -2,7 +2,7 @@
 
 Safe Rust bindings for Apple's [AVFoundation playback stack](https://developer.apple.com/documentation/avfoundation) on macOS: `AVPlayer`, `AVPlayerItem`, `AVPlayerLayer`, `AVQueuePlayer`, `AVPlayerLooper`, `AVAsset`, `AVURLAsset`, and `AVAssetReader`.
 
-> **Status:** `0.2.0` expands the crate from basic playback to broad player-subsystem coverage: queueing + looping, player-layer inspection, item outputs, access/error logs, item-track access, and media-selection criteria. See [`COVERAGE.md`](COVERAGE.md) for the per-area map.
+> **Status:** `0.2.1` expands the crate from basic playback to broad player-subsystem coverage, including player-video-output, rendered-legible-output, metadata-collector, interstitial-event, and integrated-timeline APIs. See [`COVERAGE.md`](COVERAGE.md) for the per-area map.
 
 ## Quick start
 

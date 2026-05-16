@@ -294,6 +294,35 @@ extern "C" {
         out_error_message: *mut *mut c_char,
     ) -> *mut c_char;
     pub fn av_player_item_metadata_output_set_advance_interval(output: *mut c_void, interval: f64);
+    pub fn av_player_item_metadata_collector_create(
+        identifiers_json: *const c_char,
+        classifying_labels_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_metadata_collector_release(collector: *mut c_void);
+    pub fn av_player_item_metadata_collector_info_json(
+        collector: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_metadata_collector_add_observer(
+        collector: *mut c_void,
+        queue_label: *const c_char,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_metadata_collector_observer_release(observer: *mut c_void);
+    pub fn av_player_item_add_media_data_collector(
+        item: *mut c_void,
+        collector: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_item_remove_media_data_collector(item: *mut c_void, collector: *mut c_void);
+    pub fn av_player_item_media_data_collectors_json(
+        item: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
     pub fn av_player_item_legible_output_create(
         native_representation_subtypes_json: *const c_char,
         out_error_message: *mut *mut c_char,
@@ -303,6 +332,268 @@ extern "C" {
         out_error_message: *mut *mut c_char,
     ) -> *mut c_char;
     pub fn av_player_item_legible_output_set_advance_interval(output: *mut c_void, interval: f64);
+    pub fn av_player_item_rendered_legible_output_create(
+        width: f64,
+        height: f64,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_rendered_legible_output_info_json(
+        output: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_rendered_legible_output_set_advance_interval(
+        output: *mut c_void,
+        interval: f64,
+    );
+    pub fn av_player_item_rendered_legible_output_set_video_display_size(
+        output: *mut c_void,
+        width: f64,
+        height: f64,
+    );
+    pub fn av_player_item_rendered_legible_output_add_observer(
+        output: *mut c_void,
+        queue_label: *const c_char,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_rendered_legible_output_observer_release(observer: *mut c_void);
+
+    pub fn av_player_video_output_tag_collection_create_with_preset(
+        preset_raw: u32,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_video_output_tag_collection_release(tag_collection: *mut c_void);
+    pub fn av_player_video_output_tag_collection_info_json(
+        tag_collection: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_video_output_specification_create(
+        tag_collection_ptrs: *const *mut c_void,
+        count: usize,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_video_output_specification_release(specification: *mut c_void);
+    pub fn av_video_output_specification_info_json(
+        specification: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_video_output_specification_set_default_output_settings(
+        specification: *mut c_void,
+        settings_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_video_output_specification_set_output_settings_for_tag_collection(
+        specification: *mut c_void,
+        settings_json: *const c_char,
+        tag_collection: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_video_output_create(
+        specification: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_video_output_release(output: *mut c_void);
+    pub fn av_player_video_output_sample_json(
+        output: *mut c_void,
+        host_time_value: i64,
+        host_time_timescale: i32,
+        host_time_kind: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_set_video_output(player: *mut c_void, output: *mut c_void);
+    pub fn av_player_copy_video_output(player: *mut c_void) -> *mut c_void;
+
+    pub fn av_player_interstitial_event_create_with_time(
+        item: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_interstitial_event_release(event: *mut c_void);
+    pub fn av_player_interstitial_event_info_json(
+        event: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_interstitial_event_set_identifier(
+        event: *mut c_void,
+        identifier: *const c_char,
+    );
+    pub fn av_player_interstitial_event_set_restrictions(event: *mut c_void, restrictions: u64);
+    pub fn av_player_interstitial_event_set_resumption_offset(
+        event: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    );
+    pub fn av_player_interstitial_event_set_playout_limit(
+        event: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    );
+    pub fn av_player_interstitial_event_set_aligns_start_with_primary_segment_boundary(
+        event: *mut c_void,
+        enabled: bool,
+    );
+    pub fn av_player_interstitial_event_set_aligns_resumption_with_primary_segment_boundary(
+        event: *mut c_void,
+        enabled: bool,
+    );
+    pub fn av_player_interstitial_event_set_cue(event: *mut c_void, cue: *const c_char);
+    pub fn av_player_interstitial_event_set_will_play_once(event: *mut c_void, enabled: bool);
+    pub fn av_player_interstitial_event_set_timeline_occupancy(event: *mut c_void, raw_value: i32);
+    pub fn av_player_interstitial_event_set_supplements_primary_content(
+        event: *mut c_void,
+        enabled: bool,
+    );
+    pub fn av_player_interstitial_event_set_content_may_vary(event: *mut c_void, enabled: bool);
+    pub fn av_player_interstitial_event_monitor_create(
+        player: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_interstitial_event_monitor_release(monitor: *mut c_void);
+    pub fn av_player_interstitial_event_monitor_info_json(
+        monitor: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_interstitial_event_monitor_add_observer(
+        monitor: *mut c_void,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_interstitial_event_monitor_observer_release(observer: *mut c_void);
+    pub fn av_player_interstitial_event_controller_create(
+        player: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_interstitial_event_controller_release(controller: *mut c_void);
+    pub fn av_player_interstitial_event_controller_info_json(
+        controller: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_interstitial_event_controller_set_events(
+        controller: *mut c_void,
+        event_ptrs: *const *mut c_void,
+        count: usize,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_interstitial_event_controller_cancel_current_event_with_resumption_offset(
+        controller: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    );
+    pub fn av_player_interstitial_event_controller_skip_current_event(controller: *mut c_void);
+    pub fn av_player_waiting_during_interstitial_event_reason(
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+
+    pub fn av_player_item_copy_integrated_timeline(
+        item: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_integrated_timeline_release(timeline: *mut c_void);
+    pub fn av_player_item_integrated_timeline_info_json(
+        timeline: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_integrated_timeline_copy_current_snapshot(
+        timeline: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_integrated_timeline_seek_to_time(
+        timeline: *mut c_void,
+        time_value: i64,
+        time_timescale: i32,
+        time_kind: i32,
+        before_value: i64,
+        before_timescale: i32,
+        before_kind: i32,
+        after_value: i64,
+        after_timescale: i32,
+        after_kind: i32,
+        out_success: *mut bool,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_item_integrated_timeline_seek_to_date(
+        timeline: *mut c_void,
+        date: *const c_char,
+        out_success: *mut bool,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_item_integrated_timeline_add_periodic_time_observer(
+        timeline: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        callback: Option<PeriodicTimeCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_integrated_timeline_add_boundary_time_observer(
+        timeline: *mut c_void,
+        segment: *mut c_void,
+        offsets_json: *const c_char,
+        callback: Option<PeriodicTimeCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_integrated_timeline_add_out_of_sync_observer(
+        timeline: *mut c_void,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_integrated_timeline_observer_release(observer: *mut c_void);
+    pub fn av_player_item_integrated_timeline_snapshot_release(snapshot: *mut c_void);
+    pub fn av_player_item_integrated_timeline_snapshot_info_json(
+        snapshot: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_integrated_timeline_snapshot_copy_current_segment(
+        snapshot: *mut c_void,
+    ) -> *mut c_void;
+    pub fn av_player_item_integrated_timeline_snapshot_segment_count(snapshot: *mut c_void)
+        -> usize;
+    pub fn av_player_item_integrated_timeline_snapshot_copy_segment_at_index(
+        snapshot: *mut c_void,
+        index: usize,
+    ) -> *mut c_void;
+    pub fn av_player_item_integrated_timeline_snapshot_segment_and_offset_json(
+        snapshot: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_integrated_timeline_segment_release(segment: *mut c_void);
+    pub fn av_player_item_integrated_timeline_segment_info_json(
+        segment: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_integrated_timeline_snapshots_out_of_sync_notification(
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_integrated_timeline_snapshots_out_of_sync_reason_key(
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed(
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed(
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_ranges_changed(
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
 
     pub fn av_player_media_selection_criteria_create(
         preferred_languages_json: *const c_char,

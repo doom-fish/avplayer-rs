@@ -1,10 +1,10 @@
 # avplayer-rs coverage audit (vs MacOSX26.2.sdk)
 
 SDK_PUBLIC_SYMBOLS: 109
-VERIFIED: 26
-GAPS: 83
+VERIFIED: 77
+GAPS: 32
 EXEMPT: 0
-COVERAGE_PCT: 23.85%
+COVERAGE_PCT: 70.64%
 
 > Filtered out macOS-unavailable top-level symbols (`AVPlayerHDRMode`, `AVPlayerAvailableHDRModesDidChangeNotification`). No deprecated-but-macOS-available top-level symbols remained, so EXEMPT is 0.
 
@@ -37,6 +37,57 @@ COVERAGE_PCT: 23.85%
 | AVPlayerLooperItemOrdering | Typedef | AVPlayerLooper.h | PlayerLooperItemOrdering |
 | AVPlayerLooper | Interface | AVPlayerLooper.h | PlayerLooper |
 | AVPlayerMediaSelectionCriteria | Interface | AVPlayerMediaSelectionCriteria.h | PlayerMediaSelectionCriteria |
+| AVPlayerItemRenderedLegibleOutputPushDelegate | Protocol | AVPlayerItemOutput.h | PlayerItemRenderedLegibleOutput::observe() / RenderedLegibleOutputEvent |
+| AVPlayerItemRenderedLegibleOutput | Interface | AVPlayerItemOutput.h | PlayerItemRenderedLegibleOutput |
+| AVPlayerVideoOutput | Interface | AVPlayerOutput.h | PlayerVideoOutput + Player::set_video_output() |
+| CMTagCollectionVideoOutputPreset | Typedef | AVPlayerOutput.h | PlayerVideoOutputTagCollectionPreset |
+| CMTagCollectionCreateWithVideoOutputPreset | Function | AVPlayerOutput.h | PlayerVideoOutputTagCollection::from_preset() |
+| AVVideoOutputSpecification | Interface | AVPlayerOutput.h | VideoOutputSpecification |
+| AVPlayerVideoOutputConfiguration | Interface | AVPlayerOutput.h | PlayerVideoOutputConfiguration |
+| AVPlayerInterstitialEventRestrictions | Typedef | AVPlayerInterstitialEventController.h | PlayerInterstitialEventRestrictions |
+| AVPlayerInterstitialEventNoCue | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventCue::NoCue |
+| AVPlayerInterstitialEventJoinCue | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventCue::JoinCue |
+| AVPlayerInterstitialEventLeaveCue | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventCue::LeaveCue |
+| AVPlayerInterstitialEventTimelineOccupancy | Typedef | AVPlayerInterstitialEventController.h | PlayerInterstitialEventTimelineOccupancy |
+| AVPlayerInterstitialEvent | Interface | AVPlayerInterstitialEventController.h | PlayerInterstitialEvent |
+| AVPlayerInterstitialEventAssetListResponseStatus | Typedef | AVPlayerInterstitialEventController.h | PlayerInterstitialEventAssetListResponseStatus |
+| AVPlayerInterstitialEventSkippableEventState | Typedef | AVPlayerInterstitialEventController.h | PlayerInterstitialEventSkippableEventState |
+| AVPlayerInterstitialEventMonitor | Interface | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitor |
+| AVPlayerInterstitialEventMonitorEventsDidChangeNotification | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitor::observe() / PlayerInterstitialEventMonitorEvent::EventsDidChange |
+| AVPlayerInterstitialEventMonitorCurrentEventDidChangeNotification | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitor::observe() / PlayerInterstitialEventMonitorEvent::CurrentEventDidChange |
+| AVPlayerInterstitialEventMonitorAssetListResponseStatusDidChangeNotification | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitor::observe() / PlayerInterstitialEventMonitorEvent::AssetListResponseStatusDidChange |
+| AVPlayerInterstitialEventMonitorAssetListResponseStatusDidChangeEventKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::AssetListResponseStatusDidChange::interstitial_event |
+| AVPlayerInterstitialEventMonitorAssetListResponseStatusDidChangeStatusKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::AssetListResponseStatusDidChange::status |
+| AVPlayerInterstitialEventMonitorAssetListResponseStatusDidChangeErrorKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::AssetListResponseStatusDidChange::error_message |
+| AVPlayerInterstitialEventMonitorCurrentEventSkippableStateDidChangeNotification | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitor::observe() / PlayerInterstitialEventMonitorEvent::CurrentEventSkippableStateDidChange |
+| AVPlayerInterstitialEventMonitorCurrentEventSkippableStateDidChangeEventKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::CurrentEventSkippableStateDidChange::interstitial_event |
+| AVPlayerInterstitialEventMonitorCurrentEventSkippableStateDidChangeStateKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::CurrentEventSkippableStateDidChange::state |
+| AVPlayerInterstitialEventMonitorCurrentEventSkippableStateDidChangeSkipControlLabelKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::CurrentEventSkippableStateDidChange::skip_control_label |
+| AVPlayerInterstitialEventMonitorCurrentEventSkippedNotification | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitor::observe() / PlayerInterstitialEventMonitorEvent::CurrentEventSkipped |
+| AVPlayerInterstitialEventMonitorCurrentEventSkippedEventKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::CurrentEventSkipped::interstitial_event |
+| AVPlayerInterstitialEventMonitorInterstitialEventWasUnscheduledNotification | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitor::observe() / PlayerInterstitialEventMonitorEvent::InterstitialEventWasUnscheduled |
+| AVPlayerInterstitialEventMonitorInterstitialEventWasUnscheduledEventKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::InterstitialEventWasUnscheduled::interstitial_event |
+| AVPlayerInterstitialEventMonitorInterstitialEventWasUnscheduledErrorKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::InterstitialEventWasUnscheduled::error_message |
+| AVPlayerInterstitialEventMonitorInterstitialEventDidFinishNotification | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitor::observe() / PlayerInterstitialEventMonitorEvent::InterstitialEventDidFinish |
+| AVPlayerInterstitialEventMonitorInterstitialEventDidFinishEventKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::InterstitialEventDidFinish::interstitial_event |
+| AVPlayerInterstitialEventMonitorInterstitialEventDidFinishPlayoutTimeKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::InterstitialEventDidFinish::playout_time |
+| AVPlayerInterstitialEventMonitorInterstitialEventDidFinishDidPlayEntireEventKey | Constant | AVPlayerInterstitialEventController.h | PlayerInterstitialEventMonitorEvent::InterstitialEventDidFinish::did_play_entire_event |
+| AVPlayerInterstitialEventController | Interface | AVPlayerInterstitialEventController.h | PlayerInterstitialEventController |
+| AVPlayerWaitingDuringInterstitialEventReason | Constant | AVPlayerInterstitialEventController.h | player_waiting_during_interstitial_event_reason() |
+| AVPlayerItemSegmentType | Typedef | AVPlayerItemIntegratedTimeline.h | PlayerItemSegmentType |
+| AVPlayerItemSegment | Interface | AVPlayerItemIntegratedTimeline.h | PlayerItemIntegratedTimelineSegment |
+| AVPlayerItemIntegratedTimelineSnapshot | Interface | AVPlayerItemIntegratedTimeline.h | PlayerItemIntegratedTimelineSnapshot |
+| AVPlayerItemIntegratedTimeline | Interface | AVPlayerItemIntegratedTimeline.h | PlayerItemIntegratedTimeline |
+| AVPlayerItemIntegratedTimelineObserver | Protocol | AVPlayerItemIntegratedTimeline.h | PlayerItemIntegratedTimelineObserver |
+| AVPlayerIntegratedTimelineSnapshotsOutOfSyncNotification | Constant | AVPlayerItemIntegratedTimeline.h | player_integrated_timeline_snapshots_out_of_sync_notification() / PlayerItemIntegratedTimeline::observe_snapshots_out_of_sync() |
+| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReasonKey | Constant | AVPlayerItemIntegratedTimeline.h | player_integrated_timeline_snapshots_out_of_sync_reason_key() / PlayerIntegratedTimelineOutOfSyncEvent::reason |
+| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReason | Typedef | AVPlayerItemIntegratedTimeline.h | PlayerIntegratedTimelineSnapshotsOutOfSyncReason |
+| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReasonSegmentsChanged | Constant | AVPlayerItemIntegratedTimeline.h | player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed() |
+| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReasonCurrentSegmentChanged | Constant | AVPlayerItemIntegratedTimeline.h | player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed() |
+| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReasonLoadedTimeRangesChanged | Constant | AVPlayerItemIntegratedTimeline.h | player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_ranges_changed() |
+| AVPlayerItemMediaDataCollector | Interface | AVPlayerItemMediaDataCollector.h | PlayerItem::media_data_collectors() / PlayerItemMediaDataCollectorInfo |
+| AVPlayerItemMetadataCollectorPushDelegate | Protocol | AVPlayerItemMediaDataCollector.h | PlayerItemMetadataCollector::observe() / MetadataCollectorEvent |
+| AVPlayerItemMetadataCollector | Interface | AVPlayerItemMediaDataCollector.h | PlayerItemMetadataCollector |
 
 ## 🔴 GAPS
 | Symbol | Kind | Header | Notes |
@@ -71,58 +122,7 @@ COVERAGE_PCT: 23.85%
 | AVPlayerItemLegibleOutputTextStylingResolutionSourceAndRulesOnly | Constant | AVPlayerItemOutput.h | Legible-output text-styling-resolution APIs are not exposed. |
 | AVPlayerItemOutputPushDelegate | Protocol | AVPlayerItemOutput.h | Delegate protocol callbacks are not exposed. |
 | AVPlayerItemMetadataOutputPushDelegate | Protocol | AVPlayerItemOutput.h | Delegate protocol callbacks are not exposed. |
-| AVPlayerItemRenderedLegibleOutputPushDelegate | Protocol | AVPlayerItemOutput.h | Delegate protocol callbacks are not exposed. |
-| AVPlayerItemRenderedLegibleOutput | Interface | AVPlayerItemOutput.h | Rendered legible output is not wrapped. |
 | AVPlayerItemTrackVideoFieldModeDeinterlaceFields | Constant | AVPlayerItemTrack.h | video_field_mode uses raw strings; the named constant is not exported. |
-| AVPlayerVideoOutput | Interface | AVPlayerOutput.h | The newer AVPlayerVideoOutput pipeline is not wrapped. |
-| CMTagCollectionVideoOutputPreset | Typedef | AVPlayerOutput.h | The newer AVPlayerVideoOutput pipeline is not wrapped. |
-| CMTagCollectionCreateWithVideoOutputPreset | Function | AVPlayerOutput.h | The newer AVPlayerVideoOutput pipeline is not wrapped. |
-| AVVideoOutputSpecification | Interface | AVPlayerOutput.h | The newer AVPlayerVideoOutput pipeline is not wrapped. |
-| AVPlayerVideoOutputConfiguration | Interface | AVPlayerOutput.h | The newer AVPlayerVideoOutput pipeline is not wrapped. |
-| AVPlayerInterstitialEventRestrictions | Typedef | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventNoCue | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventJoinCue | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventLeaveCue | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventTimelineOccupancy | Typedef | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEvent | Interface | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventAssetListResponseStatus | Typedef | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventSkippableEventState | Typedef | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitor | Interface | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorEventsDidChangeNotification | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorCurrentEventDidChangeNotification | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorAssetListResponseStatusDidChangeNotification | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorAssetListResponseStatusDidChangeEventKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorAssetListResponseStatusDidChangeStatusKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorAssetListResponseStatusDidChangeErrorKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorCurrentEventSkippableStateDidChangeNotification | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorCurrentEventSkippableStateDidChangeEventKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorCurrentEventSkippableStateDidChangeStateKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorCurrentEventSkippableStateDidChangeSkipControlLabelKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorCurrentEventSkippedNotification | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorCurrentEventSkippedEventKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorInterstitialEventWasUnscheduledNotification | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorInterstitialEventWasUnscheduledEventKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorInterstitialEventWasUnscheduledErrorKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorInterstitialEventDidFinishNotification | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorInterstitialEventDidFinishEventKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorInterstitialEventDidFinishPlayoutTimeKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventMonitorInterstitialEventDidFinishDidPlayEntireEventKey | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerInterstitialEventController | Interface | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerWaitingDuringInterstitialEventReason | Constant | AVPlayerInterstitialEventController.h | Interstitial-event/controller APIs are not wrapped. |
-| AVPlayerItemSegmentType | Typedef | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerItemSegment | Interface | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerItemIntegratedTimelineSnapshot | Interface | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerItemIntegratedTimeline | Interface | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerItemIntegratedTimelineObserver | Protocol | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerIntegratedTimelineSnapshotsOutOfSyncNotification | Constant | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReasonKey | Constant | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReason | Typedef | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReasonSegmentsChanged | Constant | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReasonCurrentSegmentChanged | Constant | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerIntegratedTimelineSnapshotsOutOfSyncReasonLoadedTimeRangesChanged | Constant | AVPlayerItemIntegratedTimeline.h | Integrated timeline APIs are not wrapped. |
-| AVPlayerItemMediaDataCollector | Interface | AVPlayerItemMediaDataCollector.h | Media-data collectors and delegates are not wrapped. |
-| AVPlayerItemMetadataCollectorPushDelegate | Protocol | AVPlayerItemMediaDataCollector.h | Delegate protocol callbacks are not exposed. |
-| AVPlayerItemMetadataCollector | Interface | AVPlayerItemMediaDataCollector.h | Media-data collectors and delegates are not wrapped. |
 | AVContentAuthorizationStatus | Typedef | AVPlayerItemProtectedContentAdditions.h | Protected-content authorization APIs are not wrapped. |
 
 ## ⏭️ EXEMPT

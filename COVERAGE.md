@@ -1,6 +1,6 @@
-# AVPlayer 0.2.0 coverage
+# AVPlayer 0.2.1 coverage
 
-This release expands the crate across every logical area requested for the `0.2.0` player-subsystem pass.
+This release extends the `0.2.0` player-subsystem pass with the remaining requested newer-output, metadata-collector, interstitial-event, and integrated-timeline areas.
 
 | Area | Swift bridge | Rust module | Example | Test | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -18,9 +18,14 @@ This release expands the crate across every logical area requested for the `0.2.
 | `AVPlayerItemLegibleOutput` | `swift-bridge/Sources/AVPlayerBridge/PlayerItemOutputs.swift` | `src/player_item_legible_output.rs` | `examples/13_avplayer_item_legible_output.rs` | `tests/avplayer_item_legible_output.rs` | Output construction, attach/detach, native subtype filtering, advance interval. |
 | `AVPlayerItemTrack` | `swift-bridge/Sources/AVPlayerBridge/PlayerItemTrack.swift`, `PlayerItem.swift` | `src/player_item_track.rs` | `examples/14_avplayer_item_track.rs` | `tests/avplayer_item_track.rs` | Availability depends on AVFoundation materialization; examples/tests handle zero-track cases on synthesized AIFFs. |
 | `AVPlayerMediaSelectionCriteria` | `swift-bridge/Sources/AVPlayerBridge/PlayerMediaSelectionCriteria.swift` | `src/player_media_selection_criteria.rs` | `examples/15_avplayer_media_selection_criteria.rs` | `tests/avplayer_media_selection_criteria.rs` | Preferred languages, preferred/principal characteristics, per-player application. |
+| `AVPlayerVideoOutput` | `swift-bridge/Sources/AVPlayerBridge/PlayerVideoOutput.swift` | `src/player_video_output.rs` | `examples/16_avplayer_video_output.rs` | `tests/avplayer_video_output.rs` | Tag-collection presets, output specification/configuration, player attachment, tagged-buffer inspection. |
+| `AVPlayerItemRenderedLegibleOutput` | `swift-bridge/Sources/AVPlayerBridge/PlayerItemRenderedLegibleOutput.swift` | `src/player_item_rendered_legible_output.rs` | `examples/17_avplayer_item_rendered_legible_output.rs` | `tests/avplayer_item_rendered_legible_output.rs` | Rendered caption image metadata, delegate callbacks, attach/detach, video-display sizing. |
+| `AVPlayerItemMetadataCollector` / `AVPlayerItemMediaDataCollector` | `swift-bridge/Sources/AVPlayerBridge/PlayerItemMetadataCollector.swift` | `src/player_item_metadata_collector.rs` | `examples/18_avplayer_item_metadata_collector.rs` | `tests/avplayer_item_metadata_collector.rs` | Collector construction, delegate callbacks, add/remove on items, and collector introspection. |
+| `AVPlayerInterstitialEventController` / `AVPlayerInterstitialEventMonitor` | `swift-bridge/Sources/AVPlayerBridge/PlayerInterstitial.swift` | `src/player_interstitial_event.rs` | `examples/19_avplayer_interstitial_event.rs` | `tests/avplayer_interstitial_event.rs` | Interstitial event creation, controller scheduling, monitor state/notifications, and waiting-reason access. |
+| `AVPlayerItemIntegratedTimeline` | `swift-bridge/Sources/AVPlayerBridge/PlayerItemIntegratedTimeline.swift` | `src/player_item_integrated_timeline.rs` | `examples/20_avplayer_item_integrated_timeline.rs` | `tests/avplayer_item_integrated_timeline.rs` | Current snapshot/segment inspection, periodic/boundary observers, out-of-sync notifications, and seek helpers. |
 
-## Adjacent APIs intentionally not added in 0.2.0
+## Adjacent APIs intentionally not added in 0.2.1
 
 - `AVPlayerItem` custom media-selection accessors introduced in newer SDKs beyond the requested scope.
-- `AVPlayerItemOutput` delegate callback plumbing (`AVPlayerItemOutputPullDelegate`, `AVPlayerItemMetadataOutputPushDelegate`, `AVPlayerItemLegibleOutputPushDelegate`).
-- `AVPlayerItemRenderedLegibleOutput`, which was not part of the requested logical-area list.
+- `AVPlayerItemOutput` delegate callback plumbing that remains outside the targeted surfaces (`AVPlayerItemOutputPullDelegate`, `AVPlayerItemMetadataOutputPushDelegate`, `AVPlayerItemLegibleOutputPushDelegate`).
+- Additional `AVPlayer` HDR / background-playback / network-priority surfaces that are still listed as audit gaps.
