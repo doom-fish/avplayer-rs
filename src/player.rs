@@ -93,6 +93,10 @@ pub enum PlayerItemEvent {
     },
     PresentationSizeChanged(Size),
     DidPlayToEnd,
+    PlaybackStalled,
+    NewAccessLogEntry,
+    NewErrorLogEntry,
+    MediaSelectionChanged,
 }
 
 struct PlayerItemObserverState {
@@ -109,7 +113,7 @@ struct BoundaryTimeObserverState {
 
 /// Safe wrapper around `AVPlayerItem`.
 pub struct PlayerItem {
-    ptr: *mut c_void,
+    pub(crate) ptr: *mut c_void,
 }
 
 impl Drop for PlayerItem {
@@ -138,9 +142,10 @@ impl PlayerItem {
 
     /// Create a player item from an existing asset.
     pub fn from_asset(asset: &Asset) -> Result<Self, AVPlayerError> {
-        let keys_json = CString::new("[\"duration\",\"tracks\",\"metadata\"]").map_err(
-            |error| AVPlayerError::InvalidArgument(format!("asset-key JSON contains NUL byte: {error}")),
-        )?;
+        let keys_json =
+            CString::new("[\"duration\",\"tracks\",\"metadata\"]").map_err(|error| {
+                AVPlayerError::InvalidArgument(format!("asset-key JSON contains NUL byte: {error}"))
+            })?;
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_create_with_asset(asset.ptr, keys_json.as_ptr(), &mut err)
@@ -152,11 +157,13 @@ impl PlayerItem {
     }
 
     fn from_url_internal(url: &str, is_file_url: bool) -> Result<Self, AVPlayerError> {
-        let url = CString::new(url)
-            .map_err(|error| AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}")))?;
-        let keys_json = CString::new("[\"duration\",\"tracks\",\"metadata\"]").map_err(
-            |error| AVPlayerError::InvalidArgument(format!("asset-key JSON contains NUL byte: {error}")),
-        )?;
+        let url = CString::new(url).map_err(|error| {
+            AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
+        })?;
+        let keys_json =
+            CString::new("[\"duration\",\"tracks\",\"metadata\"]").map_err(|error| {
+                AVPlayerError::InvalidArgument(format!("asset-key JSON contains NUL byte: {error}"))
+            })?;
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_create_with_url(
@@ -245,7 +252,7 @@ impl Drop for PlayerItemObserver {
 
 /// Safe wrapper around `AVPlayer`.
 pub struct Player {
-    ptr: *mut c_void,
+    pub(crate) ptr: *mut c_void,
 }
 
 impl Drop for Player {
@@ -293,8 +300,9 @@ impl Player {
     }
 
     fn from_url_internal(url: &str, is_file_url: bool) -> Result<Self, AVPlayerError> {
-        let url = CString::new(url)
-            .map_err(|error| AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}")))?;
+        let url = CString::new(url).map_err(|error| {
+            AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
+        })?;
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe { ffi::av_player_create_with_url(url.as_ptr(), is_file_url, &mut err) };
         if ptr.is_null() {
@@ -411,10 +419,13 @@ impl Player {
         F: FnMut() + Send + 'static,
     {
         let queue_label = queue_label_cstring(queue_label)?;
-        let times_json = serde_json::to_string(times)
-            .map_err(|error| AVPlayerError::InvalidArgument(format!("failed to encode boundary times: {error}")))?;
+        let times_json = serde_json::to_string(times).map_err(|error| {
+            AVPlayerError::InvalidArgument(format!("failed to encode boundary times: {error}"))
+        })?;
         let times_json = CString::new(times_json).map_err(|error| {
-            AVPlayerError::InvalidArgument(format!("boundary times JSON contains NUL byte: {error}"))
+            AVPlayerError::InvalidArgument(format!(
+                "boundary times JSON contains NUL byte: {error}"
+            ))
         })?;
         let state = Box::new(BoundaryTimeObserverState {
             callback: Box::new(callback),
@@ -470,7 +481,10 @@ impl Drop for BoundaryTimeObserver {
     }
 }
 
-unsafe extern "C" fn player_item_event_trampoline(userdata: *mut c_void, payload_json: *const c_char) {
+unsafe extern "C" fn player_item_event_trampoline(
+    userdata: *mut c_void,
+    payload_json: *const c_char,
+) {
     if userdata.is_null() || payload_json.is_null() {
         return;
     }
@@ -493,6 +507,10 @@ unsafe extern "C" fn player_item_event_trampoline(userdata: *mut c_void, payload
             None => return,
         },
         "did_play_to_end" => PlayerItemEvent::DidPlayToEnd,
+        "playback_stalled" => PlayerItemEvent::PlaybackStalled,
+        "new_access_log_entry" => PlayerItemEvent::NewAccessLogEntry,
+        "new_error_log_entry" => PlayerItemEvent::NewErrorLogEntry,
+        "media_selection_changed" => PlayerItemEvent::MediaSelectionChanged,
         _ => return,
     };
 
@@ -553,6 +571,7 @@ fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, 
         .to_string_lossy()
         .into_owned();
     unsafe { ffi::avp_string_free(json_ptr) };
-    serde_json::from_str::<T>(&json)
-        .map_err(|error| AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}")))
+    serde_json::from_str::<T>(&json).map_err(|error| {
+        AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}"))
+    })
 }

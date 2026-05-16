@@ -1,0 +1,63 @@
+#![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
+
+use std::path::Path;
+
+use crate::asset::UrlAsset;
+use crate::error::AVPlayerError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UrlAssetOptions {
+    prefer_precise_duration_and_timing: bool,
+}
+
+impl Default for UrlAssetOptions {
+    fn default() -> Self {
+        Self {
+            prefer_precise_duration_and_timing: true,
+        }
+    }
+}
+
+impl UrlAssetOptions {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            prefer_precise_duration_and_timing: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn prefer_precise_duration_and_timing(mut self, prefer: bool) -> Self {
+        self.prefer_precise_duration_and_timing = prefer;
+        self
+    }
+
+    #[must_use]
+    pub const fn prefers_precise_duration_and_timing(self) -> bool {
+        self.prefer_precise_duration_and_timing
+    }
+}
+
+impl UrlAsset {
+    pub fn from_file_path_with_options(
+        path: impl AsRef<Path>,
+        options: UrlAssetOptions,
+    ) -> Result<Self, AVPlayerError> {
+        let path = path
+            .as_ref()
+            .to_str()
+            .ok_or_else(|| AVPlayerError::InvalidArgument("path is not valid UTF-8".into()))?;
+        Self::from_raw_url_with_options(path, true, options.prefers_precise_duration_and_timing())
+    }
+
+    pub fn from_remote_url_with_options(
+        url: impl AsRef<str>,
+        options: UrlAssetOptions,
+    ) -> Result<Self, AVPlayerError> {
+        Self::from_raw_url_with_options(
+            url.as_ref(),
+            false,
+            options.prefers_precise_duration_and_timing(),
+        )
+    }
+}

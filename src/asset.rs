@@ -155,8 +155,9 @@ impl Asset {
 
     /// Query the current load status of a key without triggering loading.
     pub fn status_of_value(&self, key: &str) -> Result<KeyValueStatus, AVPlayerError> {
-        let key = CString::new(key)
-            .map_err(|error| AVPlayerError::InvalidArgument(format!("key contains NUL byte: {error}")))?;
+        let key = CString::new(key).map_err(|error| {
+            AVPlayerError::InvalidArgument(format!("key contains NUL byte: {error}"))
+        })?;
         let mut err: *mut c_char = ptr::null_mut();
         let raw = unsafe { ffi::av_asset_status_of_value(self.ptr, key.as_ptr(), &mut err) };
         if raw < 0 {
@@ -166,7 +167,10 @@ impl Asset {
     }
 
     /// Trigger asynchronous loading for the given keys and wait for completion.
-    pub fn load_values_asynchronously<I, S>(&self, keys: I) -> Result<Vec<KeyLoadStatus>, AVPlayerError>
+    pub fn load_values_asynchronously<I, S>(
+        &self,
+        keys: I,
+    ) -> Result<Vec<KeyLoadStatus>, AVPlayerError>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -175,12 +179,15 @@ impl Asset {
             .into_iter()
             .map(|key| key.as_ref().to_owned())
             .collect::<Vec<_>>();
-        let json = serde_json::to_string(&keys)
-            .map_err(|error| AVPlayerError::InvalidArgument(format!("failed to encode keys: {error}")))?;
-        let json = CString::new(json)
-            .map_err(|error| AVPlayerError::InvalidArgument(format!("keys JSON contains NUL byte: {error}")))?;
+        let json = serde_json::to_string(&keys).map_err(|error| {
+            AVPlayerError::InvalidArgument(format!("failed to encode keys: {error}"))
+        })?;
+        let json = CString::new(json).map_err(|error| {
+            AVPlayerError::InvalidArgument(format!("keys JSON contains NUL byte: {error}"))
+        })?;
         let mut err: *mut c_char = ptr::null_mut();
-        let statuses_ptr = unsafe { ffi::av_asset_load_values_json(self.ptr, json.as_ptr(), 30, &mut err) };
+        let statuses_ptr =
+            unsafe { ffi::av_asset_load_values_json(self.ptr, json.as_ptr(), 30, &mut err) };
         if statuses_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::LOAD_FAILED, err) });
         }
@@ -204,8 +211,9 @@ impl Asset {
             )));
         }
 
-        let capacity = usize::try_from(count)
-            .map_err(|error| AVPlayerError::OperationFailed(format!("invalid track count: {error}")))?;
+        let capacity = usize::try_from(count).map_err(|error| {
+            AVPlayerError::OperationFailed(format!("invalid track count: {error}"))
+        })?;
         let mut tracks = Vec::with_capacity(capacity);
         for index in 0..count {
             let ptr = unsafe { ffi::av_asset_copy_track_at_index(self.ptr, index) };
@@ -222,7 +230,7 @@ impl Asset {
 
 /// `AVURLAsset` convenience wrapper around [`Asset`].
 pub struct UrlAsset {
-    asset: Asset,
+    pub(crate) asset: Asset,
 }
 
 impl UrlAsset {
@@ -240,15 +248,33 @@ impl UrlAsset {
         Self::from_raw_url(url.as_ref(), false)
     }
 
-    fn from_raw_url(url: &str, is_file_url: bool) -> Result<Self, AVPlayerError> {
-        let url = CString::new(url)
-            .map_err(|error| AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}")))?;
+    pub(crate) fn from_raw_url_with_options(
+        url: &str,
+        is_file_url: bool,
+        prefer_precise_duration_and_timing: bool,
+    ) -> Result<Self, AVPlayerError> {
+        let url = CString::new(url).map_err(|error| {
+            AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
+        })?;
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_url_asset_create(url.as_ptr(), is_file_url, true, &mut err) };
+        let ptr = unsafe {
+            ffi::av_url_asset_create(
+                url.as_ptr(),
+                is_file_url,
+                prefer_precise_duration_and_timing,
+                &mut err,
+            )
+        };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::ASSET_CREATE_FAILED, err) });
         }
-        Ok(Self { asset: Asset { ptr } })
+        Ok(Self {
+            asset: Asset { ptr },
+        })
+    }
+
+    fn from_raw_url(url: &str, is_file_url: bool) -> Result<Self, AVPlayerError> {
+        Self::from_raw_url_with_options(url, is_file_url, true)
     }
 
     /// Borrow the underlying `AVAsset` wrapper.
@@ -265,13 +291,16 @@ impl UrlAsset {
 
     /// URL string used to create the asset.
     pub fn url(&self) -> Result<String, AVPlayerError> {
-        self.asset
-            .url()?
-            .ok_or_else(|| AVPlayerError::OperationFailed("asset is not backed by AVURLAsset".into()))
+        self.asset.url()?.ok_or_else(|| {
+            AVPlayerError::OperationFailed("asset is not backed by AVURLAsset".into())
+        })
     }
 
     /// Forwarding convenience for `AVAsynchronousKeyValueLoading`.
-    pub fn load_values_asynchronously<I, S>(&self, keys: I) -> Result<Vec<KeyLoadStatus>, AVPlayerError>
+    pub fn load_values_asynchronously<I, S>(
+        &self,
+        keys: I,
+    ) -> Result<Vec<KeyLoadStatus>, AVPlayerError>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -341,18 +370,20 @@ impl AssetTrack {
 
     /// Nominal frame rate when video-bearing.
     pub fn nominal_frame_rate(&self) -> Result<Option<f32>, AVPlayerError> {
-        self.info()?.nominal_frame_rate.parse::<f32>().ok().map_or_else(
-            || Ok(None),
-            |value| Ok(Some(value)),
-        )
+        self.info()?
+            .nominal_frame_rate
+            .parse::<f32>()
+            .ok()
+            .map_or_else(|| Ok(None), |value| Ok(Some(value)))
     }
 
     /// Estimated data rate in bits per second.
     pub fn estimated_data_rate(&self) -> Result<Option<f32>, AVPlayerError> {
-        self.info()?.estimated_data_rate.parse::<f32>().ok().map_or_else(
-            || Ok(None),
-            |value| Ok(Some(value)),
-        )
+        self.info()?
+            .estimated_data_rate
+            .parse::<f32>()
+            .ok()
+            .map_or_else(|| Ok(None), |value| Ok(Some(value)))
     }
 }
 
@@ -361,6 +392,7 @@ fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, 
         .to_string_lossy()
         .into_owned();
     unsafe { ffi::avp_string_free(json_ptr) };
-    serde_json::from_str::<T>(&json)
-        .map_err(|error| AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}")))
+    serde_json::from_str::<T>(&json).map_err(|error| {
+        AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}"))
+    })
 }

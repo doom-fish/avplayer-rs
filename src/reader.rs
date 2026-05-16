@@ -223,7 +223,10 @@ impl AssetReader {
         unsafe { ffi::av_reader_can_add_output(self.ptr, output.ptr) }
     }
 
-    pub fn can_add_video_composition_output(&self, output: &AssetReaderVideoCompositionOutput) -> bool {
+    pub fn can_add_video_composition_output(
+        &self,
+        output: &AssetReaderVideoCompositionOutput,
+    ) -> bool {
         unsafe { ffi::av_reader_can_add_output(self.ptr, output.ptr) }
     }
 
@@ -231,7 +234,10 @@ impl AssetReader {
         self.add_output_ptr(output.ptr)
     }
 
-    pub fn add_audio_mix_output(&self, output: &AssetReaderAudioMixOutput) -> Result<(), AVPlayerError> {
+    pub fn add_audio_mix_output(
+        &self,
+        output: &AssetReaderAudioMixOutput,
+    ) -> Result<(), AVPlayerError> {
         self.add_output_ptr(output.ptr)
     }
 
@@ -450,10 +456,14 @@ fn settings_json<T: Serialize>(settings: Option<&T>) -> Result<Option<CString>, 
     settings
         .map(|settings| serde_json::to_string(settings))
         .transpose()
-        .map_err(|error| AVPlayerError::InvalidArgument(format!("failed to encode reader settings: {error}")))?
+        .map_err(|error| {
+            AVPlayerError::InvalidArgument(format!("failed to encode reader settings: {error}"))
+        })?
         .map(|json| {
             CString::new(json).map_err(|error| {
-                AVPlayerError::InvalidArgument(format!("reader settings JSON contains NUL byte: {error}"))
+                AVPlayerError::InvalidArgument(format!(
+                    "reader settings JSON contains NUL byte: {error}"
+                ))
             })
         })
         .transpose()
@@ -482,6 +492,7 @@ fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, 
         .to_string_lossy()
         .into_owned();
     unsafe { ffi::avp_string_free(json_ptr) };
-    serde_json::from_str::<T>(&json)
-        .map_err(|error| AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}")))
+    serde_json::from_str::<T>(&json).map_err(|error| {
+        AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}"))
+    })
 }

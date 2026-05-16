@@ -1,8 +1,8 @@
 # avplayer
 
-Safe Rust bindings for Apple's [AVPlayer](https://developer.apple.com/documentation/avfoundation/avplayer), `AVPlayerItem`, `AVAsset`, `AVURLAsset`, and `AVAssetReader` on macOS.
+Safe Rust bindings for Apple's [AVFoundation playback stack](https://developer.apple.com/documentation/avfoundation) on macOS: `AVPlayer`, `AVPlayerItem`, `AVPlayerLayer`, `AVQueuePlayer`, `AVPlayerLooper`, `AVAsset`, `AVURLAsset`, and `AVAssetReader`.
 
-> **Status:** `0.1.0` covers practical playback + inspection workflows: URL/file assets, asynchronous key loading, track + metadata listing, basic AVPlayer control, `AVPlayerItem` observation, time observers, and frame/sample reading through `AVAssetReader` outputs.
+> **Status:** `0.2.0` expands the crate from basic playback to broad player-subsystem coverage: queueing + looping, player-layer inspection, item outputs, access/error logs, item-track access, and media-selection criteria. See [`COVERAGE.md`](COVERAGE.md) for the per-area map.
 
 ## Quick start
 
@@ -13,11 +13,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let asset = UrlAsset::from_file_path("target/example-artifacts/test.aiff")?;
     asset.load_values_asynchronously(["duration", "tracks", "metadata"])?;
 
+    let player = Player::from_asset(asset.as_asset())?;
+    player.set_action_at_item_end(PlayerActionAtItemEnd::Pause)?;
+
     println!("duration: {:?}", asset.duration()?);
     println!("tracks: {}", asset.tracks()?.len());
+    println!("time control: {:?}", player.time_control_status()?);
 
-    let player = Player::from_asset(asset.as_asset())?;
-    println!("status: {:?}", player.status()?);
     player.play();
     player.pause();
     Ok(())
@@ -26,27 +28,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Highlights
 
-- `UrlAsset::from_file_path` / `UrlAsset::from_remote_url`
-- `Asset::load_values_asynchronously`, `status_of_value`, `duration`, `tracks`, `metadata`
-- `Player::from_url`, `Player::from_asset`, `play`, `pause`, `rate`, `seek_to`, `current_time`, `duration`
-- `PlayerItem::observe` for status / presentation-size / end-of-playback events
-- `Player::add_periodic_time_observer` / `add_boundary_time_observer`
-- `AssetReader`, `AssetReaderTrackOutput`, `AssetReaderAudioMixOutput`, `AssetReaderVideoCompositionOutput`
-- `VideoOutputSettings` + `AudioOutputSettings` helpers for `AVAssetReader` conversion dictionaries
-- `apple-cf` interop for `CMSampleBuffer` and `CVPixelBuffer`
+- `AVAsset` / `AVURLAsset`: async key loading, URL inspection, metadata, track enumeration, and `UrlAssetOptions`.
+- `AVPlayer`: play/pause/rate/seek, volume + mute, action-at-item-end, time-control status, time observers, and media-selection criteria application.
+- `AVPlayerItem`: observation callbacks, buffering/bit-rate/resolution preferences, audio time-pitch selection, loaded/seekable ranges, outputs, and per-item logs.
+- `AVPlayerLayer`: player attachment, video gravity, video rect inspection, and displayed pixel-buffer access.
+- `AVQueuePlayer` / `AVPlayerLooper`: queue mutation, current-item inspection, loop configuration, and loop-state reporting.
+- `AVPlayerItemVideoOutput`, `AVPlayerItemMetadataOutput`, and `AVPlayerItemLegibleOutput`: attach/detach plus configuration/introspection helpers.
+- `AVPlayerItemTrack`, `AVPlayerItemAccessLog`, `AVPlayerItemErrorLog`, and `AVPlayerMediaSelectionCriteria` wrappers.
+- `AVAssetReader`, `AssetReaderTrackOutput`, `AssetReaderAudioMixOutput`, and `AssetReaderVideoCompositionOutput` remain available for frame/sample extraction.
 
-## Smoke example
+## Examples
+
+Every requested subsystem area now has a numbered example:
+
+- `01_smoke_surface`
+- `02_avasset`
+- `03_avurlasset`
+- `04_avplayer`
+- `05_avplayer_item`
+- `06_avplayer_layer`
+- `07_avqueue_player`
+- `08_avplayer_looper`
+- `09_avplayer_item_access_log`
+- `10_avplayer_item_error_log`
+- `11_avplayer_item_metadata_output`
+- `12_avplayer_item_video_output`
+- `13_avplayer_item_legible_output`
+- `14_avplayer_item_track`
+- `15_avplayer_media_selection_criteria`
+
+Run any example with:
 
 ```bash
-cargo run --all-features --example 01_smoke_surface
+cargo run --example 15_avplayer_media_selection_criteria
 ```
 
-The smoke example synthesizes a short AIFF under `target/example-artifacts/`, loads it as an `AVURLAsset`, inspects metadata/tracks, reads the first sample buffers through `AVAssetReader`, and exercises `AVPlayer` control + observer registration.
+Examples write synthesized media into `target/example-artifacts/` and avoid `/tmp`.
 
 ## Notes
 
-- `AVPlayerLayer` is intentionally out of scope for this crate; it belongs to AppKit/UIKit presentation layers.
-- The current macOS SDK used for this release does not expose an `AVPlayerItem.externalMetadata` property, so `PlayerItem::metadata()` returns the underlying asset metadata instead.
+- `AVPlayerItemTrack` materialization is media- and readiness-dependent. On synthesized `AIFF`s, `AVFoundation` may legitimately report zero `AVPlayerItemTrack` instances until it fully prepares the item.
+- The current macOS SDK used for this release does not expose `AVPlayerItem.externalMetadata`, so `PlayerItem::metadata()` continues to surface the underlying asset metadata.
 
 ## License
 

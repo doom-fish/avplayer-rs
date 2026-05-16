@@ -47,10 +47,9 @@ impl Time {
     pub const fn as_numeric(self) -> Option<(i64, i32)> {
         match self {
             Self::Numeric { value, timescale } => Some((value, timescale)),
-            Self::Invalid
-            | Self::Indefinite
-            | Self::PositiveInfinity
-            | Self::NegativeInfinity => None,
+            Self::Invalid | Self::Indefinite | Self::PositiveInfinity | Self::NegativeInfinity => {
+                None
+            }
         }
     }
 

@@ -30,7 +30,9 @@ impl fmt::Display for AVPlayerError {
             Self::InvalidArgument(message) => write!(f, "invalid argument: {message}"),
             Self::AssetCreateFailed(message) => write!(f, "asset creation failed: {message}"),
             Self::PlayerCreateFailed(message) => write!(f, "player creation failed: {message}"),
-            Self::ReaderCreateFailed(message) => write!(f, "asset reader creation failed: {message}"),
+            Self::ReaderCreateFailed(message) => {
+                write!(f, "asset reader creation failed: {message}")
+            }
             Self::OperationFailed(message) => write!(f, "operation failed: {message}"),
             Self::ObserverFailed(message) => write!(f, "observer registration failed: {message}"),
             Self::LoadFailed(message) => write!(f, "load failed: {message}"),

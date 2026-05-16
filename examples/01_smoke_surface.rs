@@ -41,7 +41,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("audio track id: {}", audio_track.track_id()?);
 
     let reader = AssetReader::new(asset.as_asset())?;
-    let output = AssetReaderTrackOutput::audio(audio_track, Some(&AudioOutputSettings::pcm_i16(44_100.0, 1)))?;
+    let output = AssetReaderTrackOutput::audio(
+        audio_track,
+        Some(&AudioOutputSettings::pcm_i16(44_100.0, 1)),
+    )?;
     output.set_always_copies_sample_data(false);
     assert!(reader.can_add_track_output(&output));
     reader.add_track_output(&output)?;
@@ -60,18 +63,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let player = Player::from_asset(asset.as_asset())?;
     println!("player status: {:?}", player.status()?);
-    let current_item = player.current_item().ok_or("expected AVPlayer current item")?;
+    let current_item = player
+        .current_item()
+        .ok_or("expected AVPlayer current item")?;
     println!("item status: {:?}", current_item.status()?);
     println!("presentation size: {:?}", current_item.presentation_size()?);
     let _observer = current_item.observe(|event| {
         println!("player-item event: {event:?}");
     })?;
-    let _periodic = player.add_periodic_time_observer(Time::new(1, 2), Some("avplayer-smoke-periodic"), |time| {
-        println!("periodic time: {time:?}");
-    })?;
-    let _boundary = player.add_boundary_time_observer(&[Time::new(1, 1)], Some("avplayer-smoke-boundary"), || {
-        println!("boundary reached");
-    })?;
+    let _periodic = player.add_periodic_time_observer(
+        Time::new(1, 2),
+        Some("avplayer-smoke-periodic"),
+        |time| {
+            println!("periodic time: {time:?}");
+        },
+    )?;
+    let _boundary = player.add_boundary_time_observer(
+        &[Time::new(1, 1)],
+        Some("avplayer-smoke-boundary"),
+        || {
+            println!("boundary reached");
+        },
+    )?;
     player.play();
     thread::sleep(Duration::from_millis(150));
     player.pause();

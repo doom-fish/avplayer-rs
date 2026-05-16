@@ -20,7 +20,10 @@ extern "C" {
         out_error_message: *mut *mut c_char,
     ) -> *mut c_void;
     pub fn av_asset_release(asset: *mut c_void);
-    pub fn av_asset_info_json(asset: *mut c_void, out_error_message: *mut *mut c_char) -> *mut c_char;
+    pub fn av_asset_info_json(
+        asset: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
     pub fn av_asset_load_values_json(
         asset: *mut c_void,
         keys_json: *const c_char,
@@ -35,7 +38,10 @@ extern "C" {
     pub fn av_asset_track_count(asset: *mut c_void) -> i32;
     pub fn av_asset_copy_track_at_index(asset: *mut c_void, index: i32) -> *mut c_void;
     pub fn av_asset_track_release(track: *mut c_void);
-    pub fn av_asset_track_info_json(track: *mut c_void, out_error_message: *mut *mut c_char) -> *mut c_char;
+    pub fn av_asset_track_info_json(
+        track: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
 
     pub fn av_player_item_create_with_url(
         url: *const c_char,
@@ -61,7 +67,42 @@ extern "C" {
         out_error_message: *mut *mut c_char,
     ) -> *mut c_void;
     pub fn av_player_item_observer_release(observer: *mut c_void);
+    pub fn av_player_item_set_can_use_network_resources_for_live_streaming_while_paused(
+        item: *mut c_void,
+        enabled: bool,
+    );
+    pub fn av_player_item_set_preferred_forward_buffer_duration(item: *mut c_void, duration: f64);
+    pub fn av_player_item_set_preferred_peak_bit_rate(item: *mut c_void, value: f64);
+    pub fn av_player_item_set_preferred_peak_bit_rate_for_expensive_networks(
+        item: *mut c_void,
+        value: f64,
+    );
+    pub fn av_player_item_set_preferred_maximum_resolution(
+        item: *mut c_void,
+        width: f64,
+        height: f64,
+    );
+    pub fn av_player_item_set_preferred_maximum_resolution_for_expensive_networks(
+        item: *mut c_void,
+        width: f64,
+        height: f64,
+    );
+    pub fn av_player_item_set_audio_time_pitch_algorithm(
+        item: *mut c_void,
+        algorithm: *const c_char,
+    );
+    pub fn av_player_item_track_count(item: *mut c_void) -> i32;
+    pub fn av_player_item_copy_track_at_index(item: *mut c_void, index: i32) -> *mut c_void;
+    pub fn av_player_item_copy_access_log(item: *mut c_void) -> *mut c_void;
+    pub fn av_player_item_copy_error_log(item: *mut c_void) -> *mut c_void;
+    pub fn av_player_item_add_output(
+        item: *mut c_void,
+        output: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_item_remove_output(item: *mut c_void, output: *mut c_void);
 
+    pub fn av_player_create(out_error_message: *mut *mut c_char) -> *mut c_void;
     pub fn av_player_create_with_url(
         url: *const c_char,
         is_file_url: bool,
@@ -76,7 +117,10 @@ extern "C" {
         out_error_message: *mut *mut c_char,
     ) -> *mut c_void;
     pub fn av_player_release(player: *mut c_void);
-    pub fn av_player_info_json(player: *mut c_void, out_error_message: *mut *mut c_char) -> *mut c_char;
+    pub fn av_player_info_json(
+        player: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
     pub fn av_player_play(player: *mut c_void);
     pub fn av_player_pause(player: *mut c_void);
     pub fn av_player_set_rate(player: *mut c_void, rate: f32);
@@ -88,6 +132,33 @@ extern "C" {
         out_error_message: *mut *mut c_char,
     ) -> i32;
     pub fn av_player_copy_current_item(player: *mut c_void) -> *mut c_void;
+    pub fn av_player_replace_current_item(player: *mut c_void, item: *mut c_void);
+    pub fn av_player_set_action_at_item_end(
+        player: *mut c_void,
+        raw_value: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_set_volume(player: *mut c_void, volume: f32);
+    pub fn av_player_set_muted(player: *mut c_void, muted: bool);
+    pub fn av_player_set_automatically_waits_to_minimize_stalling(
+        player: *mut c_void,
+        enabled: bool,
+    );
+    pub fn av_player_set_applies_media_selection_criteria_automatically(
+        player: *mut c_void,
+        enabled: bool,
+    );
+    pub fn av_player_set_media_selection_criteria(
+        player: *mut c_void,
+        media_characteristic: *const c_char,
+        criteria: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_copy_media_selection_criteria(
+        player: *mut c_void,
+        media_characteristic: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
     pub fn av_player_add_periodic_time_observer(
         player: *mut c_void,
         interval_value: i64,
@@ -110,12 +181,148 @@ extern "C" {
     ) -> *mut c_void;
     pub fn av_player_time_observer_release(observer: *mut c_void);
 
-    pub fn av_reader_create(
-        asset: *mut c_void,
+    pub fn av_queue_player_create(out_error_message: *mut *mut c_char) -> *mut c_void;
+    pub fn av_queue_player_create_with_items(
+        item_ptrs: *const *mut c_void,
+        count: usize,
         out_error_message: *mut *mut c_char,
     ) -> *mut c_void;
+    pub fn av_queue_player_release(player: *mut c_void);
+    pub fn av_queue_player_item_count(player: *mut c_void) -> i32;
+    pub fn av_queue_player_copy_item_at_index(player: *mut c_void, index: i32) -> *mut c_void;
+    pub fn av_queue_player_advance_to_next_item(player: *mut c_void);
+    pub fn av_queue_player_can_insert_item_after_item(
+        player: *mut c_void,
+        item: *mut c_void,
+        after_item: *mut c_void,
+    ) -> bool;
+    pub fn av_queue_player_insert_item_after_item(
+        player: *mut c_void,
+        item: *mut c_void,
+        after_item: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_queue_player_remove_item(player: *mut c_void, item: *mut c_void);
+    pub fn av_queue_player_remove_all_items(player: *mut c_void);
+
+    pub fn av_player_looper_create(
+        player: *mut c_void,
+        template_item: *mut c_void,
+        use_loop_range: bool,
+        start_value: i64,
+        start_timescale: i32,
+        start_kind: i32,
+        duration_value: i64,
+        duration_timescale: i32,
+        duration_kind: i32,
+        item_ordering_raw: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_looper_release(looper: *mut c_void);
+    pub fn av_player_looper_info_json(
+        looper: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_looper_disable_looping(looper: *mut c_void);
+    pub fn av_player_looper_looping_item_count(looper: *mut c_void) -> i32;
+    pub fn av_player_looper_copy_looping_item_at_index(
+        looper: *mut c_void,
+        index: i32,
+    ) -> *mut c_void;
+
+    pub fn av_player_layer_create(player: *mut c_void) -> *mut c_void;
+    pub fn av_player_layer_release(layer: *mut c_void);
+    pub fn av_player_layer_info_json(
+        layer: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_layer_set_player(layer: *mut c_void, player: *mut c_void);
+    pub fn av_player_layer_set_video_gravity(layer: *mut c_void, gravity: *const c_char);
+    pub fn av_player_layer_copy_displayed_pixel_buffer(layer: *mut c_void) -> *mut c_void;
+
+    pub fn av_player_item_track_release(track: *mut c_void);
+    pub fn av_player_item_track_info_json(
+        track: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_track_set_enabled(track: *mut c_void, enabled: bool);
+    pub fn av_player_item_track_set_video_field_mode(track: *mut c_void, mode: *const c_char);
+    pub fn av_player_item_track_copy_asset_track(track: *mut c_void) -> *mut c_void;
+
+    pub fn av_player_item_access_log_release(log: *mut c_void);
+    pub fn av_player_item_access_log_info_json(
+        log: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_error_log_release(log: *mut c_void);
+    pub fn av_player_item_error_log_info_json(
+        log: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+
+    pub fn av_player_item_output_release(output: *mut c_void);
+    pub fn av_player_item_output_set_suppresses_player_rendering(
+        output: *mut c_void,
+        suppresses: bool,
+    );
+    pub fn av_player_item_video_output_create(
+        settings_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_video_output_info_json(
+        output: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_video_output_has_new_pixel_buffer_for_item_time(
+        output: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    ) -> bool;
+    pub fn av_player_item_video_output_copy_pixel_buffer_for_item_time(
+        output: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    ) -> *mut c_void;
+    pub fn av_player_item_metadata_output_create(
+        identifiers_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_metadata_output_info_json(
+        output: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_metadata_output_set_advance_interval(output: *mut c_void, interval: f64);
+    pub fn av_player_item_legible_output_create(
+        native_representation_subtypes_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_legible_output_info_json(
+        output: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_legible_output_set_advance_interval(output: *mut c_void, interval: f64);
+
+    pub fn av_player_media_selection_criteria_create(
+        preferred_languages_json: *const c_char,
+        preferred_media_characteristics_json: *const c_char,
+        principal_media_characteristics_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_media_selection_criteria_release(criteria: *mut c_void);
+    pub fn av_player_media_selection_criteria_info_json(
+        criteria: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+
+    pub fn av_reader_create(asset: *mut c_void, out_error_message: *mut *mut c_char)
+        -> *mut c_void;
     pub fn av_reader_release(reader: *mut c_void);
-    pub fn av_reader_info_json(reader: *mut c_void, out_error_message: *mut *mut c_char) -> *mut c_char;
+    pub fn av_reader_info_json(
+        reader: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
     pub fn av_reader_set_time_range(
         reader: *mut c_void,
         start_value: i64,
