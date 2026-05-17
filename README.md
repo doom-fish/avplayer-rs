@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Async API
 
 Enable the `async` Cargo feature for executor-agnostic `Future` wrappers around
-AVFoundation's `async throws` and completion-handler APIs:
+`AVFoundation`'s `async throws` and completion-handler APIs:
 
 ```toml
 avplayer = { version = "0.3", features = ["async"] }
