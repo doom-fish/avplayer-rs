@@ -71,6 +71,10 @@ impl Drop for PlayerItemErrorLog {
     }
 }
 
+// SAFETY: AVPlayerItemErrorLog ObjC handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerItemErrorLog {}
+
 impl PlayerItemErrorLog {
     fn info(&self) -> Result<ErrorLogPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();

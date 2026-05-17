@@ -72,6 +72,10 @@ impl Drop for PlayerLooper {
     }
 }
 
+// SAFETY: AVPlayerLooper ObjC handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerLooper {}
+
 impl PlayerLooper {
     pub fn new(player: &QueuePlayer, template_item: &PlayerItem) -> Result<Self, AVPlayerError> {
         Self::with_time_range_and_ordering(

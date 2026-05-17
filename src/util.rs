@@ -41,3 +41,18 @@ pub fn maybe_json_cstring<T: Serialize>(
 ) -> Result<Option<CString>, AVPlayerError> {
     value.map(|value| json_cstring(value, what)).transpose()
 }
+
+/// Catch a panic inside an `extern "C"` callback so it cannot unwind
+/// across the FFI boundary into Swift (which is undefined behaviour).
+pub fn catch_cb_panic<F: FnOnce()>(site: &str, f: F) {
+    use std::panic::AssertUnwindSafe;
+
+    if let Err(payload) = std::panic::catch_unwind(AssertUnwindSafe(f)) {
+        let msg = payload.downcast_ref::<&str>().copied().unwrap_or_else(|| {
+            payload
+                .downcast_ref::<String>()
+                .map_or("<non-string panic>", String::as_str)
+        });
+        eprintln!("avplayer: panic in {site} caught at C ABI boundary: {msg}");
+    }
+}

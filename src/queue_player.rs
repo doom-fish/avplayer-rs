@@ -36,6 +36,10 @@ impl Drop for QueuePlayer {
     }
 }
 
+// SAFETY: AVQueuePlayer ObjC handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for QueuePlayer {}
+
 impl QueuePlayer {
     pub fn new() -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();

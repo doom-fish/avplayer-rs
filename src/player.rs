@@ -128,6 +128,8 @@ pub struct PlayerItem {
 impl Drop for PlayerItem {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
+            // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
+            // ffi create function and has not been released.
             unsafe { ffi::av_player_item_release(self.ptr) };
             self.ptr = ptr::null_mut();
         }
@@ -156,10 +158,14 @@ impl PlayerItem {
                 AVPlayerError::InvalidArgument(format!("asset-key JSON contains NUL byte: {error}"))
             })?;
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `asset.ptr` is a valid borrowed AVAsset handle, `keys_json` is a
+        // NUL-terminated string, and `err` points to writable storage for the bridge.
         let ptr = unsafe {
             ffi::av_player_item_create_with_asset(asset.ptr, keys_json.as_ptr(), &mut err)
         };
         if ptr.is_null() {
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::PLAYER_CREATE_FAILED, err) });
         }
         Ok(Self { ptr })
@@ -174,6 +180,8 @@ impl PlayerItem {
                 AVPlayerError::InvalidArgument(format!("asset-key JSON contains NUL byte: {error}"))
             })?;
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `url` and `keys_json` are NUL-terminated strings owned by this
+        // frame, and `err` points to writable storage for the bridge.
         let ptr = unsafe {
             ffi::av_player_item_create_with_url(
                 url.as_ptr(),
@@ -183,6 +191,8 @@ impl PlayerItem {
             )
         };
         if ptr.is_null() {
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::PLAYER_CREATE_FAILED, err) });
         }
         Ok(Self { ptr })
@@ -190,8 +200,12 @@ impl PlayerItem {
 
     fn info(&self) -> Result<PlayerItemInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `self.ptr` is a valid AVPlayerItem handle and `err` points to
+        // writable storage for the bridge.
         let json_ptr = unsafe { ffi::av_player_item_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
         parse_json_and_free(json_ptr)
@@ -228,6 +242,9 @@ impl PlayerItem {
         });
         let userdata = Box::into_raw(state).cast::<c_void>();
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `self.ptr` is a valid AVPlayerItem handle, `userdata` is a Box
+        // allocation that remains alive until the drop callback runs, and `err`
+        // points to writable storage for the bridge.
         let token = unsafe {
             ffi::av_player_item_add_observer(
                 self.ptr,
@@ -238,7 +255,11 @@ impl PlayerItem {
             )
         };
         if token.is_null() {
+            // SAFETY: Observer creation failed before ownership of `userdata` was
+            // transferred to the bridge, so we must reclaim it locally.
             unsafe { player_item_observer_drop(userdata) };
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
         }
         Ok(PlayerItemObserver { token })
@@ -253,6 +274,8 @@ pub struct PlayerItemObserver {
 impl Drop for PlayerItemObserver {
     fn drop(&mut self) {
         if !self.token.is_null() {
+            // SAFETY: `self.token` is a valid observer token returned by the bridge
+            // and has not been released yet.
             unsafe { ffi::av_player_item_observer_release(self.token) };
             self.token = ptr::null_mut();
         }
@@ -267,6 +290,8 @@ pub struct Player {
 impl Drop for Player {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
+            // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
+            // ffi create function and has not been released.
             unsafe { ffi::av_player_release(self.ptr) };
             self.ptr = ptr::null_mut();
         }
@@ -291,8 +316,12 @@ impl Player {
     /// Create a player that plays the supplied asset.
     pub fn from_asset(asset: &Asset) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `asset.ptr` is a valid borrowed AVAsset handle and `err` points
+        // to writable storage for the bridge.
         let ptr = unsafe { ffi::av_player_create_with_asset(asset.ptr, &mut err) };
         if ptr.is_null() {
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::PLAYER_CREATE_FAILED, err) });
         }
         Ok(Self { ptr })
@@ -301,8 +330,12 @@ impl Player {
     /// Create a player from an already-configured item.
     pub fn from_item(item: &PlayerItem) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `item.ptr` is a valid borrowed AVPlayerItem handle and `err`
+        // points to writable storage for the bridge.
         let ptr = unsafe { ffi::av_player_create_with_item(item.ptr, &mut err) };
         if ptr.is_null() {
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::PLAYER_CREATE_FAILED, err) });
         }
         Ok(Self { ptr })
@@ -313,8 +346,12 @@ impl Player {
             AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
         })?;
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `url` is a NUL-terminated string owned by this frame and `err`
+        // points to writable storage for the bridge.
         let ptr = unsafe { ffi::av_player_create_with_url(url.as_ptr(), is_file_url, &mut err) };
         if ptr.is_null() {
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::PLAYER_CREATE_FAILED, err) });
         }
         Ok(Self { ptr })
@@ -322,8 +359,12 @@ impl Player {
 
     fn info(&self) -> Result<PlayerInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `self.ptr` is a valid AVPlayer handle and `err` points to
+        // writable storage for the bridge.
         let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
         parse_json_and_free(json_ptr)
@@ -350,6 +391,8 @@ impl Player {
     }
 
     pub fn current_item(&self) -> Option<PlayerItem> {
+        // SAFETY: `self.ptr` is a valid AVPlayer handle; the bridge returns either
+        // a retained current item or null when no item is set.
         let ptr = unsafe { ffi::av_player_copy_current_item(self.ptr) };
         if ptr.is_null() {
             None
@@ -359,22 +402,32 @@ impl Player {
     }
 
     pub fn play(&self) {
+        // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
+        // ffi create function and has not been released.
         unsafe { ffi::av_player_play(self.ptr) };
     }
 
     pub fn pause(&self) {
+        // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
+        // ffi create function and has not been released.
         unsafe { ffi::av_player_pause(self.ptr) };
     }
 
     pub fn set_rate(&self, rate: f32) {
+        // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
+        // ffi create function and has not been released.
         unsafe { ffi::av_player_set_rate(self.ptr, rate) };
     }
 
     pub fn seek_to(&self, time: Time) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let (value, timescale, kind) = time.to_raw();
+        // SAFETY: `self.ptr` is a valid AVPlayer handle and `err` points to
+        // writable storage for the bridge.
         let status = unsafe { ffi::av_player_seek(self.ptr, value, timescale, kind, &mut err) };
         if status != ffi::status::OK {
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(status, err) });
         }
         Ok(())
@@ -396,6 +449,9 @@ impl Player {
         let userdata = Box::into_raw(state).cast::<c_void>();
         let (value, timescale, kind) = interval.to_raw();
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `self.ptr` is a valid AVPlayer handle, `userdata` is a Box
+        // allocation that remains alive until the drop callback runs, and `err`
+        // points to writable storage for the bridge.
         let token = unsafe {
             ffi::av_player_add_periodic_time_observer(
                 self.ptr,
@@ -412,7 +468,11 @@ impl Player {
             )
         };
         if token.is_null() {
+            // SAFETY: Observer creation failed before ownership of `userdata` was
+            // transferred to the bridge, so we must reclaim it locally.
             unsafe { periodic_time_observer_drop(userdata) };
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
         }
         Ok(PeriodicTimeObserver { token })
@@ -441,6 +501,9 @@ impl Player {
         });
         let userdata = Box::into_raw(state).cast::<c_void>();
         let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: `self.ptr` is a valid AVPlayer handle, `times_json` is a
+        // NUL-terminated string owned by this frame, `userdata` is kept alive
+        // until the drop callback runs, and `err` points to writable storage.
         let token = unsafe {
             ffi::av_player_add_boundary_time_observer(
                 self.ptr,
@@ -455,7 +518,11 @@ impl Player {
             )
         };
         if token.is_null() {
+            // SAFETY: Observer creation failed before ownership of `userdata` was
+            // transferred to the bridge, so we must reclaim it locally.
             unsafe { boundary_time_observer_drop(userdata) };
+            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
+            // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
         }
         Ok(BoundaryTimeObserver { token })
@@ -470,6 +537,8 @@ pub struct PeriodicTimeObserver {
 impl Drop for PeriodicTimeObserver {
     fn drop(&mut self) {
         if !self.token.is_null() {
+            // SAFETY: `self.token` is a valid observer token returned by the bridge
+            // and has not been released yet.
             unsafe { ffi::av_player_time_observer_release(self.token) };
             self.token = ptr::null_mut();
         }
@@ -484,11 +553,22 @@ pub struct BoundaryTimeObserver {
 impl Drop for BoundaryTimeObserver {
     fn drop(&mut self) {
         if !self.token.is_null() {
+            // SAFETY: `self.token` is a valid observer token returned by the bridge
+            // and has not been released yet.
             unsafe { ffi::av_player_time_observer_release(self.token) };
             self.token = ptr::null_mut();
         }
     }
 }
+
+// SAFETY: AVPlayer / AVPlayerItem ObjC handles and observer tokens are safe to
+// transfer across thread boundaries; method calls are internally dispatched
+// safely.
+unsafe impl Send for PlayerItem {}
+unsafe impl Send for PlayerItemObserver {}
+unsafe impl Send for Player {}
+unsafe impl Send for PeriodicTimeObserver {}
+unsafe impl Send for BoundaryTimeObserver {}
 
 unsafe extern "C" fn player_item_event_trampoline(
     userdata: *mut c_void,
@@ -498,8 +578,12 @@ unsafe extern "C" fn player_item_event_trampoline(
         return;
     }
 
-    let callback = &*userdata.cast::<PlayerItemObserverState>();
-    let Ok(payload) = CStr::from_ptr(payload_json).to_str() else {
+    // SAFETY: `userdata` is a valid `*mut PlayerItemObserverState` allocated in
+    // `observe()` and kept alive for the lifetime of the token; null is checked above.
+    let callback = unsafe { &*userdata.cast::<PlayerItemObserverState>() };
+    // SAFETY: `payload_json` is a non-null, NUL-terminated string owned by the
+    // bridge for the duration of this callback.
+    let Ok(payload) = unsafe { CStr::from_ptr(payload_json) }.to_str() else {
         return;
     };
     let Ok(payload) = serde_json::from_str::<PlayerItemEventPayload>(payload) else {
@@ -535,12 +619,16 @@ unsafe extern "C" fn player_item_event_trampoline(
         _ => return,
     };
 
-    (callback.callback)(event);
+    crate::util::catch_cb_panic("player_item_event_trampoline", || {
+        (callback.callback)(event);
+    });
 }
 
 unsafe extern "C" fn player_item_observer_drop(userdata: *mut c_void) {
     if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<PlayerItemObserverState>()));
+        // SAFETY: `userdata` is the unique Box pointer created in `observe()`; the
+        // Swift bridge calls this drop callback exactly once.
+        drop(unsafe { Box::from_raw(userdata.cast::<PlayerItemObserverState>()) });
     }
 }
 
@@ -553,13 +641,21 @@ unsafe extern "C" fn periodic_time_observer_trampoline(
     if userdata.is_null() {
         return;
     }
-    let state = &mut *userdata.cast::<PeriodicTimeObserverState>();
-    (state.callback)(Time::from_raw(value, timescale, kind));
+    // SAFETY: `userdata` is a valid `*mut PeriodicTimeObserverState` allocated in
+    // `add_periodic_time_observer()` and kept alive for the lifetime of the token;
+    // null is checked above.
+    let state = unsafe { &mut *userdata.cast::<PeriodicTimeObserverState>() };
+    crate::util::catch_cb_panic("periodic_time_observer_trampoline", || {
+        (state.callback)(Time::from_raw(value, timescale, kind));
+    });
 }
 
 unsafe extern "C" fn periodic_time_observer_drop(userdata: *mut c_void) {
     if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<PeriodicTimeObserverState>()));
+        // SAFETY: `userdata` is the unique Box pointer created in
+        // `add_periodic_time_observer()`; the Swift bridge calls this drop callback
+        // exactly once.
+        drop(unsafe { Box::from_raw(userdata.cast::<PeriodicTimeObserverState>()) });
     }
 }
 
@@ -567,13 +663,21 @@ unsafe extern "C" fn boundary_time_observer_trampoline(userdata: *mut c_void) {
     if userdata.is_null() {
         return;
     }
-    let state = &mut *userdata.cast::<BoundaryTimeObserverState>();
-    (state.callback)();
+    // SAFETY: `userdata` is a valid `*mut BoundaryTimeObserverState` allocated in
+    // `add_boundary_time_observer()` and kept alive for the lifetime of the token;
+    // null is checked above.
+    let state = unsafe { &mut *userdata.cast::<BoundaryTimeObserverState>() };
+    crate::util::catch_cb_panic("boundary_time_observer_trampoline", || {
+        (state.callback)();
+    });
 }
 
 unsafe extern "C" fn boundary_time_observer_drop(userdata: *mut c_void) {
     if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<BoundaryTimeObserverState>()));
+        // SAFETY: `userdata` is the unique Box pointer created in
+        // `add_boundary_time_observer()`; the Swift bridge calls this drop callback
+        // exactly once.
+        drop(unsafe { Box::from_raw(userdata.cast::<BoundaryTimeObserverState>()) });
     }
 }
 
@@ -588,9 +692,12 @@ fn queue_label_cstring(queue_label: Option<&str>) -> Result<Option<CString>, AVP
 }
 
 fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, AVPlayerError> {
+    // SAFETY: `json_ptr` is a non-null, NUL-terminated C string returned by the
+    // bridge; it remains valid until freed with `avp_string_free`.
     let json = unsafe { CStr::from_ptr(json_ptr) }
         .to_string_lossy()
         .into_owned();
+    // SAFETY: `json_ptr` was returned by the FFI and has not been freed yet.
     unsafe { ffi::avp_string_free(json_ptr) };
     serde_json::from_str::<T>(&json).map_err(|error| {
         AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}"))

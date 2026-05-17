@@ -206,9 +206,14 @@ impl TryFrom<PlayerInterstitialEventInfoPayload> for PlayerInterstitialEventInfo
             restrictions: PlayerInterstitialEventRestrictions::from_bits(payload.restrictions),
             resumption_offset: payload.resumption_offset,
             playout_limit: payload.playout_limit,
-            aligns_start_with_primary_segment_boundary: payload.aligns_start_with_primary_segment_boundary,
-            aligns_resumption_with_primary_segment_boundary: payload.aligns_resumption_with_primary_segment_boundary,
-            cue: payload.cue.as_deref().map(PlayerInterstitialEventCue::from_raw),
+            aligns_start_with_primary_segment_boundary: payload
+                .aligns_start_with_primary_segment_boundary,
+            aligns_resumption_with_primary_segment_boundary: payload
+                .aligns_resumption_with_primary_segment_boundary,
+            cue: payload
+                .cue
+                .as_deref()
+                .map(PlayerInterstitialEventCue::from_raw),
             will_play_once: payload.will_play_once,
             user_defined_attributes: parse_json_value(payload.user_defined_attributes_json)?,
             asset_list_response: parse_json_value(payload.asset_list_response_json)?,
@@ -249,7 +254,10 @@ impl TryFrom<PlayerInterstitialMonitorStatePayload> for PlayerInterstitialEventM
                 .into_iter()
                 .map(PlayerInterstitialEventInfo::try_from)
                 .collect::<Result<_, _>>()?,
-            current_event: payload.current_event.map(PlayerInterstitialEventInfo::try_from).transpose()?,
+            current_event: payload
+                .current_event
+                .map(PlayerInterstitialEventInfo::try_from)
+                .transpose()?,
             current_event_skippable_state: payload
                 .current_event_skippable_state_raw
                 .map(PlayerInterstitialEventSkippableEventState::from_raw),
@@ -342,7 +350,9 @@ impl PlayerInterstitialEvent {
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        PlayerInterstitialEventInfo::try_from(parse_json_and_free::<PlayerInterstitialEventInfoPayload>(json_ptr)?)
+        PlayerInterstitialEventInfo::try_from(parse_json_and_free::<
+            PlayerInterstitialEventInfoPayload,
+        >(json_ptr)?)
     }
 
     pub fn set_identifier(&self, identifier: &str) -> Result<(), AVPlayerError> {
@@ -352,17 +362,16 @@ impl PlayerInterstitialEvent {
     }
 
     pub fn set_restrictions(&self, restrictions: PlayerInterstitialEventRestrictions) {
-        unsafe { ffi::av_player_interstitial_event_set_restrictions(self.ptr, restrictions.bits()) };
+        unsafe {
+            ffi::av_player_interstitial_event_set_restrictions(self.ptr, restrictions.bits());
+        }
     }
 
     pub fn set_resumption_offset(&self, value: Time) {
         let (time_value, timescale, kind) = value.to_raw();
         unsafe {
             ffi::av_player_interstitial_event_set_resumption_offset(
-                self.ptr,
-                time_value,
-                timescale,
-                kind,
+                self.ptr, time_value, timescale, kind,
             );
         }
     }
@@ -371,10 +380,7 @@ impl PlayerInterstitialEvent {
         let (time_value, timescale, kind) = value.to_raw();
         unsafe {
             ffi::av_player_interstitial_event_set_playout_limit(
-                self.ptr,
-                time_value,
-                timescale,
-                kind,
+                self.ptr, time_value, timescale, kind,
             );
         }
     }
@@ -406,11 +412,15 @@ impl PlayerInterstitialEvent {
     }
 
     pub fn set_timeline_occupancy(&self, occupancy: PlayerInterstitialEventTimelineOccupancy) {
-        unsafe { ffi::av_player_interstitial_event_set_timeline_occupancy(self.ptr, occupancy.raw()) };
+        unsafe {
+            ffi::av_player_interstitial_event_set_timeline_occupancy(self.ptr, occupancy.raw());
+        }
     }
 
     pub fn set_supplements_primary_content(&self, enabled: bool) {
-        unsafe { ffi::av_player_interstitial_event_set_supplements_primary_content(self.ptr, enabled) };
+        unsafe {
+            ffi::av_player_interstitial_event_set_supplements_primary_content(self.ptr, enabled);
+        }
     }
 
     pub fn set_content_may_vary(&self, enabled: bool) {
@@ -443,14 +453,20 @@ impl PlayerInterstitialEventMonitor {
 
     pub fn state(&self) -> Result<PlayerInterstitialEventMonitorState, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_interstitial_event_monitor_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_interstitial_event_monitor_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        PlayerInterstitialEventMonitorState::try_from(parse_json_and_free::<PlayerInterstitialMonitorStatePayload>(json_ptr)?)
+        PlayerInterstitialEventMonitorState::try_from(parse_json_and_free::<
+            PlayerInterstitialMonitorStatePayload,
+        >(json_ptr)?)
     }
 
-    pub fn observe<F>(&self, callback: F) -> Result<PlayerInterstitialEventMonitorObserver, AVPlayerError>
+    pub fn observe<F>(
+        &self,
+        callback: F,
+    ) -> Result<PlayerInterstitialEventMonitorObserver, AVPlayerError>
     where
         F: Fn(PlayerInterstitialEventMonitorEvent) + Send + 'static,
     {
@@ -492,7 +508,8 @@ impl Drop for PlayerInterstitialEventController {
 impl PlayerInterstitialEventController {
     pub fn new(player: &Player) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_player_interstitial_event_controller_create(player.ptr, &mut err) };
+        let ptr =
+            unsafe { ffi::av_player_interstitial_event_controller_create(player.ptr, &mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -501,11 +518,14 @@ impl PlayerInterstitialEventController {
 
     pub fn state(&self) -> Result<PlayerInterstitialEventMonitorState, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_interstitial_event_controller_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_interstitial_event_controller_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        PlayerInterstitialEventMonitorState::try_from(parse_json_and_free::<PlayerInterstitialMonitorStatePayload>(json_ptr)?)
+        PlayerInterstitialEventMonitorState::try_from(parse_json_and_free::<
+            PlayerInterstitialMonitorStatePayload,
+        >(json_ptr)?)
     }
 
     pub fn set_events(&self, events: &[&PlayerInterstitialEvent]) -> Result<(), AVPlayerError> {
@@ -554,6 +574,13 @@ impl Drop for PlayerInterstitialEventMonitorObserver {
         }
     }
 }
+
+// SAFETY: These AVFoundation interstitial-event handles are safe to transfer
+// across thread boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerInterstitialEvent {}
+unsafe impl Send for PlayerInterstitialEventMonitor {}
+unsafe impl Send for PlayerInterstitialEventController {}
+unsafe impl Send for PlayerInterstitialEventMonitorObserver {}
 
 pub fn player_waiting_during_interstitial_event_reason() -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
@@ -639,7 +666,9 @@ unsafe extern "C" fn player_interstitial_event_monitor_event_trampoline(
         _ => return,
     };
 
-    (callback.callback)(event);
+    crate::util::catch_cb_panic("player_interstitial_event_monitor_event_trampoline", || {
+        (callback.callback)(event);
+    });
 }
 
 unsafe extern "C" fn player_interstitial_event_monitor_observer_drop(userdata: *mut c_void) {

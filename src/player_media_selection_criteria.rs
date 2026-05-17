@@ -246,9 +246,7 @@ impl PlayerRateDidChangeReason {
         match raw {
             "AVPlayerRateDidChangeReasonSetRateCalled" => Self::SetRateCalled,
             "AVPlayerRateDidChangeReasonSetRateFailed" => Self::SetRateFailed,
-            "AVPlayerRateDidChangeReasonAudioSessionInterrupted" => {
-                Self::AudioSessionInterrupted
-            }
+            "AVPlayerRateDidChangeReasonAudioSessionInterrupted" => Self::AudioSessionInterrupted,
             "AVPlayerRateDidChangeReasonAppBackgrounded" => Self::AppBackgrounded,
             other => Self::Unknown(other.to_owned()),
         }
@@ -514,7 +512,9 @@ impl Player {
         Ok(())
     }
 
-    pub fn network_resource_priority(&self) -> Result<PlayerNetworkResourcePriority, AVPlayerError> {
+    pub fn network_resource_priority(
+        &self,
+    ) -> Result<PlayerNetworkResourcePriority, AVPlayerError> {
         Ok(PlayerNetworkResourcePriority::from_raw(
             self.info_for_media_selection()?
                 .network_resource_priority
@@ -555,7 +555,9 @@ impl Player {
         let token = unsafe {
             ffi::av_player_add_rate_observer(
                 self.ptr,
-                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                queue_label
+                    .as_ref()
+                    .map_or(ptr::null(), |label| label.as_ptr()),
                 Some(player_rate_event_trampoline),
                 userdata,
                 Some(player_rate_observer_drop),
@@ -628,11 +630,15 @@ impl Drop for PlayerRateDidChangeObserver {
     }
 }
 
+// SAFETY: These media-selection handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerMediaSelectionCriteria {}
+unsafe impl Send for PlayerRateDidChangeObserver {}
+
 pub fn player_eligible_for_hdr_playback_did_change_notification() -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
-    let string_ptr = unsafe {
-        ffi::av_player_eligible_for_hdr_playback_did_change_notification_name(&mut err)
-    };
+    let string_ptr =
+        unsafe { ffi::av_player_eligible_for_hdr_playback_did_change_notification_name(&mut err) };
     if string_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
@@ -659,13 +665,15 @@ unsafe extern "C" fn player_rate_event_trampoline(
         return;
     };
 
-    (callback.callback)(PlayerRateDidChangeEvent {
-        rate: payload.rate,
-        reason: payload
-            .reason
-            .as_deref()
-            .map(PlayerRateDidChangeReason::from_raw),
-        has_originating_participant: payload.has_originating_participant,
+    crate::util::catch_cb_panic("player_rate_event_trampoline", || {
+        (callback.callback)(PlayerRateDidChangeEvent {
+            rate: payload.rate,
+            reason: payload
+                .reason
+                .as_deref()
+                .map(PlayerRateDidChangeReason::from_raw),
+            has_originating_participant: payload.has_originating_participant,
+        });
     });
 }
 

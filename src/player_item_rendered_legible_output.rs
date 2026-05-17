@@ -101,9 +101,8 @@ impl PlayerItemRenderedLegibleOutput {
 
     fn info(&self) -> Result<RenderedLegibleOutputInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_player_item_rendered_legible_output_info_json(self.ptr, &mut err)
-        };
+        let json_ptr =
+            unsafe { ffi::av_player_item_rendered_legible_output_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -161,7 +160,9 @@ impl PlayerItemRenderedLegibleOutput {
         let token = unsafe {
             ffi::av_player_item_rendered_legible_output_add_observer(
                 self.ptr,
-                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                queue_label
+                    .as_ref()
+                    .map_or(ptr::null(), |label| label.as_ptr()),
                 Some(rendered_legible_output_event_trampoline),
                 userdata,
                 Some(rendered_legible_output_observer_drop),
@@ -188,6 +189,11 @@ impl Drop for RenderedLegibleOutputObserver {
         }
     }
 }
+
+// SAFETY: These rendered-legible-output handles are safe to transfer across
+// thread boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerItemRenderedLegibleOutput {}
+unsafe impl Send for RenderedLegibleOutputObserver {}
 
 impl PlayerItem {
     pub fn add_rendered_legible_output(
@@ -240,11 +246,15 @@ unsafe extern "C" fn rendered_legible_output_event_trampoline(
         _ => return,
     };
 
-    (callback.callback)(event);
+    crate::util::catch_cb_panic("rendered_legible_output_event_trampoline", || {
+        (callback.callback)(event);
+    });
 }
 
 unsafe extern "C" fn rendered_legible_output_observer_drop(userdata: *mut c_void) {
     if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<RenderedLegibleOutputObserverState>()));
+        drop(Box::from_raw(
+            userdata.cast::<RenderedLegibleOutputObserverState>(),
+        ));
     }
 }

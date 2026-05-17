@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-05-17
+
+### Fixed
+
+- Wrapped all `extern "C"` event-callback trampolines in `catch_cb_panic` to
+  prevent panics from unwinding across the FFI boundary (undefined behaviour).
+- Added `unsafe impl Send` for all raw-pointer RAII wrappers (`Player`,
+  `PlayerItem`, `Asset`, observer tokens, output types, etc.) — the underlying
+  Obj-C handles are safe to transfer across thread boundaries.
+- Added `// SAFETY:` comments to unsafe blocks in `player.rs` and `async_api.rs`.
+- Narrowed `apple-cf` version range from `>=0.4, <0.8` to `>=0.4, <0.6`.
+- Set `doom-fish-utils` version constraint to `>=0.1, <0.3`.
+
 ## [0.3.0] - 2026-05-17
 
 ### Added

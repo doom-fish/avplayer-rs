@@ -122,7 +122,9 @@ impl PlayerItemVideoOutput {
         let token = unsafe {
             ffi::av_player_item_video_output_add_observer(
                 self.ptr,
-                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                queue_label
+                    .as_ref()
+                    .map_or(ptr::null(), |label| label.as_ptr()),
                 Some(video_output_event_trampoline),
                 userdata,
                 Some(video_output_observer_drop),
@@ -169,6 +171,11 @@ impl Drop for PlayerItemVideoOutputObserver {
     }
 }
 
+// SAFETY: These video-output handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerItemVideoOutput {}
+unsafe impl Send for PlayerItemVideoOutputObserver {}
+
 impl PlayerItem {
     pub fn add_video_output(&self, output: &PlayerItemVideoOutput) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
@@ -206,7 +213,9 @@ unsafe extern "C" fn video_output_event_trampoline(
         _ => return,
     };
 
-    (callback.callback)(event);
+    crate::util::catch_cb_panic("video_output_event_trampoline", || {
+        (callback.callback)(event);
+    });
 }
 
 unsafe extern "C" fn video_output_observer_drop(userdata: *mut c_void) {

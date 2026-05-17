@@ -70,6 +70,10 @@ impl Drop for PlayerLayer {
     }
 }
 
+// SAFETY: AVPlayerLayer ObjC handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerLayer {}
+
 impl PlayerLayer {
     pub fn new(player: Option<&Player>) -> Result<Self, AVPlayerError> {
         let ptr = unsafe {

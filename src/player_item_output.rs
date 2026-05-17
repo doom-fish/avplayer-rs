@@ -16,6 +16,11 @@ pub struct PlayerItemOutput<'a> {
     _marker: PhantomData<&'a c_void>,
 }
 
+// SAFETY: Borrowed AVPlayerItemOutput handles are safe to transfer across
+// thread boundaries while borrowed; method calls are internally dispatched
+// safely.
+unsafe impl Send for PlayerItemOutput<'_> {}
+
 impl PlayerItemOutput<'_> {
     pub(crate) const fn from_ptr(ptr: *mut c_void) -> Self {
         Self {

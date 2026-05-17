@@ -383,6 +383,13 @@ impl Drop for AssetReaderVideoCompositionOutput {
     }
 }
 
+// SAFETY: These AVAssetReader handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for AssetReader {}
+unsafe impl Send for AssetReaderTrackOutput {}
+unsafe impl Send for AssetReaderAudioMixOutput {}
+unsafe impl Send for AssetReaderVideoCompositionOutput {}
+
 impl AssetReaderVideoCompositionOutput {
     pub fn new(
         tracks: &[AssetTrack],

@@ -129,23 +129,29 @@ const fn bridge_err(msg: String) -> AVPlayerError {
 
 // ── AssetProperties future ────────────────────────────────────────────────────
 
-extern "C" fn asset_properties_cb(
-    result: *const c_void,
-    error: *const i8,
-    ctx: *mut c_void,
-) {
+extern "C" fn asset_properties_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
     if !error.is_null() {
+        // SAFETY: `error` is a non-null, NUL-terminated error string provided by
+        // the bridge for the duration of this callback.
         let msg = unsafe { error_from_cstr(error) };
+        // SAFETY: `ctx` is the raw context pointer vended by
+        // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
+        // this callback exactly once.
         unsafe { AsyncCompletion::<String>::complete_err(ctx, msg) };
     } else if !result.is_null() {
-        let s = unsafe {
-            CStr::from_ptr(result.cast())
-                .to_string_lossy()
-                .into_owned()
-        };
+        // SAFETY: `result` is a non-null, NUL-terminated C string returned by the
+        // bridge; it remains valid until freed with `avp_string_free`.
+        let s = unsafe { CStr::from_ptr(result.cast()).to_string_lossy().into_owned() };
+        // SAFETY: `result` was returned by the FFI and has not been freed yet.
         unsafe { ffi::avp_string_free(result as *mut _) };
+        // SAFETY: `ctx` is the raw context pointer vended by
+        // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
+        // this callback exactly once.
         unsafe { AsyncCompletion::complete_ok(ctx, s) };
     } else {
+        // SAFETY: `ctx` is the raw context pointer vended by
+        // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
+        // this callback exactly once.
         unsafe {
             AsyncCompletion::<String>::complete_err(ctx, "bridge returned null result".into());
         };
@@ -187,11 +193,7 @@ impl Future for AssetPropertiesFuture {
 
 // ── Tracks future ─────────────────────────────────────────────────────────────
 
-extern "C" fn asset_tracks_cb(
-    result: *const c_void,
-    error: *const i8,
-    ctx: *mut c_void,
-) {
+extern "C" fn asset_tracks_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
     asset_properties_cb(result, error, ctx); // same JSON-string pattern
 }
 
@@ -202,8 +204,7 @@ pub struct AssetTracksFuture {
 
 impl std::fmt::Debug for AssetTracksFuture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AssetTracksFuture")
-            .finish_non_exhaustive()
+        f.debug_struct("AssetTracksFuture").finish_non_exhaustive()
     }
 }
 
@@ -213,24 +214,20 @@ impl Future for AssetTracksFuture {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         Pin::new(&mut self.inner).poll(cx).map(|r| {
             let json = r.map_err(bridge_err)?;
-            let payloads =
-                serde_json::from_str::<Vec<TrackInfoPayload>>(&json).map_err(|e| {
-                    AVPlayerError::OperationFailed(format!(
-                        "async bridge JSON decode failed: {e}"
-                    ))
-                })?;
-            Ok(payloads.into_iter().map(|p| TrackProperties::from_payload(&p)).collect())
+            let payloads = serde_json::from_str::<Vec<TrackInfoPayload>>(&json).map_err(|e| {
+                AVPlayerError::OperationFailed(format!("async bridge JSON decode failed: {e}"))
+            })?;
+            Ok(payloads
+                .into_iter()
+                .map(|p| TrackProperties::from_payload(&p))
+                .collect())
         })
     }
 }
 
 // ── TrackById future ──────────────────────────────────────────────────────────
 
-extern "C" fn asset_track_by_id_cb(
-    result: *const c_void,
-    error: *const i8,
-    ctx: *mut c_void,
-) {
+extern "C" fn asset_track_by_id_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
     asset_properties_cb(result, error, ctx); // same JSON-string pattern
 }
 
@@ -255,12 +252,9 @@ impl Future for AssetTrackByIdFuture {
             if json.trim() == "null" {
                 return Ok(None);
             }
-            let payload =
-                serde_json::from_str::<TrackInfoPayload>(&json).map_err(|e| {
-                    AVPlayerError::OperationFailed(format!(
-                        "async bridge JSON decode failed: {e}"
-                    ))
-                })?;
+            let payload = serde_json::from_str::<TrackInfoPayload>(&json).map_err(|e| {
+                AVPlayerError::OperationFailed(format!("async bridge JSON decode failed: {e}"))
+            })?;
             Ok(Some(TrackProperties::from_payload(&payload)))
         })
     }
@@ -268,17 +262,21 @@ impl Future for AssetTrackByIdFuture {
 
 // ── Bool (seek / preroll) future ──────────────────────────────────────────────
 
-extern "C" fn bool_completion_cb(
-    result: *const c_void,
-    error: *const i8,
-    ctx: *mut c_void,
-) {
+extern "C" fn bool_completion_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
     if error.is_null() {
         // result is UnsafeRawPointer(bitPattern: 1) for true, nil for false
         let finished = !result.is_null();
+        // SAFETY: `ctx` is the raw context pointer vended by
+        // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
+        // this callback exactly once.
         unsafe { AsyncCompletion::complete_ok(ctx, finished) };
     } else {
+        // SAFETY: `error` is a non-null, NUL-terminated error string provided by
+        // the bridge for the duration of this callback.
         let msg = unsafe { error_from_cstr(error) };
+        // SAFETY: `ctx` is the raw context pointer vended by
+        // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
+        // this callback exactly once.
         unsafe { AsyncCompletion::<bool>::complete_err(ctx, msg) };
     }
 }
@@ -312,8 +310,7 @@ pub struct PlayerSeekFuture {
 
 impl std::fmt::Debug for PlayerSeekFuture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PlayerSeekFuture")
-            .finish_non_exhaustive()
+        f.debug_struct("PlayerSeekFuture").finish_non_exhaustive()
     }
 }
 
@@ -379,6 +376,8 @@ impl<'a> AsyncAsset<'a> {
     /// `AVAsset.load(...)`.
     pub fn load_properties(&self) -> AssetPropertiesFuture {
         let (future, ctx) = AsyncCompletion::create();
+        // SAFETY: `self.asset.ptr` is a valid borrowed AVAsset handle and `ctx` is
+        // the raw completion context returned by `AsyncCompletion::create()`.
         unsafe { ffi::avp_asset_load_properties_async(self.asset.ptr, asset_properties_cb, ctx) };
         AssetPropertiesFuture { inner: future }
     }
@@ -386,6 +385,8 @@ impl<'a> AsyncAsset<'a> {
     /// Load all tracks via `AVAsset.load(.tracks)`.
     pub fn load_tracks(&self) -> AssetTracksFuture {
         let (future, ctx) = AsyncCompletion::create();
+        // SAFETY: `self.asset.ptr` is a valid borrowed AVAsset handle and `ctx` is
+        // the raw completion context returned by `AsyncCompletion::create()`.
         unsafe { ffi::avp_asset_load_tracks_async(self.asset.ptr, asset_tracks_cb, ctx) };
         AssetTracksFuture { inner: future }
     }
@@ -397,6 +398,9 @@ impl<'a> AsyncAsset<'a> {
         use std::ffi::CString;
         let mt = CString::new(media_type).unwrap_or_default();
         let (future, ctx) = AsyncCompletion::create();
+        // SAFETY: `self.asset.ptr` is a valid borrowed AVAsset handle, `mt` is a
+        // NUL-terminated string owned by this frame, and `ctx` is the raw
+        // completion context returned by `AsyncCompletion::create()`.
         unsafe {
             ffi::avp_asset_load_tracks_with_media_type_async(
                 self.asset.ptr,
@@ -414,6 +418,8 @@ impl<'a> AsyncAsset<'a> {
     /// Returns `Ok(None)` when no track with the given ID exists.
     pub fn load_track_with_id(&self, track_id: i32) -> AssetTrackByIdFuture {
         let (future, ctx) = AsyncCompletion::create();
+        // SAFETY: `self.asset.ptr` is a valid borrowed AVAsset handle and `ctx` is
+        // the raw completion context returned by `AsyncCompletion::create()`.
         unsafe {
             ffi::avp_asset_load_track_with_id_async(
                 self.asset.ptr,
@@ -452,8 +458,17 @@ impl<'a> AsyncPlayerItem<'a> {
     pub fn seek(&self, time: Time) -> PlayerItemSeekFuture {
         let (future, ctx) = AsyncCompletion::create();
         let (value, timescale, kind) = time.to_raw();
+        // SAFETY: `self.item.ptr` is a valid borrowed AVPlayerItem handle and
+        // `ctx` is the raw completion context returned by `AsyncCompletion::create()`.
         unsafe {
-            ffi::avp_player_item_seek_async(self.item.ptr, value, timescale, kind, bool_completion_cb, ctx);
+            ffi::avp_player_item_seek_async(
+                self.item.ptr,
+                value,
+                timescale,
+                kind,
+                bool_completion_cb,
+                ctx,
+            );
         };
         PlayerItemSeekFuture { inner: future }
     }
@@ -487,8 +502,17 @@ impl<'a> AsyncPlayer<'a> {
     pub fn seek(&self, time: Time) -> PlayerSeekFuture {
         let (future, ctx) = AsyncCompletion::create();
         let (value, timescale, kind) = time.to_raw();
+        // SAFETY: `self.player.ptr` is a valid borrowed AVPlayer handle and `ctx`
+        // is the raw completion context returned by `AsyncCompletion::create()`.
         unsafe {
-            ffi::avp_player_seek_async(self.player.ptr, value, timescale, kind, bool_completion_cb, ctx);
+            ffi::avp_player_seek_async(
+                self.player.ptr,
+                value,
+                timescale,
+                kind,
+                bool_completion_cb,
+                ctx,
+            );
         };
         PlayerSeekFuture { inner: future }
     }
@@ -502,6 +526,8 @@ impl<'a> AsyncPlayer<'a> {
     /// macOS 26+ but remains functional on all supported platforms.
     pub fn preroll(&self, rate: f32) -> PlayerPrerollFuture {
         let (future, ctx) = AsyncCompletion::create();
+        // SAFETY: `self.player.ptr` is a valid borrowed AVPlayer handle and `ctx`
+        // is the raw completion context returned by `AsyncCompletion::create()`.
         unsafe {
             ffi::avp_player_preroll_async(self.player.ptr, rate, bool_completion_cb, ctx);
         };

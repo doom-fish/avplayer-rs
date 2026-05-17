@@ -149,7 +149,9 @@ impl PlayerItemMetadataOutput {
         let token = unsafe {
             ffi::av_player_item_metadata_output_add_observer(
                 self.ptr,
-                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                queue_label
+                    .as_ref()
+                    .map_or(ptr::null(), |label| label.as_ptr()),
                 Some(metadata_output_event_trampoline),
                 userdata,
                 Some(metadata_output_observer_drop),
@@ -189,6 +191,11 @@ impl Drop for MetadataOutputObserver {
     }
 }
 
+// SAFETY: These metadata-output handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerItemMetadataOutput {}
+unsafe impl Send for MetadataOutputObserver {}
+
 impl PlayerItem {
     pub fn add_metadata_output(
         &self,
@@ -226,17 +233,25 @@ unsafe extern "C" fn metadata_output_event_trampoline(
     let event = match payload.event.as_str() {
         "sequence_was_flushed" => MetadataOutputEvent::SequenceWasFlushed,
         "timed_metadata_groups" => MetadataOutputEvent::TimedMetadataGroups {
-            groups: payload.groups.into_iter().map(TimedMetadataGroup::from).collect(),
+            groups: payload
+                .groups
+                .into_iter()
+                .map(TimedMetadataGroup::from)
+                .collect(),
             track_present: payload.track_present,
         },
         _ => return,
     };
 
-    (callback.callback)(event);
+    crate::util::catch_cb_panic("metadata_output_event_trampoline", || {
+        (callback.callback)(event);
+    });
 }
 
 unsafe extern "C" fn metadata_output_observer_drop(userdata: *mut c_void) {
     if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<MetadataOutputObserverState>()));
+        drop(Box::from_raw(
+            userdata.cast::<MetadataOutputObserverState>(),
+        ));
     }
 }

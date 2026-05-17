@@ -12,7 +12,9 @@ use serde::Deserialize;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
-use crate::player_interstitial_event::{PlayerInterstitialEventInfo, PlayerInterstitialEventInfoPayload};
+use crate::player_interstitial_event::{
+    PlayerInterstitialEventInfo, PlayerInterstitialEventInfoPayload,
+};
 use crate::time::{Time, TimeRange};
 use crate::util::{parse_json_and_free, to_cstring};
 
@@ -77,7 +79,9 @@ pub struct PlayerItemIntegratedTimelineSegmentInfo {
     pub interstitial_event: Option<PlayerInterstitialEventInfo>,
 }
 
-impl TryFrom<PlayerItemIntegratedTimelineSegmentPayload> for PlayerItemIntegratedTimelineSegmentInfo {
+impl TryFrom<PlayerItemIntegratedTimelineSegmentPayload>
+    for PlayerItemIntegratedTimelineSegmentInfo
+{
     type Error = AVPlayerError;
 
     fn try_from(payload: PlayerItemIntegratedTimelineSegmentPayload) -> Result<Self, Self::Error> {
@@ -115,7 +119,9 @@ pub struct PlayerItemIntegratedTimelineSnapshotInfo {
     pub segments: Vec<PlayerItemIntegratedTimelineSegmentInfo>,
 }
 
-impl TryFrom<PlayerItemIntegratedTimelineSnapshotPayload> for PlayerItemIntegratedTimelineSnapshotInfo {
+impl TryFrom<PlayerItemIntegratedTimelineSnapshotPayload>
+    for PlayerItemIntegratedTimelineSnapshotInfo
+{
     type Error = AVPlayerError;
 
     fn try_from(payload: PlayerItemIntegratedTimelineSnapshotPayload) -> Result<Self, Self::Error> {
@@ -206,7 +212,8 @@ impl Drop for PlayerItemIntegratedTimeline {
 impl PlayerItemIntegratedTimeline {
     pub fn info(&self) -> Result<PlayerItemIntegratedTimelineInfo, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_integrated_timeline_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_item_integrated_timeline_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -215,7 +222,9 @@ impl PlayerItemIntegratedTimeline {
 
     pub fn current_snapshot(&self) -> Result<PlayerItemIntegratedTimelineSnapshot, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_player_item_integrated_timeline_copy_current_snapshot(self.ptr, &mut err) };
+        let ptr = unsafe {
+            ffi::av_player_item_integrated_timeline_copy_current_snapshot(self.ptr, &mut err)
+        };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -401,7 +410,9 @@ impl PlayerItemIntegratedTimelineSnapshot {
     }
 
     pub fn current_segment(&self) -> Option<PlayerItemIntegratedTimelineSegment> {
-        let ptr = unsafe { ffi::av_player_item_integrated_timeline_snapshot_copy_current_segment(self.ptr) };
+        let ptr = unsafe {
+            ffi::av_player_item_integrated_timeline_snapshot_copy_current_segment(self.ptr)
+        };
         if ptr.is_null() {
             None
         } else {
@@ -432,17 +443,14 @@ impl PlayerItemIntegratedTimelineSnapshot {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe {
             ffi::av_player_item_integrated_timeline_snapshot_segment_and_offset_json(
-                self.ptr,
-                value,
-                timescale,
-                kind,
-                &mut err,
+                self.ptr, value, timescale, kind, &mut err,
             )
         };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        let payload = parse_json_and_free::<PlayerItemIntegratedTimelineSegmentOffsetPayload>(json_ptr)?;
+        let payload =
+            parse_json_and_free::<PlayerItemIntegratedTimelineSegmentOffsetPayload>(json_ptr)?;
         Ok((
             PlayerItemIntegratedTimelineSegmentInfo::try_from(payload.segment)?,
             payload.offset,
@@ -466,7 +474,9 @@ impl Drop for PlayerItemIntegratedTimelineSegment {
 impl PlayerItemIntegratedTimelineSegment {
     pub fn info(&self) -> Result<PlayerItemIntegratedTimelineSegmentInfo, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_integrated_timeline_segment_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe {
+            ffi::av_player_item_integrated_timeline_segment_info_json(self.ptr, &mut err)
+        };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -489,20 +499,29 @@ impl Drop for PlayerItemIntegratedTimelineObserver {
     }
 }
 
+// SAFETY: These integrated-timeline wrapper handles are safe to transfer across
+// thread boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerItemIntegratedTimeline {}
+unsafe impl Send for PlayerItemIntegratedTimelineSnapshot {}
+unsafe impl Send for PlayerItemIntegratedTimelineSegment {}
+unsafe impl Send for PlayerItemIntegratedTimelineObserver {}
+
 pub fn player_integrated_timeline_snapshots_out_of_sync_notification(
 ) -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
-    let ptr = unsafe { ffi::av_player_integrated_timeline_snapshots_out_of_sync_notification(&mut err) };
+    let ptr =
+        unsafe { ffi::av_player_integrated_timeline_snapshots_out_of_sync_notification(&mut err) };
     if ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
     parse_json_and_free::<String>(ptr)
 }
 
-pub fn player_integrated_timeline_snapshots_out_of_sync_reason_key(
-) -> Result<String, AVPlayerError> {
+pub fn player_integrated_timeline_snapshots_out_of_sync_reason_key() -> Result<String, AVPlayerError>
+{
     let mut err: *mut c_char = ptr::null_mut();
-    let ptr = unsafe { ffi::av_player_integrated_timeline_snapshots_out_of_sync_reason_key(&mut err) };
+    let ptr =
+        unsafe { ffi::av_player_integrated_timeline_snapshots_out_of_sync_reason_key(&mut err) };
     if ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
@@ -513,9 +532,7 @@ pub fn player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed(
 ) -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
     let ptr = unsafe {
-        ffi::av_player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed(
-            &mut err,
-        )
+        ffi::av_player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed(&mut err)
     };
     if ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -572,7 +589,9 @@ unsafe extern "C" fn player_item_integrated_timeline_time_trampoline(
         return;
     }
     let state = &*userdata.cast::<TimelineTimeObserverState>();
-    (state.callback)(Time::from_raw(value, timescale, kind));
+    crate::util::catch_cb_panic("player_item_integrated_timeline_time_trampoline", || {
+        (state.callback)(Time::from_raw(value, timescale, kind));
+    });
 }
 
 unsafe extern "C" fn player_item_integrated_timeline_time_observer_drop(userdata: *mut c_void) {
@@ -596,15 +615,22 @@ unsafe extern "C" fn player_item_integrated_timeline_out_of_sync_trampoline(
     else {
         return;
     };
-    (state.callback)(PlayerIntegratedTimelineOutOfSyncEvent {
-        reason: PlayerIntegratedTimelineSnapshotsOutOfSyncReason::from_raw(&payload.reason),
-    });
+    crate::util::catch_cb_panic(
+        "player_item_integrated_timeline_out_of_sync_trampoline",
+        || {
+            (state.callback)(PlayerIntegratedTimelineOutOfSyncEvent {
+                reason: PlayerIntegratedTimelineSnapshotsOutOfSyncReason::from_raw(&payload.reason),
+            });
+        },
+    );
 }
 
 unsafe extern "C" fn player_item_integrated_timeline_out_of_sync_observer_drop(
     userdata: *mut c_void,
 ) {
     if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<TimelineOutOfSyncObserverState>()));
+        drop(Box::from_raw(
+            userdata.cast::<TimelineOutOfSyncObserverState>(),
+        ));
     }
 }

@@ -148,7 +148,9 @@ impl PlayerItemLegibleOutput {
         let token = unsafe {
             ffi::av_player_item_legible_output_add_observer(
                 self.ptr,
-                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                queue_label
+                    .as_ref()
+                    .map_or(ptr::null(), |label| label.as_ptr()),
                 Some(legible_output_event_trampoline),
                 userdata,
                 Some(legible_output_observer_drop),
@@ -218,6 +220,11 @@ impl Drop for PlayerItemLegibleOutputObserver {
     }
 }
 
+// SAFETY: These legible-output handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerItemLegibleOutput {}
+unsafe impl Send for PlayerItemLegibleOutputObserver {}
+
 impl PlayerItem {
     pub fn add_legible_output(
         &self,
@@ -265,7 +272,9 @@ unsafe extern "C" fn legible_output_event_trampoline(
         _ => return,
     };
 
-    (callback.callback)(event);
+    crate::util::catch_cb_panic("legible_output_event_trampoline", || {
+        (callback.callback)(event);
+    });
 }
 
 unsafe extern "C" fn legible_output_observer_drop(userdata: *mut c_void) {

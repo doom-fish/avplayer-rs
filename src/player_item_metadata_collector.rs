@@ -129,7 +129,9 @@ impl PlayerItemMetadataCollector {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_metadata_collector_create(
-                identifiers.as_ref().map_or(ptr::null(), |values| values.as_ptr()),
+                identifiers
+                    .as_ref()
+                    .map_or(ptr::null(), |values| values.as_ptr()),
                 classifying_labels
                     .as_ref()
                     .map_or(ptr::null(), |values| values.as_ptr()),
@@ -144,7 +146,8 @@ impl PlayerItemMetadataCollector {
 
     fn info(&self) -> Result<MetadataCollectorInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_metadata_collector_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_item_metadata_collector_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -182,7 +185,9 @@ impl PlayerItemMetadataCollector {
         let token = unsafe {
             ffi::av_player_item_metadata_collector_add_observer(
                 self.ptr,
-                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                queue_label
+                    .as_ref()
+                    .map_or(ptr::null(), |label| label.as_ptr()),
                 Some(metadata_collector_event_trampoline),
                 userdata,
                 Some(metadata_collector_observer_drop),
@@ -210,13 +215,20 @@ impl Drop for MetadataCollectorObserver {
     }
 }
 
+// SAFETY: These metadata-collector handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerItemMetadataCollector {}
+unsafe impl Send for MetadataCollectorObserver {}
+
 impl PlayerItem {
     pub fn add_metadata_collector(
         &self,
         collector: &PlayerItemMetadataCollector,
     ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let status = unsafe { ffi::av_player_item_add_media_data_collector(self.ptr, collector.ptr, &mut err) };
+        let status = unsafe {
+            ffi::av_player_item_add_media_data_collector(self.ptr, collector.ptr, &mut err)
+        };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
         }
@@ -227,16 +239,21 @@ impl PlayerItem {
         unsafe { ffi::av_player_item_remove_media_data_collector(self.ptr, collector.ptr) };
     }
 
-    pub fn media_data_collectors(&self) -> Result<Vec<PlayerItemMediaDataCollectorInfo>, AVPlayerError> {
+    pub fn media_data_collectors(
+        &self,
+    ) -> Result<Vec<PlayerItemMediaDataCollectorInfo>, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_media_data_collectors_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_item_media_data_collectors_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        Ok(parse_json_and_free::<Vec<PlayerItemMediaDataCollectorInfoPayload>>(json_ptr)?
-            .into_iter()
-            .map(PlayerItemMediaDataCollectorInfo::from)
-            .collect())
+        Ok(
+            parse_json_and_free::<Vec<PlayerItemMediaDataCollectorInfoPayload>>(json_ptr)?
+                .into_iter()
+                .map(PlayerItemMediaDataCollectorInfo::from)
+                .collect(),
+        )
     }
 }
 
@@ -267,11 +284,15 @@ unsafe extern "C" fn metadata_collector_event_trampoline(
         _ => return,
     };
 
-    (callback.callback)(event);
+    crate::util::catch_cb_panic("metadata_collector_event_trampoline", || {
+        (callback.callback)(event);
+    });
 }
 
 unsafe extern "C" fn metadata_collector_observer_drop(userdata: *mut c_void) {
     if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<MetadataCollectorObserverState>()));
+        drop(Box::from_raw(
+            userdata.cast::<MetadataCollectorObserverState>(),
+        ));
     }
 }

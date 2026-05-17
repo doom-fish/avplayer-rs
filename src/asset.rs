@@ -343,6 +343,12 @@ impl Drop for AssetTrack {
     }
 }
 
+// SAFETY: These AVFoundation asset handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for Asset {}
+unsafe impl Send for UrlAsset {}
+unsafe impl Send for AssetTrack {}
+
 impl AssetTrack {
     fn info(&self) -> Result<TrackInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();

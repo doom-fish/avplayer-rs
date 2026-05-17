@@ -148,7 +148,9 @@ impl Drop for PlayerVideoOutputTagCollection {
 }
 
 impl PlayerVideoOutputTagCollection {
-    pub fn from_preset(preset: PlayerVideoOutputTagCollectionPreset) -> Result<Self, AVPlayerError> {
+    pub fn from_preset(
+        preset: PlayerVideoOutputTagCollectionPreset,
+    ) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_video_output_tag_collection_create_with_preset(preset.raw(), &mut err)
@@ -161,7 +163,8 @@ impl PlayerVideoOutputTagCollection {
 
     fn info(&self) -> Result<PlayerVideoOutputTagCollectionPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_video_output_tag_collection_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_video_output_tag_collection_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -194,7 +197,10 @@ impl VideoOutputSpecification {
             ));
         }
         let mut err: *mut c_char = ptr::null_mut();
-        let ptrs = tag_collections.iter().map(|collection| collection.ptr).collect::<Vec<_>>();
+        let ptrs = tag_collections
+            .iter()
+            .map(|collection| collection.ptr)
+            .collect::<Vec<_>>();
         let ptr = unsafe {
             ffi::av_video_output_specification_create(ptrs.as_ptr(), ptrs.len(), &mut err)
         };
@@ -232,7 +238,9 @@ impl VideoOutputSpecification {
         let status = unsafe {
             ffi::av_video_output_specification_set_default_output_settings(
                 self.ptr,
-                settings.as_ref().map_or(ptr::null(), |settings| settings.as_ptr()),
+                settings
+                    .as_ref()
+                    .map_or(ptr::null(), |settings| settings.as_ptr()),
                 &mut err,
             )
         };
@@ -252,7 +260,9 @@ impl VideoOutputSpecification {
         let status = unsafe {
             ffi::av_video_output_specification_set_output_settings_for_tag_collection(
                 self.ptr,
-                settings.as_ref().map_or(ptr::null(), |settings| settings.as_ptr()),
+                settings
+                    .as_ref()
+                    .map_or(ptr::null(), |settings| settings.as_ptr()),
                 tag_collection.ptr,
                 &mut err,
             )
@@ -277,6 +287,12 @@ impl Drop for PlayerVideoOutput {
     }
 }
 
+// SAFETY: These player-video-output handles are safe to transfer across thread
+// boundaries; method calls are internally dispatched safely.
+unsafe impl Send for PlayerVideoOutputTagCollection {}
+unsafe impl Send for VideoOutputSpecification {}
+unsafe impl Send for PlayerVideoOutput {}
+
 impl PlayerVideoOutput {
     pub fn new(specification: &VideoOutputSpecification) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
@@ -287,7 +303,10 @@ impl PlayerVideoOutput {
         Ok(Self { ptr })
     }
 
-    pub fn sample_for_host_time(&self, host_time: Time) -> Result<Option<PlayerVideoOutputSample>, AVPlayerError> {
+    pub fn sample_for_host_time(
+        &self,
+        host_time: Time,
+    ) -> Result<Option<PlayerVideoOutputSample>, AVPlayerError> {
         let (value, timescale, kind) = host_time.to_raw();
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe {
@@ -296,14 +315,21 @@ impl PlayerVideoOutput {
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        Ok(parse_json_and_free::<Option<PlayerVideoOutputSamplePayload>>(json_ptr)?
-            .map(PlayerVideoOutputSample::from))
+        Ok(
+            parse_json_and_free::<Option<PlayerVideoOutputSamplePayload>>(json_ptr)?
+                .map(PlayerVideoOutputSample::from),
+        )
     }
 }
 
 impl Player {
     pub fn set_video_output(&self, output: Option<&PlayerVideoOutput>) {
-        unsafe { ffi::av_player_set_video_output(self.ptr, output.map_or(ptr::null_mut(), |output| output.ptr)) };
+        unsafe {
+            ffi::av_player_set_video_output(
+                self.ptr,
+                output.map_or(ptr::null_mut(), |output| output.ptr),
+            );
+        }
     }
 
     pub fn video_output(&self) -> Option<PlayerVideoOutput> {
