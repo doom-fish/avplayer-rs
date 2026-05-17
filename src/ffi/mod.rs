@@ -91,6 +91,11 @@ extern "C" {
         item: *mut c_void,
         algorithm: *const c_char,
     );
+    pub fn av_player_item_set_variant_preferences(
+        item: *mut c_void,
+        raw_value: u64,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
     pub fn av_player_item_track_count(item: *mut c_void) -> i32;
     pub fn av_player_item_copy_track_at_index(item: *mut c_void, index: i32) -> *mut c_void;
     pub fn av_player_item_copy_access_log(item: *mut c_void) -> *mut c_void;
@@ -148,6 +153,28 @@ extern "C" {
         player: *mut c_void,
         enabled: bool,
     );
+    pub fn av_player_set_audiovisual_background_playback_policy(
+        player: *mut c_void,
+        raw_value: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_set_network_resource_priority(
+        player: *mut c_void,
+        raw_value: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_add_rate_observer(
+        player: *mut c_void,
+        queue_label: *const c_char,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_rate_observer_release(observer: *mut c_void);
+    pub fn av_player_eligible_for_hdr_playback_did_change_notification_name(
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
     pub fn av_player_set_media_selection_criteria(
         player: *mut c_void,
         media_characteristic: *const c_char,
@@ -261,10 +288,21 @@ extern "C" {
     ) -> *mut c_char;
 
     pub fn av_player_item_output_release(output: *mut c_void);
+    pub fn av_player_item_output_suppresses_player_rendering(output: *mut c_void) -> bool;
     pub fn av_player_item_output_set_suppresses_player_rendering(
         output: *mut c_void,
         suppresses: bool,
     );
+    pub fn av_player_item_output_item_time_for_host_time_json(
+        output: *mut c_void,
+        host_time: f64,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn av_player_item_output_item_time_for_mach_absolute_time_json(
+        output: *mut c_void,
+        mach_absolute_time: i64,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
     pub fn av_player_item_video_output_create(
         settings_json: *const c_char,
         out_error_message: *mut *mut c_char,
@@ -273,6 +311,19 @@ extern "C" {
         output: *mut c_void,
         out_error_message: *mut *mut c_char,
     ) -> *mut c_char;
+    pub fn av_player_item_video_output_add_observer(
+        output: *mut c_void,
+        queue_label: *const c_char,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_video_output_observer_release(observer: *mut c_void);
+    pub fn av_player_item_video_output_request_notification_of_media_data_change(
+        output: *mut c_void,
+        interval: f64,
+    );
     pub fn av_player_item_video_output_has_new_pixel_buffer_for_item_time(
         output: *mut c_void,
         value: i64,
@@ -293,6 +344,15 @@ extern "C" {
         output: *mut c_void,
         out_error_message: *mut *mut c_char,
     ) -> *mut c_char;
+    pub fn av_player_item_metadata_output_add_observer(
+        output: *mut c_void,
+        queue_label: *const c_char,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_metadata_output_observer_release(observer: *mut c_void);
     pub fn av_player_item_metadata_output_set_advance_interval(output: *mut c_void, interval: f64);
     pub fn av_player_item_metadata_collector_create(
         identifiers_json: *const c_char,
@@ -331,7 +391,21 @@ extern "C" {
         output: *mut c_void,
         out_error_message: *mut *mut c_char,
     ) -> *mut c_char;
+    pub fn av_player_item_legible_output_add_observer(
+        output: *mut c_void,
+        queue_label: *const c_char,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_item_legible_output_observer_release(observer: *mut c_void);
     pub fn av_player_item_legible_output_set_advance_interval(output: *mut c_void, interval: f64);
+    pub fn av_player_item_legible_output_set_text_styling_resolution(
+        output: *mut c_void,
+        resolution: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
     pub fn av_player_item_rendered_legible_output_create(
         width: f64,
         height: f64,

@@ -53,6 +53,14 @@ public func av_player_item_output_release(_ outputPtr: UnsafeMutableRawPointer?)
     Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).release()
 }
 
+@_cdecl("av_player_item_output_suppresses_player_rendering")
+public func av_player_item_output_suppresses_player_rendering(
+    _ outputPtr: UnsafeMutableRawPointer
+) -> Bool {
+    let output = Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).takeUnretainedValue().output
+    return output.suppressesPlayerRendering
+}
+
 @_cdecl("av_player_item_output_set_suppresses_player_rendering")
 public func av_player_item_output_set_suppresses_player_rendering(
     _ outputPtr: UnsafeMutableRawPointer,
@@ -60,6 +68,36 @@ public func av_player_item_output_set_suppresses_player_rendering(
 ) {
     let output = Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).takeUnretainedValue().output
     output.suppressesPlayerRendering = suppresses
+}
+
+@_cdecl("av_player_item_output_item_time_for_host_time_json")
+public func av_player_item_output_item_time_for_host_time_json(
+    _ outputPtr: UnsafeMutableRawPointer,
+    _ hostTime: Double,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutablePointer<CChar>? {
+    let output = Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).takeUnretainedValue().output
+    do {
+        return ffiString(try avpEncodeJSON(encodeTime(output.itemTime(forHostTime: hostTime))))
+    } catch {
+        outErrorMessage?.pointee = ffiString(error.localizedDescription)
+        return nil
+    }
+}
+
+@_cdecl("av_player_item_output_item_time_for_mach_absolute_time_json")
+public func av_player_item_output_item_time_for_mach_absolute_time_json(
+    _ outputPtr: UnsafeMutableRawPointer,
+    _ machAbsoluteTime: Int64,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutablePointer<CChar>? {
+    let output = Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).takeUnretainedValue().output
+    do {
+        return ffiString(try avpEncodeJSON(encodeTime(output.itemTime(forMachAbsoluteTime: machAbsoluteTime))))
+    } catch {
+        outErrorMessage?.pointee = ffiString(error.localizedDescription)
+        return nil
+    }
 }
 
 @_cdecl("av_player_item_video_output_create")
@@ -89,7 +127,10 @@ public func av_player_item_video_output_info_json(
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
     let box = Unmanaged<AVPPlayerItemVideoOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
-    let payload = VideoOutputInfoPayload(suppressesPlayerRendering: box.videoOutput.suppressesPlayerRendering)
+    let payload = VideoOutputInfoPayload(
+        suppressesPlayerRendering: box.videoOutput.suppressesPlayerRendering,
+        hasDelegate: box.videoOutput.delegate != nil
+    )
     do {
         return ffiString(try avpEncodeJSON(payload))
     } catch {
@@ -149,7 +190,8 @@ public func av_player_item_metadata_output_info_json(
     let payload = MetadataOutputInfoPayload(
         suppressesPlayerRendering: box.metadataOutput.suppressesPlayerRendering,
         advanceIntervalForDelegateInvocation: box.metadataOutput.advanceIntervalForDelegateInvocation,
-        identifiers: box.identifiers
+        identifiers: box.identifiers,
+        hasDelegate: box.metadataOutput.delegate != nil
     )
     do {
         return ffiString(try avpEncodeJSON(payload))
@@ -205,7 +247,9 @@ public func av_player_item_legible_output_info_json(
     let payload = LegibleOutputInfoPayload(
         suppressesPlayerRendering: box.legibleOutput.suppressesPlayerRendering,
         advanceIntervalForDelegateInvocation: box.legibleOutput.advanceIntervalForDelegateInvocation,
-        nativeRepresentationSubtypes: box.nativeRepresentationSubtypes
+        nativeRepresentationSubtypes: box.nativeRepresentationSubtypes,
+        hasDelegate: box.legibleOutput.delegate != nil,
+        textStylingResolution: avpLegibleOutputTextStylingResolutionString(box.legibleOutput.textStylingResolution)
     )
     do {
         return ffiString(try avpEncodeJSON(payload))
@@ -222,6 +266,47 @@ public func av_player_item_legible_output_set_advance_interval(
 ) {
     let box = Unmanaged<AVPPlayerItemLegibleOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
     box.legibleOutput.advanceIntervalForDelegateInvocation = interval
+}
+
+@_cdecl("av_player_item_legible_output_set_text_styling_resolution")
+public func av_player_item_legible_output_set_text_styling_resolution(
+    _ outputPtr: UnsafeMutableRawPointer,
+    _ resolutionPtr: UnsafePointer<CChar>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    let box = Unmanaged<AVPPlayerItemLegibleOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
+    let rawValue = String(cString: resolutionPtr)
+    guard let resolution = avpLegibleOutputTextStylingResolution(from: rawValue) else {
+        outErrorMessage?.pointee = ffiString("invalid AVPlayerItemLegibleOutputTextStylingResolution: \(rawValue)")
+        return AVP_INVALID_ARGUMENT
+    }
+    box.legibleOutput.textStylingResolution = resolution
+    return AVP_OK
+}
+
+private func avpLegibleOutputTextStylingResolutionString(
+    _ resolution: AVPlayerItemLegibleOutput.TextStylingResolution
+) -> String {
+    if resolution == .default {
+        return "default"
+    }
+    if resolution == .sourceAndRulesOnly {
+        return "source_and_rules_only"
+    }
+    return resolution.rawValue
+}
+
+private func avpLegibleOutputTextStylingResolution(
+    from rawValue: String
+) -> AVPlayerItemLegibleOutput.TextStylingResolution? {
+    if rawValue == "default" || rawValue == AVPlayerItemLegibleOutput.TextStylingResolution.default.rawValue {
+        return .default
+    }
+    if rawValue == "source_and_rules_only"
+        || rawValue == AVPlayerItemLegibleOutput.TextStylingResolution.sourceAndRulesOnly.rawValue {
+        return .sourceAndRulesOnly
+    }
+    return nil
 }
 
 private func videoOutputSettingsDictionary(_ payload: VideoOutputSettingsPayload) throws -> [String: Any] {

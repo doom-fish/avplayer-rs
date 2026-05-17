@@ -1,6 +1,38 @@
 import AVFoundation
 import Foundation
 
+private func encodePlayerItemVideoCompositor(
+    _ compositor: any AVVideoCompositing
+) -> PlayerItemVideoCompositorPayload {
+    PlayerItemVideoCompositorPayload(
+        className: String(describing: type(of: compositor)),
+        supportsWideColorSourceFrames: {
+            if #available(macOS 10.12, *) {
+                return compositor.supportsWideColorSourceFrames
+            }
+            return nil
+        }(),
+        supportsHdrSourceFrames: {
+            if #available(macOS 11.0, *) {
+                return compositor.supportsHDRSourceFrames
+            }
+            return nil
+        }(),
+        supportsSourceTaggedBuffers: {
+            if #available(macOS 26.0, *) {
+                return compositor.supportsSourceTaggedBuffers
+            }
+            return nil
+        }(),
+        canConformColorOfSourceFrames: {
+            if #available(macOS 12.0, *) {
+                return compositor.canConformColorOfSourceFrames
+            }
+            return nil
+        }()
+    )
+}
+
 private final class PlayerItemObserverBox: NSObject {
     private let item: AVPlayerItem
     private let callback: AVPJsonCallback
@@ -9,10 +41,13 @@ private final class PlayerItemObserverBox: NSObject {
     private var disposed = false
     private var statusObservation: NSKeyValueObservation?
     private var presentationSizeObservation: NSKeyValueObservation?
+    private var timeJumpedObserver: NSObjectProtocol?
     private var endObserver: NSObjectProtocol?
+    private var failedToPlayToEndObserver: NSObjectProtocol?
     private var stalledObserver: NSObjectProtocol?
     private var accessLogObserver: NSObjectProtocol?
     private var errorLogObserver: NSObjectProtocol?
+    private var recommendedTimeOffsetFromLiveObserver: NSObjectProtocol?
     private var mediaSelectionObserver: NSObjectProtocol?
 
     init(
@@ -40,13 +75,25 @@ private final class PlayerItemObserverBox: NSObject {
         presentationSizeObservation?.invalidate()
         statusObservation = nil
         presentationSizeObservation = nil
-        [endObserver, stalledObserver, accessLogObserver, errorLogObserver, mediaSelectionObserver]
+        [
+            timeJumpedObserver,
+            endObserver,
+            failedToPlayToEndObserver,
+            stalledObserver,
+            accessLogObserver,
+            errorLogObserver,
+            recommendedTimeOffsetFromLiveObserver,
+            mediaSelectionObserver,
+        ]
             .compactMap { $0 }
             .forEach(NotificationCenter.default.removeObserver)
+        timeJumpedObserver = nil
         endObserver = nil
+        failedToPlayToEndObserver = nil
         stalledObserver = nil
         accessLogObserver = nil
         errorLogObserver = nil
+        recommendedTimeOffsetFromLiveObserver = nil
         mediaSelectionObserver = nil
         if let userData, let dropUserData {
             dropUserData(userData)
@@ -61,7 +108,9 @@ private final class PlayerItemObserverBox: NSObject {
                     event: "status_changed",
                     status: Int32(item.status.rawValue),
                     errorMessage: item.error?.localizedDescription,
-                    presentationSize: nil
+                    presentationSize: nil,
+                    hasOriginatingParticipant: nil,
+                    recommendedTimeOffsetFromLive: nil
                 )
             )
         }
@@ -74,7 +123,26 @@ private final class PlayerItemObserverBox: NSObject {
                     event: "presentation_size_changed",
                     status: nil,
                     errorMessage: nil,
-                    presentationSize: encodeSize(item.presentationSize)
+                    presentationSize: encodeSize(item.presentationSize),
+                    hasOriginatingParticipant: nil,
+                    recommendedTimeOffsetFromLive: nil
+                )
+            )
+        }
+
+        timeJumpedObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemTimeJumped,
+            object: item,
+            queue: nil
+        ) { [weak self] note in
+            self?.send(
+                PlayerItemEventPayload(
+                    event: "time_jumped",
+                    status: nil,
+                    errorMessage: nil,
+                    presentationSize: nil,
+                    hasOriginatingParticipant: note.userInfo?[AVPlayerItem.timeJumpedOriginatingParticipantKey] != nil,
+                    recommendedTimeOffsetFromLive: nil
                 )
             )
         }
@@ -84,7 +152,34 @@ private final class PlayerItemObserverBox: NSObject {
             object: item,
             queue: nil
         ) { [weak self] _ in
-            self?.send(PlayerItemEventPayload(event: "did_play_to_end", status: nil, errorMessage: nil, presentationSize: nil))
+            self?.send(
+                PlayerItemEventPayload(
+                    event: "did_play_to_end",
+                    status: nil,
+                    errorMessage: nil,
+                    presentationSize: nil,
+                    hasOriginatingParticipant: nil,
+                    recommendedTimeOffsetFromLive: nil
+                )
+            )
+        }
+
+        failedToPlayToEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: nil
+        ) { [weak self] note in
+            let errorMessage = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? NSError)?.localizedDescription
+            self?.send(
+                PlayerItemEventPayload(
+                    event: "failed_to_play_to_end",
+                    status: nil,
+                    errorMessage: errorMessage,
+                    presentationSize: nil,
+                    hasOriginatingParticipant: nil,
+                    recommendedTimeOffsetFromLive: nil
+                )
+            )
         }
 
         stalledObserver = NotificationCenter.default.addObserver(
@@ -92,7 +187,16 @@ private final class PlayerItemObserverBox: NSObject {
             object: item,
             queue: nil
         ) { [weak self] _ in
-            self?.send(PlayerItemEventPayload(event: "playback_stalled", status: nil, errorMessage: nil, presentationSize: nil))
+            self?.send(
+                PlayerItemEventPayload(
+                    event: "playback_stalled",
+                    status: nil,
+                    errorMessage: nil,
+                    presentationSize: nil,
+                    hasOriginatingParticipant: nil,
+                    recommendedTimeOffsetFromLive: nil
+                )
+            )
         }
 
         accessLogObserver = NotificationCenter.default.addObserver(
@@ -100,7 +204,16 @@ private final class PlayerItemObserverBox: NSObject {
             object: item,
             queue: nil
         ) { [weak self] _ in
-            self?.send(PlayerItemEventPayload(event: "new_access_log_entry", status: nil, errorMessage: nil, presentationSize: nil))
+            self?.send(
+                PlayerItemEventPayload(
+                    event: "new_access_log_entry",
+                    status: nil,
+                    errorMessage: nil,
+                    presentationSize: nil,
+                    hasOriginatingParticipant: nil,
+                    recommendedTimeOffsetFromLive: nil
+                )
+            )
         }
 
         errorLogObserver = NotificationCenter.default.addObserver(
@@ -108,7 +221,36 @@ private final class PlayerItemObserverBox: NSObject {
             object: item,
             queue: nil
         ) { [weak self] _ in
-            self?.send(PlayerItemEventPayload(event: "new_error_log_entry", status: nil, errorMessage: nil, presentationSize: nil))
+            self?.send(
+                PlayerItemEventPayload(
+                    event: "new_error_log_entry",
+                    status: nil,
+                    errorMessage: nil,
+                    presentationSize: nil,
+                    hasOriginatingParticipant: nil,
+                    recommendedTimeOffsetFromLive: nil
+                )
+            )
+        }
+
+        if #available(macOS 10.15, *) {
+            recommendedTimeOffsetFromLiveObserver = NotificationCenter.default.addObserver(
+                forName: Notification.Name(rawValue: "AVPlayerItemRecommendedTimeOffsetFromLiveDidChangeNotification"),
+                object: item,
+                queue: nil
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.send(
+                    PlayerItemEventPayload(
+                        event: "recommended_time_offset_from_live_did_change",
+                        status: nil,
+                        errorMessage: nil,
+                        presentationSize: nil,
+                        hasOriginatingParticipant: nil,
+                        recommendedTimeOffsetFromLive: encodeTime(self.item.recommendedTimeOffsetFromLive)
+                    )
+                )
+            }
         }
 
         mediaSelectionObserver = NotificationCenter.default.addObserver(
@@ -116,7 +258,16 @@ private final class PlayerItemObserverBox: NSObject {
             object: item,
             queue: nil
         ) { [weak self] _ in
-            self?.send(PlayerItemEventPayload(event: "media_selection_changed", status: nil, errorMessage: nil, presentationSize: nil))
+            self?.send(
+                PlayerItemEventPayload(
+                    event: "media_selection_changed",
+                    status: nil,
+                    errorMessage: nil,
+                    presentationSize: nil,
+                    hasOriginatingParticipant: nil,
+                    recommendedTimeOffsetFromLive: nil
+                )
+            )
         }
     }
 
@@ -201,7 +352,18 @@ public func av_player_item_info_json(
         preferredMaximumResolutionForExpensiveNetworks: encodeSize(item.preferredMaximumResolutionForExpensiveNetworks),
         audioTimePitchAlgorithm: avpAudioTimePitchAlgorithmString(item.audioTimePitchAlgorithm),
         outputCount: item.outputs.count,
-        trackCount: item.tracks.count
+        trackCount: item.tracks.count,
+        variantPreferences: {
+            if #available(macOS 11.3, *) {
+                return UInt64(item.variantPreferences.rawValue)
+            }
+            return nil
+        }(),
+        authorizationRequiredForPlayback: item.isAuthorizationRequiredForPlayback,
+        applicationAuthorizedForPlayback: item.isApplicationAuthorizedForPlayback,
+        contentAuthorizedForPlayback: item.isContentAuthorizedForPlayback,
+        contentAuthorizationRequestStatus: Int32(item.contentAuthorizationRequestStatus.rawValue),
+        customVideoCompositor: item.customVideoCompositor.map(encodePlayerItemVideoCompositor)
     )
     do {
         return ffiString(try avpEncodeJSON(payload))
@@ -302,6 +464,21 @@ public func av_player_item_set_audio_time_pitch_algorithm(
 ) {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     item.audioTimePitchAlgorithm = avpAudioTimePitchAlgorithm(from: String(cString: algorithmPtr))
+}
+
+@_cdecl("av_player_item_set_variant_preferences")
+public func av_player_item_set_variant_preferences(
+    _ itemPtr: UnsafeMutableRawPointer,
+    _ rawValue: UInt64,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard #available(macOS 11.3, *) else {
+        outErrorMessage?.pointee = ffiString("AVPlayerItem.variantPreferences requires macOS 11.3+")
+        return AVP_OPERATION_FAILED
+    }
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    item.variantPreferences = AVVariantPreferences(rawValue: UInt(rawValue))
+    return AVP_OK
 }
 
 @_cdecl("av_player_item_track_count")

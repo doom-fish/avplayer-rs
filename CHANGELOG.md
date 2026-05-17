@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-05-17
+
+### Added
+
+- Added `AVPlayer` rate-change observation (`AVPlayerRateDidChangeNotification`), typed waiting reasons, HDR notification-name access, audiovisual background playback policy, and network resource priority wrappers.
+- Added `AVPlayerItem` time-jumped / failed-to-end / live-offset observer events, `VariantPreferences`, protected-content authorization status accessors, and custom video compositor introspection.
+- Added abstract `PlayerItemOutput` timing/suppression helpers plus delegate observation for video, metadata, and legible outputs.
+- Added `PlayerItemLegibleOutput` text-styling-resolution helpers and typed `PlayerItemTrackVideoFieldMode::DeinterlaceFields` access.
+
+### Changed
+
+- Raised the audited AVFoundation coverage from `70.64%` to `100.00%` in `COVERAGE_AUDIT.md` by closing the remaining 32 gaps.
+- Expanded examples and integration tests to exercise the newly wrapped player, player-item, and output APIs.
+
 ## [0.2.1] - 2026-05-16
 
 ### Added

@@ -34,6 +34,89 @@ private final class TimeObserverBox {
     }
 }
 
+private struct PlayerRateDidChangeEventPayload: Codable {
+    let rate: Float
+    let reason: String?
+    let hasOriginatingParticipant: Bool
+}
+
+@available(macOS 12.0, *)
+private final class PlayerRateObserverBox: NSObject {
+    private weak var player: AVPlayer?
+    private let callback: AVPJsonCallback
+    private let queue: DispatchQueue?
+    private let userData: UnsafeMutableRawPointer?
+    private let dropUserData: AVPDropCallback?
+    private let deliveryGroup = DispatchGroup()
+    private var observer: NSObjectProtocol?
+    private var disposed = false
+
+    init(
+        player: AVPlayer,
+        queue: DispatchQueue?,
+        callback: @escaping AVPJsonCallback,
+        userData: UnsafeMutableRawPointer?,
+        dropUserData: AVPDropCallback?
+    ) {
+        self.player = player
+        self.callback = callback
+        self.queue = queue
+        self.userData = userData
+        self.dropUserData = dropUserData
+        super.init()
+        observer = NotificationCenter.default.addObserver(
+            forName: Notification.Name(rawValue: "AVPlayerRateDidChangeNotification"),
+            object: player,
+            queue: nil
+        ) { [weak self, weak player] note in
+            guard let self, let player = player ?? (note.object as? AVPlayer) else { return }
+            self.send(
+                PlayerRateDidChangeEventPayload(
+                    rate: player.rate,
+                    reason: note.userInfo?[AVPlayer.rateDidChangeReasonKey] as? String,
+                    hasOriginatingParticipant: note.userInfo?[AVPlayer.rateDidChangeOriginatingParticipantKey] != nil
+                )
+            )
+        }
+    }
+
+    deinit {
+        dispose()
+    }
+
+    func dispose() {
+        guard !disposed else { return }
+        disposed = true
+        if let observer {
+            NotificationCenter.default.removeObserver(observer)
+            self.observer = nil
+        }
+        deliveryGroup.wait()
+        if let userData, let dropUserData {
+            dropUserData(userData)
+        }
+    }
+
+    private func send(_ payload: PlayerRateDidChangeEventPayload) {
+        let deliver = { [callback, userData] in
+            guard let json = try? avpEncodeJSON(payload) else {
+                callback(userData, nil)
+                return
+            }
+            json.withCString { callback(userData, $0) }
+        }
+        if let queue {
+            deliveryGroup.enter()
+            queue.async { [self] in
+                defer { deliveryGroup.leave() }
+                deliver()
+            }
+        } else {
+            deliver()
+        }
+    }
+}
+
 @_cdecl("av_player_create")
 public func av_player_create(
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
@@ -99,7 +182,25 @@ public func av_player_info_json(
         volume: player.volume,
         muted: player.isMuted,
         automaticallyWaitsToMinimizeStalling: player.automaticallyWaitsToMinimizeStalling,
-        appliesMediaSelectionCriteriaAutomatically: player.appliesMediaSelectionCriteriaAutomatically
+        appliesMediaSelectionCriteriaAutomatically: player.appliesMediaSelectionCriteriaAutomatically,
+        eligibleForHdrPlayback: {
+            if #available(macOS 10.15, *) {
+                return AVPlayer.eligibleForHDRPlayback
+            }
+            return nil
+        }(),
+        audiovisualBackgroundPlaybackPolicy: {
+            if #available(macOS 12.0, *) {
+                return Int32(player.audiovisualBackgroundPlaybackPolicy.rawValue)
+            }
+            return nil
+        }(),
+        networkResourcePriority: {
+            if #available(macOS 26.0, *) {
+                return Int32(player.networkResourcePriority.rawValue)
+            }
+            return nil
+        }()
     )
     do {
         return ffiString(try avpEncodeJSON(payload))
@@ -205,6 +306,91 @@ public func av_player_set_applies_media_selection_criteria_automatically(
 ) {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     player.appliesMediaSelectionCriteriaAutomatically = enabled
+}
+
+@_cdecl("av_player_set_audiovisual_background_playback_policy")
+public func av_player_set_audiovisual_background_playback_policy(
+    _ playerPtr: UnsafeMutableRawPointer,
+    _ rawValue: Int32,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard #available(macOS 12.0, *) else {
+        outErrorMessage?.pointee = ffiString("AVPlayer.audiovisualBackgroundPlaybackPolicy requires macOS 12.0+")
+        return AVP_OPERATION_FAILED
+    }
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    guard let policy = AVPlayerAudiovisualBackgroundPlaybackPolicy(rawValue: Int(rawValue)) else {
+        outErrorMessage?.pointee = ffiString("invalid AVPlayerAudiovisualBackgroundPlaybackPolicy raw value: \(rawValue)")
+        return AVP_INVALID_ARGUMENT
+    }
+    player.audiovisualBackgroundPlaybackPolicy = policy
+    return AVP_OK
+}
+
+@_cdecl("av_player_set_network_resource_priority")
+public func av_player_set_network_resource_priority(
+    _ playerPtr: UnsafeMutableRawPointer,
+    _ rawValue: Int32,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard #available(macOS 26.0, *) else {
+        outErrorMessage?.pointee = ffiString("AVPlayer.networkResourcePriority requires macOS 26.0+")
+        return AVP_OPERATION_FAILED
+    }
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    guard let priority = AVPlayer.NetworkResourcePriority(rawValue: Int(rawValue)) else {
+        outErrorMessage?.pointee = ffiString("invalid AVPlayerNetworkResourcePriority raw value: \(rawValue)")
+        return AVP_INVALID_ARGUMENT
+    }
+    player.networkResourcePriority = priority
+    return AVP_OK
+}
+
+@_cdecl("av_player_add_rate_observer")
+public func av_player_add_rate_observer(
+    _ playerPtr: UnsafeMutableRawPointer,
+    _ queueLabel: UnsafePointer<CChar>?,
+    _ callback: AVPJsonCallback?,
+    _ userData: UnsafeMutableRawPointer?,
+    _ dropUserData: AVPDropCallback?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    guard #available(macOS 12.0, *) else {
+        outErrorMessage?.pointee = ffiString("AVPlayerRateDidChangeNotification requires macOS 12.0+")
+        return nil
+    }
+    guard let callback else {
+        outErrorMessage?.pointee = ffiString("missing player rate observer callback")
+        return nil
+    }
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    let observer = PlayerRateObserverBox(
+        player: player,
+        queue: avpDispatchQueue(from: queueLabel),
+        callback: callback,
+        userData: userData,
+        dropUserData: dropUserData
+    )
+    return Unmanaged.passRetained(observer).toOpaque()
+}
+
+@_cdecl("av_player_rate_observer_release")
+public func av_player_rate_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
+    guard let observerPtr else { return }
+    if #available(macOS 12.0, *) {
+        Unmanaged<PlayerRateObserverBox>.fromOpaque(observerPtr).release()
+    }
+}
+
+@_cdecl("av_player_eligible_for_hdr_playback_did_change_notification_name")
+public func av_player_eligible_for_hdr_playback_did_change_notification_name(
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutablePointer<CChar>? {
+    guard #available(macOS 10.15, *) else {
+        outErrorMessage?.pointee = ffiString("AVPlayerEligibleForHDRPlaybackDidChangeNotification requires macOS 10.15+")
+        return nil
+    }
+    return ffiString("AVPlayerEligibleForHDRPlaybackDidChangeNotification")
 }
 
 @_cdecl("av_player_set_media_selection_criteria")

@@ -7,8 +7,11 @@ use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
+use crate::metadata::MetadataItem;
 use crate::player::PlayerItem;
-use crate::util::{json_cstring, parse_json_and_free};
+use crate::player_item_output::PlayerItemOutput;
+use crate::time::TimeRange;
+use crate::util::{json_cstring, parse_json_and_free, to_cstring};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +19,50 @@ struct MetadataOutputInfoPayload {
     suppresses_player_rendering: bool,
     advance_interval_for_delegate_invocation: f64,
     identifiers: Option<Vec<String>>,
+    has_delegate: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimedMetadataGroupPayload {
+    time_range: TimeRange,
+    items: Vec<MetadataItem>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimedMetadataGroup {
+    pub time_range: TimeRange,
+    pub items: Vec<MetadataItem>,
+}
+
+impl From<TimedMetadataGroupPayload> for TimedMetadataGroup {
+    fn from(payload: TimedMetadataGroupPayload) -> Self {
+        Self {
+            time_range: payload.time_range,
+            items: payload.items,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MetadataOutputEventPayload {
+    event: String,
+    groups: Vec<TimedMetadataGroupPayload>,
+    track_present: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MetadataOutputEvent {
+    SequenceWasFlushed,
+    TimedMetadataGroups {
+        groups: Vec<TimedMetadataGroup>,
+        track_present: bool,
+    },
+}
+
+struct MetadataOutputObserverState {
+    callback: Box<dyn Fn(MetadataOutputEvent) + Send + 'static>,
 }
 
 pub struct PlayerItemMetadataOutput {
@@ -71,8 +118,49 @@ impl PlayerItemMetadataOutput {
         Ok(self.info()?.suppresses_player_rendering)
     }
 
+    pub fn has_delegate(&self) -> Result<bool, AVPlayerError> {
+        Ok(self.info()?.has_delegate)
+    }
+
+    pub const fn as_output(&self) -> PlayerItemOutput<'_> {
+        PlayerItemOutput::from_ptr(self.ptr)
+    }
+
     pub fn set_suppresses_player_rendering(&self, suppresses: bool) {
         unsafe { ffi::av_player_item_output_set_suppresses_player_rendering(self.ptr, suppresses) };
+    }
+
+    pub fn observe<F>(
+        &self,
+        queue_label: Option<&str>,
+        callback: F,
+    ) -> Result<MetadataOutputObserver, AVPlayerError>
+    where
+        F: Fn(MetadataOutputEvent) + Send + 'static,
+    {
+        let queue_label = queue_label
+            .map(|label| to_cstring(label, "metadata output queue label"))
+            .transpose()?;
+        let state = Box::new(MetadataOutputObserverState {
+            callback: Box::new(callback),
+        });
+        let userdata = Box::into_raw(state).cast::<c_void>();
+        let mut err: *mut c_char = ptr::null_mut();
+        let token = unsafe {
+            ffi::av_player_item_metadata_output_add_observer(
+                self.ptr,
+                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                Some(metadata_output_event_trampoline),
+                userdata,
+                Some(metadata_output_observer_drop),
+                &mut err,
+            )
+        };
+        if token.is_null() {
+            unsafe { metadata_output_observer_drop(userdata) };
+            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
+        }
+        Ok(MetadataOutputObserver { token })
     }
 
     pub fn advance_interval_for_delegate_invocation(&self) -> Result<f64, AVPlayerError> {
@@ -85,6 +173,19 @@ impl PlayerItemMetadataOutput {
 
     pub fn identifiers(&self) -> Result<Vec<String>, AVPlayerError> {
         Ok(self.info()?.identifiers.unwrap_or_default())
+    }
+}
+
+pub struct MetadataOutputObserver {
+    token: *mut c_void,
+}
+
+impl Drop for MetadataOutputObserver {
+    fn drop(&mut self) {
+        if !self.token.is_null() {
+            unsafe { ffi::av_player_item_metadata_output_observer_release(self.token) };
+            self.token = ptr::null_mut();
+        }
     }
 }
 
@@ -103,5 +204,39 @@ impl PlayerItem {
 
     pub fn remove_metadata_output(&self, output: &PlayerItemMetadataOutput) {
         unsafe { ffi::av_player_item_remove_output(self.ptr, output.ptr) };
+    }
+}
+
+unsafe extern "C" fn metadata_output_event_trampoline(
+    userdata: *mut c_void,
+    payload_json: *const c_char,
+) {
+    if userdata.is_null() || payload_json.is_null() {
+        return;
+    }
+
+    let callback = &*userdata.cast::<MetadataOutputObserverState>();
+    let Ok(payload) = core::ffi::CStr::from_ptr(payload_json).to_str() else {
+        return;
+    };
+    let Ok(payload) = serde_json::from_str::<MetadataOutputEventPayload>(payload) else {
+        return;
+    };
+
+    let event = match payload.event.as_str() {
+        "sequence_was_flushed" => MetadataOutputEvent::SequenceWasFlushed,
+        "timed_metadata_groups" => MetadataOutputEvent::TimedMetadataGroups {
+            groups: payload.groups.into_iter().map(TimedMetadataGroup::from).collect(),
+            track_present: payload.track_present,
+        },
+        _ => return,
+    };
+
+    (callback.callback)(event);
+}
+
+unsafe extern "C" fn metadata_output_observer_drop(userdata: *mut c_void) {
+    if !userdata.is_null() {
+        drop(Box::from_raw(userdata.cast::<MetadataOutputObserverState>()));
     }
 }

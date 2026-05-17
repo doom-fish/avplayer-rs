@@ -8,7 +8,9 @@ use serde::Deserialize;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
-use crate::util::{json_cstring, parse_json_and_free};
+use crate::player_item_output::PlayerItemOutput;
+use crate::time::Time;
+use crate::util::{json_cstring, parse_json_and_free, to_cstring};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +18,57 @@ struct LegibleOutputInfoPayload {
     suppresses_player_rendering: bool,
     advance_interval_for_delegate_invocation: f64,
     native_representation_subtypes: Vec<u32>,
+    has_delegate: bool,
+    text_styling_resolution: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlayerItemLegibleOutputTextStylingResolution {
+    Default,
+    SourceAndRulesOnly,
+    Unknown(String),
+}
+
+impl PlayerItemLegibleOutputTextStylingResolution {
+    fn from_raw(raw: &str) -> Self {
+        match raw {
+            "default" => Self::Default,
+            "source_and_rules_only" => Self::SourceAndRulesOnly,
+            other => Self::Unknown(other.to_owned()),
+        }
+    }
+
+    fn as_raw(&self) -> &str {
+        match self {
+            Self::Default => "default",
+            Self::SourceAndRulesOnly => "source_and_rules_only",
+            Self::Unknown(raw) => raw,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegibleOutputEventPayload {
+    event: String,
+    item_time: Option<Time>,
+    strings: Vec<String>,
+    native_sample_buffer_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlayerItemLegibleOutputEvent {
+    SequenceWasFlushed,
+    AttributedStrings {
+        item_time: Time,
+        strings: Vec<String>,
+        native_sample_buffer_count: usize,
+    },
+}
+
+struct LegibleOutputObserverState {
+    callback: Box<dyn Fn(PlayerItemLegibleOutputEvent) + Send + 'static>,
 }
 
 pub struct PlayerItemLegibleOutput {
@@ -64,8 +117,49 @@ impl PlayerItemLegibleOutput {
         Ok(self.info()?.suppresses_player_rendering)
     }
 
+    pub fn has_delegate(&self) -> Result<bool, AVPlayerError> {
+        Ok(self.info()?.has_delegate)
+    }
+
+    pub const fn as_output(&self) -> PlayerItemOutput<'_> {
+        PlayerItemOutput::from_ptr(self.ptr)
+    }
+
     pub fn set_suppresses_player_rendering(&self, suppresses: bool) {
         unsafe { ffi::av_player_item_output_set_suppresses_player_rendering(self.ptr, suppresses) };
+    }
+
+    pub fn observe<F>(
+        &self,
+        queue_label: Option<&str>,
+        callback: F,
+    ) -> Result<PlayerItemLegibleOutputObserver, AVPlayerError>
+    where
+        F: Fn(PlayerItemLegibleOutputEvent) + Send + 'static,
+    {
+        let queue_label = queue_label
+            .map(|label| to_cstring(label, "legible output queue label"))
+            .transpose()?;
+        let state = Box::new(LegibleOutputObserverState {
+            callback: Box::new(callback),
+        });
+        let userdata = Box::into_raw(state).cast::<c_void>();
+        let mut err: *mut c_char = ptr::null_mut();
+        let token = unsafe {
+            ffi::av_player_item_legible_output_add_observer(
+                self.ptr,
+                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                Some(legible_output_event_trampoline),
+                userdata,
+                Some(legible_output_observer_drop),
+                &mut err,
+            )
+        };
+        if token.is_null() {
+            unsafe { legible_output_observer_drop(userdata) };
+            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
+        }
+        Ok(PlayerItemLegibleOutputObserver { token })
     }
 
     pub fn advance_interval_for_delegate_invocation(&self) -> Result<f64, AVPlayerError> {
@@ -78,6 +172,49 @@ impl PlayerItemLegibleOutput {
 
     pub fn native_representation_subtypes(&self) -> Result<Vec<u32>, AVPlayerError> {
         Ok(self.info()?.native_representation_subtypes)
+    }
+
+    pub fn text_styling_resolution(
+        &self,
+    ) -> Result<PlayerItemLegibleOutputTextStylingResolution, AVPlayerError> {
+        Ok(PlayerItemLegibleOutputTextStylingResolution::from_raw(
+            &self.info()?.text_styling_resolution,
+        ))
+    }
+
+    pub fn set_text_styling_resolution(
+        &self,
+        resolution: &PlayerItemLegibleOutputTextStylingResolution,
+    ) -> Result<(), AVPlayerError> {
+        let resolution = to_cstring(
+            resolution.as_raw(),
+            "legible output text styling resolution",
+        )?;
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_player_item_legible_output_set_text_styling_resolution(
+                self.ptr,
+                resolution.as_ptr(),
+                &mut err,
+            )
+        };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
+    }
+}
+
+pub struct PlayerItemLegibleOutputObserver {
+    token: *mut c_void,
+}
+
+impl Drop for PlayerItemLegibleOutputObserver {
+    fn drop(&mut self) {
+        if !self.token.is_null() {
+            unsafe { ffi::av_player_item_legible_output_observer_release(self.token) };
+            self.token = ptr::null_mut();
+        }
     }
 }
 
@@ -96,5 +233,43 @@ impl PlayerItem {
 
     pub fn remove_legible_output(&self, output: &PlayerItemLegibleOutput) {
         unsafe { ffi::av_player_item_remove_output(self.ptr, output.ptr) };
+    }
+}
+
+unsafe extern "C" fn legible_output_event_trampoline(
+    userdata: *mut c_void,
+    payload_json: *const c_char,
+) {
+    if userdata.is_null() || payload_json.is_null() {
+        return;
+    }
+
+    let callback = &*userdata.cast::<LegibleOutputObserverState>();
+    let Ok(payload) = core::ffi::CStr::from_ptr(payload_json).to_str() else {
+        return;
+    };
+    let Ok(payload) = serde_json::from_str::<LegibleOutputEventPayload>(payload) else {
+        return;
+    };
+
+    let event = match payload.event.as_str() {
+        "sequence_was_flushed" => PlayerItemLegibleOutputEvent::SequenceWasFlushed,
+        "attributed_strings" => PlayerItemLegibleOutputEvent::AttributedStrings {
+            item_time: match payload.item_time {
+                Some(item_time) => item_time,
+                None => return,
+            },
+            strings: payload.strings,
+            native_sample_buffer_count: payload.native_sample_buffer_count,
+        },
+        _ => return,
+    };
+
+    (callback.callback)(event);
+}
+
+unsafe extern "C" fn legible_output_observer_drop(userdata: *mut c_void) {
+    if !userdata.is_null() {
+        drop(Box::from_raw(userdata.cast::<LegibleOutputObserverState>()));
     }
 }

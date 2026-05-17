@@ -2,7 +2,7 @@
 
 Safe Rust bindings for Apple's [AVFoundation playback stack](https://developer.apple.com/documentation/avfoundation) on macOS: `AVPlayer`, `AVPlayerItem`, `AVPlayerLayer`, `AVQueuePlayer`, `AVPlayerLooper`, `AVAsset`, `AVURLAsset`, and `AVAssetReader`.
 
-> **Status:** `0.2.1` expands the crate from basic playback to broad player-subsystem coverage, including player-video-output, rendered-legible-output, metadata-collector, interstitial-event, and integrated-timeline APIs. See [`COVERAGE.md`](COVERAGE.md) for the per-area map.
+> **Status:** `0.2.2` closes the remaining audited AVPlayer / AVPlayerItem gaps and brings the crate to 100% coverage of the audited macOS playback surface, including rate-change notifications, HDR/background/network policy, variant preferences, protected-content authorization, and abstract/delegate player-item outputs. See [`COVERAGE.md`](COVERAGE.md) for the per-area map.
 
 ## Quick start
 
@@ -29,11 +29,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Highlights
 
 - `AVAsset` / `AVURLAsset`: async key loading, URL inspection, metadata, track enumeration, and `UrlAssetOptions`.
-- `AVPlayer`: play/pause/rate/seek, volume + mute, action-at-item-end, time-control status, time observers, and media-selection criteria application.
-- `AVPlayerItem`: observation callbacks, buffering/bit-rate/resolution preferences, audio time-pitch selection, loaded/seekable ranges, outputs, and per-item logs.
+- `AVPlayer`: play/pause/rate/seek, volume + mute, action-at-item-end, time-control/waiting-state inspection, time observers, rate-change observation, HDR/background/network policy access, and media-selection criteria application.
+- `AVPlayerItem`: observation callbacks (including time-jumped / failed-to-end / live-offset changes), buffering/bit-rate/resolution preferences, variant preferences, protected-content authorization status, custom compositor info, outputs, and per-item logs.
 - `AVPlayerLayer`: player attachment, video gravity, video rect inspection, and displayed pixel-buffer access.
 - `AVQueuePlayer` / `AVPlayerLooper`: queue mutation, current-item inspection, loop configuration, and loop-state reporting.
-- `AVPlayerItemVideoOutput`, `AVPlayerItemMetadataOutput`, and `AVPlayerItemLegibleOutput`: attach/detach plus configuration/introspection helpers.
+- `AVPlayerItemOutput`, `AVPlayerItemVideoOutput`, `AVPlayerItemMetadataOutput`, and `AVPlayerItemLegibleOutput`: attach/detach, base-output timing/suppression helpers, delegate observation, and text-styling/output configuration helpers.
 - `AVPlayerItemTrack`, `AVPlayerItemAccessLog`, `AVPlayerItemErrorLog`, and `AVPlayerMediaSelectionCriteria` wrappers.
 - `AVAssetReader`, `AssetReaderTrackOutput`, `AssetReaderAudioMixOutput`, and `AssetReaderVideoCompositionOutput` remain available for frame/sample extraction.
 

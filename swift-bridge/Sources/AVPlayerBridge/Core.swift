@@ -113,6 +113,17 @@ struct PlayerInfoPayload: Codable {
     let muted: Bool?
     let automaticallyWaitsToMinimizeStalling: Bool?
     let appliesMediaSelectionCriteriaAutomatically: Bool?
+    let eligibleForHdrPlayback: Bool?
+    let audiovisualBackgroundPlaybackPolicy: Int32?
+    let networkResourcePriority: Int32?
+}
+
+struct PlayerItemVideoCompositorPayload: Codable {
+    let className: String
+    let supportsWideColorSourceFrames: Bool?
+    let supportsHdrSourceFrames: Bool?
+    let supportsSourceTaggedBuffers: Bool?
+    let canConformColorOfSourceFrames: Bool?
 }
 
 struct PlayerItemInfoPayload: Codable {
@@ -133,6 +144,12 @@ struct PlayerItemInfoPayload: Codable {
     let audioTimePitchAlgorithm: String
     let outputCount: Int
     let trackCount: Int
+    let variantPreferences: UInt64?
+    let authorizationRequiredForPlayback: Bool
+    let applicationAuthorizedForPlayback: Bool
+    let contentAuthorizedForPlayback: Bool
+    let contentAuthorizationRequestStatus: Int32
+    let customVideoCompositor: PlayerItemVideoCompositorPayload?
 }
 
 struct PlayerItemEventPayload: Codable {
@@ -140,6 +157,8 @@ struct PlayerItemEventPayload: Codable {
     let status: Int32?
     let errorMessage: String?
     let presentationSize: SizePayload?
+    let hasOriginatingParticipant: Bool?
+    let recommendedTimeOffsetFromLive: TimePayload?
 }
 
 struct ReaderInfoPayload: Codable {
@@ -242,18 +261,22 @@ struct MediaSelectionCriteriaPayload: Codable {
 
 struct VideoOutputInfoPayload: Codable {
     let suppressesPlayerRendering: Bool
+    let hasDelegate: Bool
 }
 
 struct MetadataOutputInfoPayload: Codable {
     let suppressesPlayerRendering: Bool
     let advanceIntervalForDelegateInvocation: Double
     let identifiers: [String]?
+    let hasDelegate: Bool
 }
 
 struct LegibleOutputInfoPayload: Codable {
     let suppressesPlayerRendering: Bool
     let advanceIntervalForDelegateInvocation: Double
     let nativeRepresentationSubtypes: [UInt32]
+    let hasDelegate: Bool
+    let textStylingResolution: String
 }
 
 func avpEncodeJSON<T: Encodable>(_ value: T) throws -> String {

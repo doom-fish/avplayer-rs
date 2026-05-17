@@ -41,6 +41,8 @@ struct PlayerItemEventPayload {
     status: Option<i32>,
     error_message: Option<String>,
     presentation_size: Option<Size>,
+    has_originating_participant: Option<bool>,
+    recommended_time_offset_from_live: Option<Time>,
 }
 
 /// `AVPlayerStatus`.
@@ -92,10 +94,17 @@ pub enum PlayerItemEvent {
         error_message: Option<String>,
     },
     PresentationSizeChanged(Size),
+    TimeJumped {
+        has_originating_participant: bool,
+    },
     DidPlayToEnd,
+    FailedToPlayToEnd {
+        error_message: Option<String>,
+    },
     PlaybackStalled,
     NewAccessLogEntry,
     NewErrorLogEntry,
+    RecommendedTimeOffsetFromLiveDidChange(Time),
     MediaSelectionChanged,
 }
 
@@ -506,10 +515,22 @@ unsafe extern "C" fn player_item_event_trampoline(
             Some(size) => PlayerItemEvent::PresentationSizeChanged(size),
             None => return,
         },
+        "time_jumped" => PlayerItemEvent::TimeJumped {
+            has_originating_participant: payload.has_originating_participant.unwrap_or(false),
+        },
         "did_play_to_end" => PlayerItemEvent::DidPlayToEnd,
+        "failed_to_play_to_end" => PlayerItemEvent::FailedToPlayToEnd {
+            error_message: payload.error_message,
+        },
         "playback_stalled" => PlayerItemEvent::PlaybackStalled,
         "new_access_log_entry" => PlayerItemEvent::NewAccessLogEntry,
         "new_error_log_entry" => PlayerItemEvent::NewErrorLogEntry,
+        "recommended_time_offset_from_live_did_change" => {
+            match payload.recommended_time_offset_from_live {
+                Some(time) => PlayerItemEvent::RecommendedTimeOffsetFromLiveDidChange(time),
+                None => return,
+            }
+        }
         "media_selection_changed" => PlayerItemEvent::MediaSelectionChanged,
         _ => return,
     };

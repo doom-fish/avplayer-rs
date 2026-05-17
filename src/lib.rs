@@ -13,6 +13,7 @@ mod player_item_integrated_timeline;
 mod player_item_legible_output;
 mod player_item_metadata_collector;
 mod player_item_metadata_output;
+mod player_item_output;
 mod player_item_rendered_legible_output;
 mod player_item_track;
 mod player_item_video_output;
@@ -34,7 +35,10 @@ pub use player::{
     BoundaryTimeObserver, PeriodicTimeObserver, Player, PlayerItem, PlayerItemEvent,
     PlayerItemObserver, PlayerItemStatus, PlayerStatus,
 };
-pub use player_item::AudioTimePitchAlgorithm;
+pub use player_item::{
+    AudioTimePitchAlgorithm, ContentAuthorizationStatus, PlayerItemVideoCompositorInfo,
+    VariantPreferences,
+};
 pub use player_item_access_log::{PlayerItemAccessLog, PlayerItemAccessLogEvent};
 pub use player_item_error_log::{PlayerItemErrorLog, PlayerItemErrorLogEvent};
 pub use player_item_integrated_timeline::{
@@ -50,19 +54,28 @@ pub use player_item_integrated_timeline::{
     PlayerItemIntegratedTimelineSnapshot, PlayerItemIntegratedTimelineSnapshotInfo,
     PlayerItemSegmentType,
 };
-pub use player_item_legible_output::PlayerItemLegibleOutput;
+pub use player_item_legible_output::{
+    PlayerItemLegibleOutput, PlayerItemLegibleOutputEvent, PlayerItemLegibleOutputObserver,
+    PlayerItemLegibleOutputTextStylingResolution,
+};
 pub use player_item_metadata_collector::{
     DateRangeMetadataGroup, MetadataCollectorEvent, MetadataCollectorObserver,
     PlayerItemMediaDataCollectorInfo, PlayerItemMediaDataCollectorKind,
     PlayerItemMetadataCollector,
 };
-pub use player_item_metadata_output::PlayerItemMetadataOutput;
+pub use player_item_metadata_output::{
+    MetadataOutputEvent, MetadataOutputObserver, PlayerItemMetadataOutput, TimedMetadataGroup,
+};
+pub use player_item_output::PlayerItemOutput;
 pub use player_item_rendered_legible_output::{
     PlayerItemRenderedLegibleOutput, RenderedCaptionImage, RenderedLegibleOutputEvent,
     RenderedLegibleOutputObserver,
 };
-pub use player_item_track::PlayerItemTrack;
-pub use player_item_video_output::{PlayerItemVideoOutput, PlayerItemVideoOutputSettings};
+pub use player_item_track::{PlayerItemTrack, PlayerItemTrackVideoFieldMode};
+pub use player_item_video_output::{
+    PlayerItemVideoOutput, PlayerItemVideoOutputEvent, PlayerItemVideoOutputObserver,
+    PlayerItemVideoOutputSettings,
+};
 pub use player_interstitial_event::{
     player_waiting_during_interstitial_event_reason, PlayerInterstitialEvent,
     PlayerInterstitialEventAssetListResponseStatus, PlayerInterstitialEventController,
@@ -74,8 +87,10 @@ pub use player_interstitial_event::{
 pub use player_layer::{PlayerLayer, Rect, VideoGravity};
 pub use player_looper::{PlayerLooper, PlayerLooperItemOrdering, PlayerLooperStatus};
 pub use player_media_selection_criteria::{
-    MediaCharacteristic, PlayerActionAtItemEnd, PlayerMediaSelectionCriteria,
-    PlayerTimeControlStatus,
+    player_eligible_for_hdr_playback_did_change_notification, MediaCharacteristic,
+    PlayerActionAtItemEnd, PlayerAudiovisualBackgroundPlaybackPolicy, PlayerMediaSelectionCriteria,
+    PlayerNetworkResourcePriority, PlayerRateDidChangeEvent, PlayerRateDidChangeObserver,
+    PlayerRateDidChangeReason, PlayerTimeControlStatus, PlayerWaitingReason,
 };
 pub use player_video_output::{
     AffineTransform, PlayerVideoOutput, PlayerVideoOutputConfiguration,
@@ -102,7 +117,10 @@ pub mod prelude {
         BoundaryTimeObserver, PeriodicTimeObserver, Player, PlayerItem, PlayerItemEvent,
         PlayerItemObserver, PlayerItemStatus, PlayerStatus,
     };
-    pub use crate::player_item::AudioTimePitchAlgorithm;
+    pub use crate::player_item::{
+        AudioTimePitchAlgorithm, ContentAuthorizationStatus, PlayerItemVideoCompositorInfo,
+        VariantPreferences,
+    };
     pub use crate::player_item_access_log::{PlayerItemAccessLog, PlayerItemAccessLogEvent};
     pub use crate::player_item_error_log::{PlayerItemErrorLog, PlayerItemErrorLogEvent};
     pub use crate::player_item_integrated_timeline::{
@@ -118,20 +136,27 @@ pub mod prelude {
         PlayerItemIntegratedTimelineSnapshot, PlayerItemIntegratedTimelineSnapshotInfo,
         PlayerItemSegmentType,
     };
-    pub use crate::player_item_legible_output::PlayerItemLegibleOutput;
+    pub use crate::player_item_legible_output::{
+        PlayerItemLegibleOutput, PlayerItemLegibleOutputEvent, PlayerItemLegibleOutputObserver,
+        PlayerItemLegibleOutputTextStylingResolution,
+    };
     pub use crate::player_item_metadata_collector::{
         DateRangeMetadataGroup, MetadataCollectorEvent, MetadataCollectorObserver,
         PlayerItemMediaDataCollectorInfo, PlayerItemMediaDataCollectorKind,
         PlayerItemMetadataCollector,
     };
-    pub use crate::player_item_metadata_output::PlayerItemMetadataOutput;
+    pub use crate::player_item_metadata_output::{
+        MetadataOutputEvent, MetadataOutputObserver, PlayerItemMetadataOutput, TimedMetadataGroup,
+    };
+    pub use crate::player_item_output::PlayerItemOutput;
     pub use crate::player_item_rendered_legible_output::{
         PlayerItemRenderedLegibleOutput, RenderedCaptionImage, RenderedLegibleOutputEvent,
         RenderedLegibleOutputObserver,
     };
-    pub use crate::player_item_track::PlayerItemTrack;
+    pub use crate::player_item_track::{PlayerItemTrack, PlayerItemTrackVideoFieldMode};
     pub use crate::player_item_video_output::{
-        PlayerItemVideoOutput, PlayerItemVideoOutputSettings,
+        PlayerItemVideoOutput, PlayerItemVideoOutputEvent, PlayerItemVideoOutputObserver,
+        PlayerItemVideoOutputSettings,
     };
     pub use crate::player_interstitial_event::{
         player_waiting_during_interstitial_event_reason, PlayerInterstitialEvent,
@@ -144,8 +169,11 @@ pub mod prelude {
     pub use crate::player_layer::{PlayerLayer, Rect, VideoGravity};
     pub use crate::player_looper::{PlayerLooper, PlayerLooperItemOrdering, PlayerLooperStatus};
     pub use crate::player_media_selection_criteria::{
-        MediaCharacteristic, PlayerActionAtItemEnd, PlayerMediaSelectionCriteria,
-        PlayerTimeControlStatus,
+        player_eligible_for_hdr_playback_did_change_notification, MediaCharacteristic,
+        PlayerActionAtItemEnd, PlayerAudiovisualBackgroundPlaybackPolicy,
+        PlayerMediaSelectionCriteria, PlayerNetworkResourcePriority, PlayerRateDidChangeEvent,
+        PlayerRateDidChangeObserver, PlayerRateDidChangeReason, PlayerTimeControlStatus,
+        PlayerWaitingReason,
     };
     pub use crate::player_video_output::{
         AffineTransform, PlayerVideoOutput, PlayerVideoOutputConfiguration,

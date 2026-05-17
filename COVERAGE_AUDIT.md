@@ -1,12 +1,12 @@
 # avplayer-rs coverage audit (vs MacOSX26.2.sdk)
 
 SDK_PUBLIC_SYMBOLS: 109
-VERIFIED: 77
-GAPS: 32
+VERIFIED: 109
+GAPS: 0
 EXEMPT: 0
-COVERAGE_PCT: 70.64%
+COVERAGE_PCT: 100.00%
 
-> Filtered out macOS-unavailable top-level symbols (`AVPlayerHDRMode`, `AVPlayerAvailableHDRModesDidChangeNotification`). No deprecated-but-macOS-available top-level symbols remained, so EXEMPT is 0.
+> Filtered out macOS-unavailable top-level symbols (`AVPlayerHDRMode`, `AVPlayerAvailableHDRModesDidChangeNotification`). No deprecated-but-macOS-available top-level symbols remained, so EXEMPT is 0. All 109 remaining macOS-available top-level symbols are now wrapped.
 
 ## 🟢 VERIFIED
 | Symbol | Kind | Header | Wrapped by |
@@ -88,42 +88,41 @@ COVERAGE_PCT: 70.64%
 | AVPlayerItemMediaDataCollector | Interface | AVPlayerItemMediaDataCollector.h | PlayerItem::media_data_collectors() / PlayerItemMediaDataCollectorInfo |
 | AVPlayerItemMetadataCollectorPushDelegate | Protocol | AVPlayerItemMediaDataCollector.h | PlayerItemMetadataCollector::observe() / MetadataCollectorEvent |
 | AVPlayerItemMetadataCollector | Interface | AVPlayerItemMediaDataCollector.h | PlayerItemMetadataCollector |
+| AVPlayerRateDidChangeNotification | Constant | AVPlayer.h | Player::observe_rate_changes() / PlayerRateDidChangeEvent |
+| AVPlayerRateDidChangeReasonKey | Constant | AVPlayer.h | Player::observe_rate_changes() / PlayerRateDidChangeEvent::reason |
+| AVPlayerRateDidChangeOriginatingParticipantKey | Constant | AVPlayer.h | Player::observe_rate_changes() / PlayerRateDidChangeEvent::has_originating_participant |
+| AVPlayerRateDidChangeReason | Typedef | AVPlayer.h | PlayerRateDidChangeReason |
+| AVPlayerRateDidChangeReasonSetRateCalled | Constant | AVPlayer.h | PlayerRateDidChangeReason::SetRateCalled |
+| AVPlayerRateDidChangeReasonSetRateFailed | Constant | AVPlayer.h | PlayerRateDidChangeReason::SetRateFailed |
+| AVPlayerRateDidChangeReasonAudioSessionInterrupted | Constant | AVPlayer.h | PlayerRateDidChangeReason::AudioSessionInterrupted |
+| AVPlayerRateDidChangeReasonAppBackgrounded | Constant | AVPlayer.h | PlayerRateDidChangeReason::AppBackgrounded |
+| AVPlayerWaitingToMinimizeStallsReason | Constant | AVPlayer.h | PlayerWaitingReason::ToMinimizeStalls |
+| AVPlayerWaitingWhileEvaluatingBufferingRateReason | Constant | AVPlayer.h | PlayerWaitingReason::WhileEvaluatingBufferingRate |
+| AVPlayerWaitingWithNoItemToPlayReason | Constant | AVPlayer.h | PlayerWaitingReason::WithNoItemToPlay |
+| AVPlayerWaitingForCoordinatedPlaybackReason | Constant | AVPlayer.h | PlayerWaitingReason::ForCoordinatedPlayback |
+| AVPlayerEligibleForHDRPlaybackDidChangeNotification | Constant | AVPlayer.h | player_eligible_for_hdr_playback_did_change_notification() |
+| AVPlayerAudiovisualBackgroundPlaybackPolicy | Typedef | AVPlayer.h | PlayerAudiovisualBackgroundPlaybackPolicy |
+| AVPlayerNetworkResourcePriority | Typedef | AVPlayer.h | PlayerNetworkResourcePriority |
+| AVPlayerItemTimeJumpedNotification | Constant | AVPlayerItem.h | PlayerItem::observe() / PlayerItemEvent::TimeJumped |
+| AVPlayerItemFailedToPlayToEndTimeNotification | Constant | AVPlayerItem.h | PlayerItem::observe() / PlayerItemEvent::FailedToPlayToEnd |
+| AVPlayerItemRecommendedTimeOffsetFromLiveDidChangeNotification | Constant | AVPlayerItem.h | PlayerItem::observe() / PlayerItemEvent::RecommendedTimeOffsetFromLiveDidChange |
+| AVPlayerItemFailedToPlayToEndTimeErrorKey | Constant | AVPlayerItem.h | PlayerItemEvent::FailedToPlayToEnd::error_message |
+| AVPlayerItemTimeJumpedOriginatingParticipantKey | Constant | AVPlayerItem.h | PlayerItemEvent::TimeJumped::has_originating_participant |
+| AVVideoCompositing | Protocol | AVPlayerItem.h | PlayerItem::custom_video_compositor() / PlayerItemVideoCompositorInfo |
+| AVVariantPreferences | Typedef | AVPlayerItem.h | VariantPreferences |
+| AVPlayerItemOutput | Interface | AVPlayerItemOutput.h | PlayerItemOutput<'_> |
+| AVPlayerItemOutputPullDelegate | Protocol | AVPlayerItemOutput.h | PlayerItemVideoOutput::observe() / PlayerItemVideoOutputEvent |
+| AVPlayerItemLegibleOutputPushDelegate | Protocol | AVPlayerItemOutput.h | PlayerItemLegibleOutput::observe() / PlayerItemLegibleOutputEvent |
+| AVPlayerItemLegibleOutputTextStylingResolution | Typedef | AVPlayerItemOutput.h | PlayerItemLegibleOutputTextStylingResolution |
+| AVPlayerItemLegibleOutputTextStylingResolutionDefault | Constant | AVPlayerItemOutput.h | PlayerItemLegibleOutputTextStylingResolution::Default |
+| AVPlayerItemLegibleOutputTextStylingResolutionSourceAndRulesOnly | Constant | AVPlayerItemOutput.h | PlayerItemLegibleOutputTextStylingResolution::SourceAndRulesOnly |
+| AVPlayerItemOutputPushDelegate | Protocol | AVPlayerItemOutput.h | PlayerItemMetadataOutput::observe() + PlayerItemLegibleOutput::observe() |
+| AVPlayerItemMetadataOutputPushDelegate | Protocol | AVPlayerItemOutput.h | PlayerItemMetadataOutput::observe() / MetadataOutputEvent |
+| AVPlayerItemTrackVideoFieldModeDeinterlaceFields | Constant | AVPlayerItemTrack.h | PlayerItemTrackVideoFieldMode::DeinterlaceFields |
+| AVContentAuthorizationStatus | Typedef | AVPlayerItemProtectedContentAdditions.h | ContentAuthorizationStatus |
 
 ## 🔴 GAPS
-| Symbol | Kind | Header | Notes |
-| --- | --- | --- | --- |
-| AVPlayerRateDidChangeNotification | Constant | AVPlayer.h | No public AVPlayer rate-change notification/userInfo wrapper. |
-| AVPlayerRateDidChangeReasonKey | Constant | AVPlayer.h | No public AVPlayer rate-change notification/userInfo wrapper. |
-| AVPlayerRateDidChangeOriginatingParticipantKey | Constant | AVPlayer.h | No public AVPlayer rate-change notification/userInfo wrapper. |
-| AVPlayerRateDidChangeReason | Typedef | AVPlayer.h | No public AVPlayer rate-change notification/userInfo wrapper. |
-| AVPlayerRateDidChangeReasonSetRateCalled | Constant | AVPlayer.h | No public AVPlayer rate-change notification/userInfo wrapper. |
-| AVPlayerRateDidChangeReasonSetRateFailed | Constant | AVPlayer.h | No public AVPlayer rate-change notification/userInfo wrapper. |
-| AVPlayerRateDidChangeReasonAudioSessionInterrupted | Constant | AVPlayer.h | No public AVPlayer rate-change notification/userInfo wrapper. |
-| AVPlayerRateDidChangeReasonAppBackgrounded | Constant | AVPlayer.h | No public AVPlayer rate-change notification/userInfo wrapper. |
-| AVPlayerWaitingToMinimizeStallsReason | Constant | AVPlayer.h | Waiting reasons are returned as raw strings only; named constants are not exported. |
-| AVPlayerWaitingWhileEvaluatingBufferingRateReason | Constant | AVPlayer.h | Waiting reasons are returned as raw strings only; named constants are not exported. |
-| AVPlayerWaitingWithNoItemToPlayReason | Constant | AVPlayer.h | Waiting reasons are returned as raw strings only; named constants are not exported. |
-| AVPlayerWaitingForCoordinatedPlaybackReason | Constant | AVPlayer.h | Waiting reasons are returned as raw strings only; named constants are not exported. |
-| AVPlayerEligibleForHDRPlaybackDidChangeNotification | Constant | AVPlayer.h | No HDR-playback notification surface. |
-| AVPlayerAudiovisualBackgroundPlaybackPolicy | Typedef | AVPlayer.h | Playback-policy / network-priority APIs are not wrapped. |
-| AVPlayerNetworkResourcePriority | Typedef | AVPlayer.h | Playback-policy / network-priority APIs are not wrapped. |
-| AVPlayerItemTimeJumpedNotification | Constant | AVPlayerItem.h | PlayerItem::observe() does not surface this notification or key. |
-| AVPlayerItemFailedToPlayToEndTimeNotification | Constant | AVPlayerItem.h | PlayerItem::observe() does not surface this notification or key. |
-| AVPlayerItemRecommendedTimeOffsetFromLiveDidChangeNotification | Constant | AVPlayerItem.h | PlayerItem::observe() does not surface this notification or key. |
-| AVPlayerItemFailedToPlayToEndTimeErrorKey | Constant | AVPlayerItem.h | PlayerItem::observe() does not surface this notification or key. |
-| AVPlayerItemTimeJumpedOriginatingParticipantKey | Constant | AVPlayerItem.h | PlayerItem::observe() does not surface this notification or key. |
-| AVVideoCompositing | Protocol | AVPlayerItem.h | No video-compositing / custom compositor binding. |
-| AVVariantPreferences | Typedef | AVPlayerItem.h | Variant-preferences flags are not wrapped. |
-| AVPlayerItemOutput | Interface | AVPlayerItemOutput.h | Only concrete output subclasses are wrapped; the abstract base class is not exposed. |
-| AVPlayerItemOutputPullDelegate | Protocol | AVPlayerItemOutput.h | Delegate protocol callbacks are not exposed. |
-| AVPlayerItemLegibleOutputPushDelegate | Protocol | AVPlayerItemOutput.h | Delegate protocol callbacks are not exposed. |
-| AVPlayerItemLegibleOutputTextStylingResolution | Typedef | AVPlayerItemOutput.h | Legible-output text-styling-resolution APIs are not exposed. |
-| AVPlayerItemLegibleOutputTextStylingResolutionDefault | Constant | AVPlayerItemOutput.h | Legible-output text-styling-resolution APIs are not exposed. |
-| AVPlayerItemLegibleOutputTextStylingResolutionSourceAndRulesOnly | Constant | AVPlayerItemOutput.h | Legible-output text-styling-resolution APIs are not exposed. |
-| AVPlayerItemOutputPushDelegate | Protocol | AVPlayerItemOutput.h | Delegate protocol callbacks are not exposed. |
-| AVPlayerItemMetadataOutputPushDelegate | Protocol | AVPlayerItemOutput.h | Delegate protocol callbacks are not exposed. |
-| AVPlayerItemTrackVideoFieldModeDeinterlaceFields | Constant | AVPlayerItemTrack.h | video_field_mode uses raw strings; the named constant is not exported. |
-| AVContentAuthorizationStatus | Typedef | AVPlayerItemProtectedContentAdditions.h | Protected-content authorization APIs are not wrapped. |
+No macOS-available gaps remain in the audited header set.
 
 ## ⏭️ EXEMPT
 No macOS-available deprecated top-level symbols in the audited header set.

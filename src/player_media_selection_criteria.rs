@@ -2,6 +2,7 @@
 
 use core::ffi::{c_char, c_void};
 use core::ptr;
+use std::ffi::CStr;
 
 use serde::Deserialize;
 
@@ -28,6 +29,9 @@ struct PlayerInfoPayload {
     muted: Option<bool>,
     automatically_waits_to_minimize_stalling: Option<bool>,
     applies_media_selection_criteria_automatically: Option<bool>,
+    eligible_for_hdr_playback: Option<bool>,
+    audiovisual_background_playback_policy: Option<i32>,
+    network_resource_priority: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -143,6 +147,131 @@ impl PlayerTimeControlStatus {
             other => Self::Unknown(other),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlayerWaitingReason {
+    ToMinimizeStalls,
+    WhileEvaluatingBufferingRate,
+    WithNoItemToPlay,
+    ForCoordinatedPlayback,
+    Unknown(String),
+}
+
+impl PlayerWaitingReason {
+    fn from_raw(raw: &str) -> Self {
+        match raw {
+            "AVPlayerWaitingToMinimizeStallsReason" => Self::ToMinimizeStalls,
+            "AVPlayerWaitingWhileEvaluatingBufferingRateReason" => {
+                Self::WhileEvaluatingBufferingRate
+            }
+            "AVPlayerWaitingWithNoItemToPlayReason" => Self::WithNoItemToPlay,
+            "AVPlayerWaitingForCoordinatedPlaybackReason" => Self::ForCoordinatedPlayback,
+            other => Self::Unknown(other.to_owned()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlayerAudiovisualBackgroundPlaybackPolicy {
+    Automatic,
+    Pauses,
+    ContinuesIfPossible,
+    Unknown(i32),
+}
+
+impl PlayerAudiovisualBackgroundPlaybackPolicy {
+    const fn from_raw(raw: i32) -> Self {
+        match raw {
+            1 => Self::Automatic,
+            2 => Self::Pauses,
+            3 => Self::ContinuesIfPossible,
+            other => Self::Unknown(other),
+        }
+    }
+
+    const fn as_raw(self) -> i32 {
+        match self {
+            Self::Automatic => 1,
+            Self::Pauses => 2,
+            Self::ContinuesIfPossible => 3,
+            Self::Unknown(raw) => raw,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlayerNetworkResourcePriority {
+    Default,
+    Low,
+    High,
+    Unknown(i32),
+}
+
+impl PlayerNetworkResourcePriority {
+    const fn from_raw(raw: i32) -> Self {
+        match raw {
+            0 => Self::Default,
+            1 => Self::Low,
+            2 => Self::High,
+            other => Self::Unknown(other),
+        }
+    }
+
+    const fn as_raw(self) -> i32 {
+        match self {
+            Self::Default => 0,
+            Self::Low => 1,
+            Self::High => 2,
+            Self::Unknown(raw) => raw,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlayerRateDidChangeReason {
+    SetRateCalled,
+    SetRateFailed,
+    AudioSessionInterrupted,
+    AppBackgrounded,
+    Unknown(String),
+}
+
+impl PlayerRateDidChangeReason {
+    fn from_raw(raw: &str) -> Self {
+        match raw {
+            "AVPlayerRateDidChangeReasonSetRateCalled" => Self::SetRateCalled,
+            "AVPlayerRateDidChangeReasonSetRateFailed" => Self::SetRateFailed,
+            "AVPlayerRateDidChangeReasonAudioSessionInterrupted" => {
+                Self::AudioSessionInterrupted
+            }
+            "AVPlayerRateDidChangeReasonAppBackgrounded" => Self::AppBackgrounded,
+            other => Self::Unknown(other.to_owned()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlayerRateDidChangeEventPayload {
+    rate: f32,
+    reason: Option<String>,
+    has_originating_participant: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayerRateDidChangeEvent {
+    pub rate: f32,
+    pub reason: Option<PlayerRateDidChangeReason>,
+    pub has_originating_participant: bool,
+}
+
+struct PlayerRateObserverState {
+    callback: Box<dyn Fn(PlayerRateDidChangeEvent) + Send + 'static>,
 }
 
 pub struct PlayerMediaSelectionCriteria {
@@ -280,6 +409,14 @@ impl Player {
         Ok(self.info_for_media_selection()?.reason_for_waiting_to_play)
     }
 
+    pub fn waiting_reason(&self) -> Result<Option<PlayerWaitingReason>, AVPlayerError> {
+        Ok(self
+            .info_for_media_selection()?
+            .reason_for_waiting_to_play
+            .as_deref()
+            .map(PlayerWaitingReason::from_raw))
+    }
+
     pub fn action_at_item_end(&self) -> Result<PlayerActionAtItemEnd, AVPlayerError> {
         Ok(PlayerActionAtItemEnd::from_raw(
             self.info_for_media_selection()?
@@ -341,6 +478,97 @@ impl Player {
         }
     }
 
+    pub fn eligible_for_hdr_playback(&self) -> Result<bool, AVPlayerError> {
+        self.info_for_media_selection()?
+            .eligible_for_hdr_playback
+            .ok_or_else(|| availability_error("AVPlayer.eligibleForHDRPlayback", "10.15"))
+    }
+
+    pub fn audiovisual_background_playback_policy(
+        &self,
+    ) -> Result<PlayerAudiovisualBackgroundPlaybackPolicy, AVPlayerError> {
+        Ok(PlayerAudiovisualBackgroundPlaybackPolicy::from_raw(
+            self.info_for_media_selection()?
+                .audiovisual_background_playback_policy
+                .ok_or_else(|| {
+                    availability_error("AVPlayer.audiovisualBackgroundPlaybackPolicy", "12.0")
+                })?,
+        ))
+    }
+
+    pub fn set_audiovisual_background_playback_policy(
+        &self,
+        policy: PlayerAudiovisualBackgroundPlaybackPolicy,
+    ) -> Result<(), AVPlayerError> {
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_player_set_audiovisual_background_playback_policy(
+                self.ptr,
+                policy.as_raw(),
+                &mut err,
+            )
+        };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
+    }
+
+    pub fn network_resource_priority(&self) -> Result<PlayerNetworkResourcePriority, AVPlayerError> {
+        Ok(PlayerNetworkResourcePriority::from_raw(
+            self.info_for_media_selection()?
+                .network_resource_priority
+                .ok_or_else(|| availability_error("AVPlayer.networkResourcePriority", "26.0"))?,
+        ))
+    }
+
+    pub fn set_network_resource_priority(
+        &self,
+        priority: PlayerNetworkResourcePriority,
+    ) -> Result<(), AVPlayerError> {
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_player_set_network_resource_priority(self.ptr, priority.as_raw(), &mut err)
+        };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
+    }
+
+    pub fn observe_rate_changes<F>(
+        &self,
+        queue_label: Option<&str>,
+        callback: F,
+    ) -> Result<PlayerRateDidChangeObserver, AVPlayerError>
+    where
+        F: Fn(PlayerRateDidChangeEvent) + Send + 'static,
+    {
+        let queue_label = queue_label
+            .map(|label| to_cstring(label, "player rate observer queue label"))
+            .transpose()?;
+        let state = Box::new(PlayerRateObserverState {
+            callback: Box::new(callback),
+        });
+        let userdata = Box::into_raw(state).cast::<c_void>();
+        let mut err: *mut c_char = ptr::null_mut();
+        let token = unsafe {
+            ffi::av_player_add_rate_observer(
+                self.ptr,
+                queue_label.as_ref().map_or(ptr::null(), |label| label.as_ptr()),
+                Some(player_rate_event_trampoline),
+                userdata,
+                Some(player_rate_observer_drop),
+                &mut err,
+            )
+        };
+        if token.is_null() {
+            unsafe { player_rate_observer_drop(userdata) };
+            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
+        }
+        Ok(PlayerRateDidChangeObserver { token })
+    }
+
     pub fn set_media_selection_criteria(
         &self,
         media_characteristic: &MediaCharacteristic,
@@ -385,4 +613,68 @@ impl Player {
         }
         Ok(Some(PlayerMediaSelectionCriteria { ptr }))
     }
+}
+
+pub struct PlayerRateDidChangeObserver {
+    token: *mut c_void,
+}
+
+impl Drop for PlayerRateDidChangeObserver {
+    fn drop(&mut self) {
+        if !self.token.is_null() {
+            unsafe { ffi::av_player_rate_observer_release(self.token) };
+            self.token = ptr::null_mut();
+        }
+    }
+}
+
+pub fn player_eligible_for_hdr_playback_did_change_notification() -> Result<String, AVPlayerError> {
+    let mut err: *mut c_char = ptr::null_mut();
+    let string_ptr = unsafe {
+        ffi::av_player_eligible_for_hdr_playback_did_change_notification_name(&mut err)
+    };
+    if string_ptr.is_null() {
+        return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
+    }
+    let value = unsafe { CStr::from_ptr(string_ptr) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { ffi::avp_string_free(string_ptr) };
+    Ok(value)
+}
+
+unsafe extern "C" fn player_rate_event_trampoline(
+    userdata: *mut c_void,
+    payload_json: *const c_char,
+) {
+    if userdata.is_null() || payload_json.is_null() {
+        return;
+    }
+
+    let callback = &*userdata.cast::<PlayerRateObserverState>();
+    let Ok(payload) = CStr::from_ptr(payload_json).to_str() else {
+        return;
+    };
+    let Ok(payload) = serde_json::from_str::<PlayerRateDidChangeEventPayload>(payload) else {
+        return;
+    };
+
+    (callback.callback)(PlayerRateDidChangeEvent {
+        rate: payload.rate,
+        reason: payload
+            .reason
+            .as_deref()
+            .map(PlayerRateDidChangeReason::from_raw),
+        has_originating_participant: payload.has_originating_participant,
+    });
+}
+
+unsafe extern "C" fn player_rate_observer_drop(userdata: *mut c_void) {
+    if !userdata.is_null() {
+        drop(Box::from_raw(userdata.cast::<PlayerRateObserverState>()));
+    }
+}
+
+fn availability_error(symbol: &str, macos_version: &str) -> AVPlayerError {
+    AVPlayerError::OperationFailed(format!("{symbol} requires macOS {macos_version}+"))
 }

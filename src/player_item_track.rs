@@ -21,6 +21,29 @@ struct PlayerItemTrackInfoPayload {
     has_asset_track: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlayerItemTrackVideoFieldMode {
+    DeinterlaceFields,
+    Unknown(String),
+}
+
+impl PlayerItemTrackVideoFieldMode {
+    fn from_raw(raw: &str) -> Self {
+        match raw {
+            "AVPlayerItemTrackVideoFieldModeDeinterlaceFields" => Self::DeinterlaceFields,
+            other => Self::Unknown(other.to_owned()),
+        }
+    }
+
+    fn as_raw(&self) -> &str {
+        match self {
+            Self::DeinterlaceFields => "AVPlayerItemTrackVideoFieldModeDeinterlaceFields",
+            Self::Unknown(raw) => raw,
+        }
+    }
+}
+
 pub struct PlayerItemTrack {
     pub(crate) ptr: *mut c_void,
 }
@@ -58,6 +81,23 @@ impl PlayerItemTrack {
 
     pub fn video_field_mode(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.video_field_mode)
+    }
+
+    pub fn typed_video_field_mode(
+        &self,
+    ) -> Result<Option<PlayerItemTrackVideoFieldMode>, AVPlayerError> {
+        Ok(self
+            .info()?
+            .video_field_mode
+            .as_deref()
+            .map(PlayerItemTrackVideoFieldMode::from_raw))
+    }
+
+    pub fn set_typed_video_field_mode(
+        &self,
+        video_field_mode: Option<&PlayerItemTrackVideoFieldMode>,
+    ) -> Result<(), AVPlayerError> {
+        self.set_video_field_mode(video_field_mode.map(PlayerItemTrackVideoFieldMode::as_raw))
     }
 
     pub fn set_video_field_mode(
