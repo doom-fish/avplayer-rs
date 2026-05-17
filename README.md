@@ -2,7 +2,10 @@
 
 Safe Rust bindings for Apple's [AVFoundation playback stack](https://developer.apple.com/documentation/avfoundation) on macOS: `AVPlayer`, `AVPlayerItem`, `AVPlayerLayer`, `AVQueuePlayer`, `AVPlayerLooper`, `AVAsset`, `AVURLAsset`, and `AVAssetReader`.
 
-> **Status:** `0.2.2` closes the remaining audited AVPlayer / AVPlayerItem gaps and brings the crate to 100% coverage of the audited macOS playback surface, including rate-change notifications, HDR/background/network policy, variant preferences, protected-content authorization, and abstract/delegate player-item outputs. See [`COVERAGE.md`](COVERAGE.md) for the per-area map.
+> **Status:** `0.3.0` adds the Tier-1 `async_api` module (feature-gated behind `async`)
+> wrapping AVFoundation's `async throws` and completion-handler APIs as
+> executor-agnostic Rust `Future`s. `0.2.2` brought the crate to 100 % coverage
+> of the audited macOS playback surface. See [`COVERAGE.md`](COVERAGE.md).
 
 ## Quick start
 
@@ -25,6 +28,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+## Async API
+
+Enable the `async` Cargo feature for executor-agnostic `Future` wrappers around
+AVFoundation's `async throws` and completion-handler APIs:
+
+```toml
+avplayer = { version = "0.3", features = ["async"] }
+```
+
+```rust,no_run
+use avplayer::{UrlAsset, async_api::AsyncAsset};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    pollster::block_on(async {
+        let asset = UrlAsset::from_file_path("my.mp4")?;
+        let props = AsyncAsset::new(asset.as_asset()).load_properties().await?;
+        println!("playable={} duration={:?}", props.is_playable, props.duration);
+        let tracks = AsyncAsset::new(asset.as_asset()).load_tracks().await?;
+        println!("{} tracks", tracks.len());
+        Ok(())
+    })
+}
+```
+
+| Type | API wrapped |
+|------|-------------|
+| `async_api::AsyncAsset` | `AVAsset.load(...)`, `loadTracks(withMediaType:)`, `loadTrack(withTrackID:)` |
+| `async_api::AsyncPlayerItem` | `AVPlayerItem.seek(to:completionHandler:)` |
+| `async_api::AsyncPlayer` | `AVPlayer.seek(to:completionHandler:)`, `preroll(atRate:completionHandler:)` |
+
+KVO / notification streams (multi-fire) belong to a Tier-2 pattern and are not
+included in this module.
 
 ## Highlights
 

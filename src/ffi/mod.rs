@@ -750,3 +750,82 @@ pub mod status {
     pub const OBSERVER_FAILED: i32 = -6;
     pub const LOAD_FAILED: i32 = -7;
 }
+
+// ── Async (feature = "async") ────────────────────────────────────────────────
+
+/// Callback signature used by all `avp_*_async` Swift thunks.
+///
+/// * `result`  – opaque result pointer (JSON `*mut c_char` or packed bool);
+///   `null` when an error occurred.
+/// * `error`   – null-terminated error message; `null` on success.
+/// * `ctx`     – opaque context returned unchanged to the Rust completion handler.
+#[cfg(feature = "async")]
+pub type AsyncCallback =
+    unsafe extern "C" fn(result: *const c_void, error: *const c_char, ctx: *mut c_void);
+
+#[cfg(feature = "async")]
+extern "C" {
+    /// Load asset properties (duration, metadata, isPlayable, isExportable,
+    /// hasProtectedContent, preferredRate) concurrently via `AVAsset.load(...)`.
+    /// On success the `result` pointer is a heap-allocated JSON `*mut c_char`
+    /// that the Rust callback must free with `avp_string_free`.
+    pub fn avp_asset_load_properties_async(
+        asset: *mut c_void,
+        cb: AsyncCallback,
+        ctx: *mut c_void,
+    );
+
+    /// Load all tracks via `AVAsset.load(.tracks)`.
+    /// Result is a JSON array of `TrackInfoPayload` objects (heap-allocated).
+    pub fn avp_asset_load_tracks_async(asset: *mut c_void, cb: AsyncCallback, ctx: *mut c_void);
+
+    /// Load tracks filtered by media-type string via `AVAsset.loadTracks(withMediaType:)`.
+    /// Result is a JSON array of `TrackInfoPayload` objects (heap-allocated).
+    pub fn avp_asset_load_tracks_with_media_type_async(
+        asset: *mut c_void,
+        media_type: *const c_char,
+        cb: AsyncCallback,
+        ctx: *mut c_void,
+    );
+
+    /// Load a single track by persistent track ID via `AVAsset.loadTrack(withTrackID:)`.
+    /// Result is a JSON object (`TrackInfoPayload`) or the literal `"null"` when
+    /// no track with that ID exists.
+    pub fn avp_asset_load_track_with_id_async(
+        asset: *mut c_void,
+        track_id: i32,
+        cb: AsyncCallback,
+        ctx: *mut c_void,
+    );
+
+    /// Seek a player item via `AVPlayerItem.seek(to:completionHandler:)`.
+    /// Result pointer encodes the `finished` bool: `1` = finished, `null` = not finished.
+    pub fn avp_player_item_seek_async(
+        item: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        cb: AsyncCallback,
+        ctx: *mut c_void,
+    );
+
+    /// Seek the player via `AVPlayer.seek(to:completionHandler:)`.
+    /// Result pointer encodes the `finished` bool: `1` = finished, `null` = not finished.
+    pub fn avp_player_seek_async(
+        player: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        cb: AsyncCallback,
+        ctx: *mut c_void,
+    );
+
+    /// Preroll via `AVPlayer.preroll(atRate:completionHandler:)`.
+    /// Result pointer encodes `finished`: `1` = finished, `null` = not finished.
+    pub fn avp_player_preroll_async(
+        player: *mut c_void,
+        rate: f32,
+        cb: AsyncCallback,
+        ctx: *mut c_void,
+    );
+}

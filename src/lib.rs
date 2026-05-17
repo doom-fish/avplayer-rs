@@ -7,6 +7,9 @@ pub mod ffi;
 mod metadata;
 mod player;
 mod player_item;
+#[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+pub mod async_api;
 mod player_item_access_log;
 mod player_item_error_log;
 mod player_item_integrated_timeline;

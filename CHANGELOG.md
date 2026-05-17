@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-05-17
+
+### Added
+
+- **`async_api` module** (feature-gated behind `async`) providing executor-agnostic
+  `Future` newtypes for AVFoundation's async-throws and completion-handler APIs:
+  - `AsyncAsset` — `load_properties()`, `load_tracks()`,
+    `load_tracks_with_media_type()`, `load_track_with_id()`
+    wrapping `AVAsset.load(...)` async properties and
+    `AVAsset.loadTracks(withMediaType:)` / `loadTrack(withTrackID:)`.
+  - `AsyncPlayerItem` — `seek()` wrapping
+    `AVPlayerItem.seek(to:completionHandler:)`.
+  - `AsyncPlayer` — `seek()` and `preroll()` wrapping
+    `AVPlayer.seek(to:completionHandler:)` and
+    `AVPlayer.preroll(atRate:completionHandler:)`.
+  - Result types `AssetProperties` and `TrackProperties`.
+  - Swift bridge thunks in `swift-bridge/Sources/AVPlayerBridge/Async.swift`.
+- New example `examples/21_async_api.rs` demonstrating all async APIs with
+  `pollster::block_on`.
+- New integration tests `tests/async_api_tests.rs` covering happy paths and
+  error / missing-track paths for every future newtype.
+- `doom-fish-utils` added as an optional dependency (enabled by `async` feature).
+- `pollster = "0.3"` dev-dependency for single-threaded `block_on` in examples
+  and tests.
+
 ## [0.2.2] - 2026-05-17
 
 ### Added
