@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.4] - 2026-05-18
+
+- Widen apple-cf version bound to `<0.10` so 0.9.x resolves.
+
 All notable changes to this project will be documented in this file.
 
 ## [0.3.3] - 2026-05-18
