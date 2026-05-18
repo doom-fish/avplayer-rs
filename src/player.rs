@@ -49,12 +49,16 @@ struct PlayerItemEventPayload {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerStatus {
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown,
+/// Mirrors the `AVPlayer` framework case `ReadyToPlay`.
     ReadyToPlay,
+/// Mirrors the `AVPlayer` framework case `Failed`.
     Failed,
 }
 
 impl PlayerStatus {
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
@@ -69,12 +73,16 @@ impl PlayerStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerItemStatus {
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown,
+/// Mirrors the `AVPlayer` framework case `ReadyToPlay`.
     ReadyToPlay,
+/// Mirrors the `AVPlayer` framework case `Failed`.
     Failed,
 }
 
 impl PlayerItemStatus {
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
@@ -89,22 +97,32 @@ impl PlayerItemStatus {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum PlayerItemEvent {
+/// Mirrors the `AVPlayer` framework case `StatusChanged`.
     StatusChanged {
         status: PlayerItemStatus,
         error_message: Option<String>,
     },
+/// Mirrors the `AVPlayer` framework case `PresentationSizeChanged`.
     PresentationSizeChanged(Size),
+/// Mirrors the `AVPlayer` framework case `TimeJumped`.
     TimeJumped {
         has_originating_participant: bool,
     },
+/// Mirrors the `AVPlayer` framework case `DidPlayToEnd`.
     DidPlayToEnd,
+/// Mirrors the `AVPlayer` framework case `FailedToPlayToEnd`.
     FailedToPlayToEnd {
         error_message: Option<String>,
     },
+/// Mirrors the `AVPlayer` framework case `PlaybackStalled`.
     PlaybackStalled,
+/// Mirrors the `AVPlayer` framework case `NewAccessLogEntry`.
     NewAccessLogEntry,
+/// Mirrors the `AVPlayer` framework case `NewErrorLogEntry`.
     NewErrorLogEntry,
+/// Mirrors the `AVPlayer` framework case `RecommendedTimeOffsetFromLiveDidChange`.
     RecommendedTimeOffsetFromLiveDidChange(Time),
+/// Mirrors the `AVPlayer` framework case `MediaSelectionChanged`.
     MediaSelectionChanged,
 }
 
@@ -212,18 +230,22 @@ impl PlayerItem {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `status`.
     pub fn status(&self) -> Result<PlayerItemStatus, AVPlayerError> {
         Ok(PlayerItemStatus::from_raw(self.info()?.status))
     }
 
+/// Calls the `AVPlayer` framework counterpart for `error`.
     pub fn error(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.error_message)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `duration`.
     pub fn duration(&self) -> Result<Time, AVPlayerError> {
         Ok(self.info()?.duration)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `presentation_size`.
     pub fn presentation_size(&self) -> Result<Size, AVPlayerError> {
         Ok(self.info()?.presentation_size)
     }
@@ -234,6 +256,7 @@ impl PlayerItem {
         Ok(self.info()?.metadata)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `observe`.
     pub fn observe<F>(&self, callback: F) -> Result<PlayerItemObserver, AVPlayerError>
     where
         F: Fn(PlayerItemEvent) + Send + 'static,
@@ -373,26 +396,32 @@ impl Player {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `status`.
     pub fn status(&self) -> Result<PlayerStatus, AVPlayerError> {
         Ok(PlayerStatus::from_raw(self.info()?.status))
     }
 
+/// Calls the `AVPlayer` framework counterpart for `error`.
     pub fn error(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.error_message)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `rate`.
     pub fn rate(&self) -> Result<f32, AVPlayerError> {
         Ok(self.info()?.rate)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `current_time`.
     pub fn current_time(&self) -> Result<Time, AVPlayerError> {
         Ok(self.info()?.current_time)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `duration`.
     pub fn duration(&self) -> Result<Time, AVPlayerError> {
         Ok(self.info()?.duration)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `current_item`.
     pub fn current_item(&self) -> Option<PlayerItem> {
         // SAFETY: `self.ptr` is a valid AVPlayer handle; the bridge returns either
         // a retained current item or null when no item is set.
@@ -404,24 +433,28 @@ impl Player {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `play`.
     pub fn play(&self) {
         // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
         // ffi create function and has not been released.
         unsafe { ffi::av_player_play(self.ptr) };
     }
 
+/// Calls the `AVPlayer` framework counterpart for `pause`.
     pub fn pause(&self) {
         // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
         // ffi create function and has not been released.
         unsafe { ffi::av_player_pause(self.ptr) };
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_rate`.
     pub fn set_rate(&self, rate: f32) {
         // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
         // ffi create function and has not been released.
         unsafe { ffi::av_player_set_rate(self.ptr, rate) };
     }
 
+/// Calls the `AVPlayer` framework counterpart for `seek_to`.
     pub fn seek_to(&self, time: Time) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let (value, timescale, kind) = time.to_raw();
@@ -436,6 +469,7 @@ impl Player {
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `add_periodic_time_observer`.
     pub fn add_periodic_time_observer<F>(
         &self,
         interval: Time,
@@ -481,6 +515,7 @@ impl Player {
         Ok(PeriodicTimeObserver { token })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `add_boundary_time_observer`.
     pub fn add_boundary_time_observer<F>(
         &self,
         times: &[Time],

@@ -42,6 +42,7 @@ impl fmt::Display for AVPlayerError {
 
 impl std::error::Error for AVPlayerError {}
 
+/// Calls the `AVPlayer` framework counterpart for `from_swift`.
 pub unsafe fn from_swift(status: i32, error_str: *mut core::ffi::c_char) -> AVPlayerError {
     let message = if error_str.is_null() {
         String::new()

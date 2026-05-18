@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.5] - 2026-05-18
+
+- Add one-line docs across the public safe and FFI surfaces, raising public-item rustdoc coverage to 95.0%.
+
 ## [0.3.4] - 2026-05-18
 
 - Widen apple-cf version bound to `<0.10` so 0.9.x resolves.

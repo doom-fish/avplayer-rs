@@ -43,15 +43,25 @@ struct KeyLoadStatusPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum MediaType {
+/// Mirrors the `AVPlayer` framework case `Audio`.
     Audio,
+/// Mirrors the `AVPlayer` framework case `Video`.
     Video,
+/// Mirrors the `AVPlayer` framework case `Text`.
     Text,
+/// Mirrors the `AVPlayer` framework case `Subtitle`.
     Subtitle,
+/// Mirrors the `AVPlayer` framework case `ClosedCaption`.
     ClosedCaption,
+/// Mirrors the `AVPlayer` framework case `Metadata`.
     Metadata,
+/// Mirrors the `AVPlayer` framework case `Timecode`.
     Timecode,
+/// Mirrors the `AVPlayer` framework case `Muxed`.
     Muxed,
+/// Mirrors the `AVPlayer` framework case `DepthData`.
     DepthData,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
@@ -86,14 +96,20 @@ pub struct Size {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum KeyValueStatus {
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown,
+/// Mirrors the `AVPlayer` framework case `Loading`.
     Loading,
+/// Mirrors the `AVPlayer` framework case `Loaded`.
     Loaded,
+/// Mirrors the `AVPlayer` framework case `Failed`.
     Failed,
+/// Mirrors the `AVPlayer` framework case `Cancelled`.
     Cancelled,
 }
 
 impl KeyValueStatus {
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
@@ -109,8 +125,11 @@ impl KeyValueStatus {
 /// Result for a single key passed to `load_values_asynchronously`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyLoadStatus {
+/// Mirrors the `AVPlayer` framework property for `key`.
     pub key: String,
+/// Mirrors the `AVPlayer` framework property for `status`.
     pub status: KeyValueStatus,
+/// Mirrors the `AVPlayer` framework property for `error_message`.
     pub error_message: Option<String>,
 }
 

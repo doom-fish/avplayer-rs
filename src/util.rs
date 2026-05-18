@@ -9,6 +9,7 @@ use serde::Serialize;
 use crate::error::AVPlayerError;
 use crate::ffi;
 
+/// Calls the `AVPlayer` framework counterpart for `parse_json_and_free`.
 pub fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, AVPlayerError> {
     let json = unsafe { CStr::from_ptr(json_ptr) }
         .to_string_lossy()
@@ -19,12 +20,14 @@ pub fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result
     })
 }
 
+/// Calls the `AVPlayer` framework counterpart for `to_cstring`.
 pub fn to_cstring(value: &str, what: &str) -> Result<CString, AVPlayerError> {
     CString::new(value).map_err(|error| {
         AVPlayerError::InvalidArgument(format!("{what} contains NUL byte: {error}"))
     })
 }
 
+/// Calls the `AVPlayer` framework counterpart for `json_cstring`.
 pub fn json_cstring<T: Serialize + ?Sized>(
     value: &T,
     what: &str,
@@ -35,6 +38,7 @@ pub fn json_cstring<T: Serialize + ?Sized>(
     to_cstring(&json, &format!("{what} JSON"))
 }
 
+/// Calls the `AVPlayer` framework counterpart for `maybe_json_cstring`.
 pub fn maybe_json_cstring<T: Serialize>(
     value: Option<&T>,
     what: &str,

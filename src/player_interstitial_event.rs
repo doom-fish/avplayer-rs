@@ -18,19 +18,26 @@ use crate::player::{Player, PlayerItem};
 use crate::time::Time;
 use crate::util::{parse_json_and_free, to_cstring};
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventRestrictions`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct PlayerInterstitialEventRestrictions(u64);
 
 impl PlayerInterstitialEventRestrictions {
+/// Mirrors the `AVPlayer` framework constant `NONE`.
     pub const NONE: Self = Self(0);
+/// Mirrors the `AVPlayer` framework constant `CONSTRAINS_SEEKING_FORWARD_IN_PRIMARY_CONTENT`.
     pub const CONSTRAINS_SEEKING_FORWARD_IN_PRIMARY_CONTENT: Self = Self(1 << 0);
+/// Mirrors the `AVPlayer` framework constant `REQUIRES_PLAYBACK_AT_PREFERRED_RATE_FOR_ADVANCEMENT`.
     pub const REQUIRES_PLAYBACK_AT_PREFERRED_RATE_FOR_ADVANCEMENT: Self = Self(1 << 2);
+/// Mirrors the `AVPlayer` framework constant `DEFAULT_POLICY`.
     pub const DEFAULT_POLICY: Self = Self::NONE;
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     pub const fn bits(self) -> u64 {
         self.0
     }
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     pub const fn contains(self, other: Self) -> bool {
         (self.0 & other.0) == other.0
     }
@@ -54,12 +61,17 @@ impl BitOrAssign for PlayerInterstitialEventRestrictions {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventCue`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerInterstitialEventCue {
+/// Mirrors the `AVPlayer` framework case `NoCue`.
     NoCue,
+/// Mirrors the `AVPlayer` framework case `JoinCue`.
     JoinCue,
+/// Mirrors the `AVPlayer` framework case `LeaveCue`.
     LeaveCue,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
@@ -83,11 +95,15 @@ impl PlayerInterstitialEventCue {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventTimelineOccupancy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerInterstitialEventTimelineOccupancy {
+/// Mirrors the `AVPlayer` framework case `SinglePoint`.
     SinglePoint,
+/// Mirrors the `AVPlayer` framework case `Fill`.
     Fill,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(i32),
 }
 
@@ -109,12 +125,17 @@ impl PlayerInterstitialEventTimelineOccupancy {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventAssetListResponseStatus`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerInterstitialEventAssetListResponseStatus {
+/// Mirrors the `AVPlayer` framework case `Available`.
     Available,
+/// Mirrors the `AVPlayer` framework case `Cleared`.
     Cleared,
+/// Mirrors the `AVPlayer` framework case `Unavailable`.
     Unavailable,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(i32),
 }
 
@@ -129,13 +150,19 @@ impl PlayerInterstitialEventAssetListResponseStatus {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventSkippableEventState`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerInterstitialEventSkippableEventState {
+/// Mirrors the `AVPlayer` framework case `NotSkippable`.
     NotSkippable,
+/// Mirrors the `AVPlayer` framework case `NotYetEligible`.
     NotYetEligible,
+/// Mirrors the `AVPlayer` framework case `Eligible`.
     Eligible,
+/// Mirrors the `AVPlayer` framework case `NoLongerEligible`.
     NoLongerEligible,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(i32),
 }
 
@@ -151,6 +178,7 @@ impl PlayerInterstitialEventSkippableEventState {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventInfoPayload`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerInterstitialEventInfoPayload {
@@ -173,24 +201,42 @@ pub struct PlayerInterstitialEventInfoPayload {
     has_primary_item: bool,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventInfo`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerInterstitialEventInfo {
+/// Mirrors the `AVPlayer` framework property for `identifier`.
     pub identifier: String,
+/// Mirrors the `AVPlayer` framework property for `time`.
     pub time: Time,
+/// Mirrors the `AVPlayer` framework property for `date`.
     pub date: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `template_item_count`.
     pub template_item_count: usize,
+/// Mirrors the `AVPlayer` framework property for `restrictions`.
     pub restrictions: PlayerInterstitialEventRestrictions,
+/// Mirrors the `AVPlayer` framework property for `resumption_offset`.
     pub resumption_offset: Time,
+/// Mirrors the `AVPlayer` framework property for `playout_limit`.
     pub playout_limit: Time,
+/// Mirrors the `AVPlayer` framework property for `aligns_start_with_primary_segment_boundary`.
     pub aligns_start_with_primary_segment_boundary: bool,
+/// Mirrors the `AVPlayer` framework property for `aligns_resumption_with_primary_segment_boundary`.
     pub aligns_resumption_with_primary_segment_boundary: bool,
+/// Mirrors the `AVPlayer` framework property for `cue`.
     pub cue: Option<PlayerInterstitialEventCue>,
+/// Mirrors the `AVPlayer` framework property for `will_play_once`.
     pub will_play_once: bool,
+/// Mirrors the `AVPlayer` framework property for `user_defined_attributes`.
     pub user_defined_attributes: Option<Value>,
+/// Mirrors the `AVPlayer` framework property for `asset_list_response`.
     pub asset_list_response: Option<Value>,
+/// Mirrors the `AVPlayer` framework property for `timeline_occupancy`.
     pub timeline_occupancy: Option<PlayerInterstitialEventTimelineOccupancy>,
+/// Mirrors the `AVPlayer` framework property for `supplements_primary_content`.
     pub supplements_primary_content: Option<bool>,
+/// Mirrors the `AVPlayer` framework property for `content_may_vary`.
     pub content_may_vary: Option<bool>,
+/// Mirrors the `AVPlayer` framework property for `has_primary_item`.
     pub has_primary_item: bool,
 }
 
@@ -236,11 +282,16 @@ struct PlayerInterstitialMonitorStatePayload {
     current_event_skip_control_label: Option<String>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventMonitorState`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerInterstitialEventMonitorState {
+/// Mirrors the `AVPlayer` framework property for `events`.
     pub events: Vec<PlayerInterstitialEventInfo>,
+/// Mirrors the `AVPlayer` framework property for `current_event`.
     pub current_event: Option<PlayerInterstitialEventInfo>,
+/// Mirrors the `AVPlayer` framework property for `current_event_skippable_state`.
     pub current_event_skippable_state: Option<PlayerInterstitialEventSkippableEventState>,
+/// Mirrors the `AVPlayer` framework property for `current_event_skip_control_label`.
     pub current_event_skip_control_label: Option<String>,
 }
 
@@ -279,28 +330,36 @@ struct PlayerInterstitialMonitorEventPayload {
     did_play_entire_event: Option<bool>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventMonitorEvent`.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum PlayerInterstitialEventMonitorEvent {
+/// Mirrors the `AVPlayer` framework case `EventsDidChange`.
     EventsDidChange,
+/// Mirrors the `AVPlayer` framework case `CurrentEventDidChange`.
     CurrentEventDidChange,
+/// Mirrors the `AVPlayer` framework case `AssetListResponseStatusDidChange`.
     AssetListResponseStatusDidChange {
         interstitial_event: Option<PlayerInterstitialEventInfo>,
         status: PlayerInterstitialEventAssetListResponseStatus,
         error_message: Option<String>,
     },
+/// Mirrors the `AVPlayer` framework case `CurrentEventSkippableStateDidChange`.
     CurrentEventSkippableStateDidChange {
         interstitial_event: Option<PlayerInterstitialEventInfo>,
         state: PlayerInterstitialEventSkippableEventState,
         skip_control_label: Option<String>,
     },
+/// Mirrors the `AVPlayer` framework case `CurrentEventSkipped`.
     CurrentEventSkipped {
         interstitial_event: Option<PlayerInterstitialEventInfo>,
     },
+/// Mirrors the `AVPlayer` framework case `InterstitialEventWasUnscheduled`.
     InterstitialEventWasUnscheduled {
         interstitial_event: Option<PlayerInterstitialEventInfo>,
         error_message: Option<String>,
     },
+/// Mirrors the `AVPlayer` framework case `InterstitialEventDidFinish`.
     InterstitialEventDidFinish {
         interstitial_event: Option<PlayerInterstitialEventInfo>,
         playout_time: Option<Time>,
@@ -312,6 +371,7 @@ struct PlayerInterstitialEventMonitorObserverState {
     callback: Box<dyn Fn(PlayerInterstitialEventMonitorEvent) + Send + 'static>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEvent`.
 #[derive(Debug)]
 pub struct PlayerInterstitialEvent {
     pub(crate) ptr: *mut c_void,
@@ -327,6 +387,7 @@ impl Drop for PlayerInterstitialEvent {
 }
 
 impl PlayerInterstitialEvent {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(primary_item: &PlayerItem, time: Time) -> Result<Self, AVPlayerError> {
         let (value, timescale, kind) = time.to_raw();
         let mut err: *mut c_char = ptr::null_mut();
@@ -345,6 +406,7 @@ impl PlayerInterstitialEvent {
         Ok(Self { ptr })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `info`.
     pub fn info(&self) -> Result<PlayerInterstitialEventInfo, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe { ffi::av_player_interstitial_event_info_json(self.ptr, &mut err) };
@@ -356,18 +418,21 @@ impl PlayerInterstitialEvent {
         >(json_ptr)?)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_identifier`.
     pub fn set_identifier(&self, identifier: &str) -> Result<(), AVPlayerError> {
         let identifier = to_cstring(identifier, "interstitial event identifier")?;
         unsafe { ffi::av_player_interstitial_event_set_identifier(self.ptr, identifier.as_ptr()) };
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_restrictions`.
     pub fn set_restrictions(&self, restrictions: PlayerInterstitialEventRestrictions) {
         unsafe {
             ffi::av_player_interstitial_event_set_restrictions(self.ptr, restrictions.bits());
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_resumption_offset`.
     pub fn set_resumption_offset(&self, value: Time) {
         let (time_value, timescale, kind) = value.to_raw();
         unsafe {
@@ -377,6 +442,7 @@ impl PlayerInterstitialEvent {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_playout_limit`.
     pub fn set_playout_limit(&self, value: Time) {
         let (time_value, timescale, kind) = value.to_raw();
         unsafe {
@@ -386,6 +452,7 @@ impl PlayerInterstitialEvent {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_aligns_start_with_primary_segment_boundary`.
     pub fn set_aligns_start_with_primary_segment_boundary(&self, enabled: bool) {
         unsafe {
             ffi::av_player_interstitial_event_set_aligns_start_with_primary_segment_boundary(
@@ -394,6 +461,7 @@ impl PlayerInterstitialEvent {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_aligns_resumption_with_primary_segment_boundary`.
     pub fn set_aligns_resumption_with_primary_segment_boundary(&self, enabled: bool) {
         unsafe {
             ffi::av_player_interstitial_event_set_aligns_resumption_with_primary_segment_boundary(
@@ -402,33 +470,39 @@ impl PlayerInterstitialEvent {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_cue`.
     pub fn set_cue(&self, cue: &PlayerInterstitialEventCue) -> Result<(), AVPlayerError> {
         let cue = to_cstring(cue.as_raw(), "interstitial event cue")?;
         unsafe { ffi::av_player_interstitial_event_set_cue(self.ptr, cue.as_ptr()) };
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_will_play_once`.
     pub fn set_will_play_once(&self, enabled: bool) {
         unsafe { ffi::av_player_interstitial_event_set_will_play_once(self.ptr, enabled) };
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_timeline_occupancy`.
     pub fn set_timeline_occupancy(&self, occupancy: PlayerInterstitialEventTimelineOccupancy) {
         unsafe {
             ffi::av_player_interstitial_event_set_timeline_occupancy(self.ptr, occupancy.raw());
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_supplements_primary_content`.
     pub fn set_supplements_primary_content(&self, enabled: bool) {
         unsafe {
             ffi::av_player_interstitial_event_set_supplements_primary_content(self.ptr, enabled);
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_content_may_vary`.
     pub fn set_content_may_vary(&self, enabled: bool) {
         unsafe { ffi::av_player_interstitial_event_set_content_may_vary(self.ptr, enabled) };
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventMonitor`.
 #[derive(Debug)]
 pub struct PlayerInterstitialEventMonitor {
     pub(crate) ptr: *mut c_void,
@@ -444,6 +518,7 @@ impl Drop for PlayerInterstitialEventMonitor {
 }
 
 impl PlayerInterstitialEventMonitor {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(player: &Player) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe { ffi::av_player_interstitial_event_monitor_create(player.ptr, &mut err) };
@@ -453,6 +528,7 @@ impl PlayerInterstitialEventMonitor {
         Ok(Self { ptr })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `state`.
     pub fn state(&self) -> Result<PlayerInterstitialEventMonitorState, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
@@ -465,6 +541,7 @@ impl PlayerInterstitialEventMonitor {
         >(json_ptr)?)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `observe`.
     pub fn observe<F>(
         &self,
         callback: F,
@@ -494,6 +571,7 @@ impl PlayerInterstitialEventMonitor {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventController`.
 #[derive(Debug)]
 pub struct PlayerInterstitialEventController {
     pub(crate) ptr: *mut c_void,
@@ -509,6 +587,7 @@ impl Drop for PlayerInterstitialEventController {
 }
 
 impl PlayerInterstitialEventController {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(player: &Player) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr =
@@ -519,6 +598,7 @@ impl PlayerInterstitialEventController {
         Ok(Self { ptr })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `state`.
     pub fn state(&self) -> Result<PlayerInterstitialEventMonitorState, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
@@ -531,6 +611,7 @@ impl PlayerInterstitialEventController {
         >(json_ptr)?)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_events`.
     pub fn set_events(&self, events: &[&PlayerInterstitialEvent]) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let event_ptrs = events.iter().map(|event| event.ptr).collect::<Vec<_>>();
@@ -548,6 +629,7 @@ impl PlayerInterstitialEventController {
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `cancel_current_event_with_resumption_offset`.
     pub fn cancel_current_event_with_resumption_offset(&self, value: Time) {
         let (time_value, timescale, kind) = value.to_raw();
         unsafe {
@@ -560,11 +642,13 @@ impl PlayerInterstitialEventController {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `skip_current_event`.
     pub fn skip_current_event(&self) {
         unsafe { ffi::av_player_interstitial_event_controller_skip_current_event(self.ptr) };
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventMonitorObserver`.
 #[derive(Debug)]
 pub struct PlayerInterstitialEventMonitorObserver {
     token: *mut c_void,
@@ -586,6 +670,7 @@ unsafe impl Send for PlayerInterstitialEventMonitor {}
 unsafe impl Send for PlayerInterstitialEventController {}
 unsafe impl Send for PlayerInterstitialEventMonitorObserver {}
 
+/// Calls the `AVPlayer` framework counterpart for `player_waiting_during_interstitial_event_reason`.
 pub fn player_waiting_during_interstitial_event_reason() -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
     let string_ptr = unsafe { ffi::av_player_waiting_during_interstitial_event_reason(&mut err) };

@@ -16,11 +16,15 @@ use crate::reader::VideoOutputSettings;
 use crate::time::Time;
 use crate::util::{maybe_json_cstring, parse_json_and_free};
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutputSettings`.
 pub type PlayerVideoOutputSettings = VideoOutputSettings;
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutputTagCollectionPreset`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlayerVideoOutputTagCollectionPreset {
+/// Mirrors the `AVPlayer` framework case `Monoscopic`.
     Monoscopic,
+/// Mirrors the `AVPlayer` framework case `Stereoscopic`.
     Stereoscopic,
 }
 
@@ -39,31 +43,47 @@ struct PlayerVideoOutputTagCollectionPayload {
     tags: Vec<String>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `AffineTransform`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AffineTransform {
+/// Mirrors the `AVPlayer` framework property for `a`.
     pub a: f64,
+/// Mirrors the `AVPlayer` framework property for `b`.
     pub b: f64,
+/// Mirrors the `AVPlayer` framework property for `c`.
     pub c: f64,
+/// Mirrors the `AVPlayer` framework property for `d`.
     pub d: f64,
+/// Mirrors the `AVPlayer` framework property for `tx`.
     pub tx: f64,
+/// Mirrors the `AVPlayer` framework property for `ty`.
     pub ty: f64,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutputConfiguration`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerVideoOutputConfiguration {
+/// Mirrors the `AVPlayer` framework property for `has_source_player_item`.
     pub has_source_player_item: bool,
+/// Mirrors the `AVPlayer` framework property for `data_channel_descriptions`.
     pub data_channel_descriptions: Vec<Vec<String>>,
+/// Mirrors the `AVPlayer` framework property for `preferred_transform`.
     pub preferred_transform: Option<AffineTransform>,
+/// Mirrors the `AVPlayer` framework property for `activation_time`.
     pub activation_time: Time,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoTaggedBufferKind`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum PlayerVideoTaggedBufferKind {
+/// Mirrors the `AVPlayer` framework case `PixelBuffer`.
     PixelBuffer,
+/// Mirrors the `AVPlayer` framework case `SampleBuffer`.
     SampleBuffer,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
@@ -86,11 +106,16 @@ struct PlayerVideoTaggedBufferPayload {
     pixel_buffer_height: Option<usize>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoTaggedBuffer`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerVideoTaggedBuffer {
+/// Mirrors the `AVPlayer` framework property for `tags`.
     pub tags: Vec<String>,
+/// Mirrors the `AVPlayer` framework property for `kind`.
     pub kind: PlayerVideoTaggedBufferKind,
+/// Mirrors the `AVPlayer` framework property for `pixel_buffer_width`.
     pub pixel_buffer_width: Option<usize>,
+/// Mirrors the `AVPlayer` framework property for `pixel_buffer_height`.
     pub pixel_buffer_height: Option<usize>,
 }
 
@@ -113,10 +138,14 @@ struct PlayerVideoOutputSamplePayload {
     active_configuration: PlayerVideoOutputConfiguration,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutputSample`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerVideoOutputSample {
+/// Mirrors the `AVPlayer` framework property for `tagged_buffers`.
     pub tagged_buffers: Vec<PlayerVideoTaggedBuffer>,
+/// Mirrors the `AVPlayer` framework property for `presentation_time`.
     pub presentation_time: Time,
+/// Mirrors the `AVPlayer` framework property for `active_configuration`.
     pub active_configuration: PlayerVideoOutputConfiguration,
 }
 
@@ -134,6 +163,7 @@ impl From<PlayerVideoOutputSamplePayload> for PlayerVideoOutputSample {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutputTagCollection`.
 #[derive(Debug)]
 pub struct PlayerVideoOutputTagCollection {
     pub(crate) ptr: *mut c_void,
@@ -149,6 +179,7 @@ impl Drop for PlayerVideoOutputTagCollection {
 }
 
 impl PlayerVideoOutputTagCollection {
+/// Calls the `AVPlayer` framework counterpart for `from_preset`.
     pub fn from_preset(
         preset: PlayerVideoOutputTagCollectionPreset,
     ) -> Result<Self, AVPlayerError> {
@@ -172,11 +203,13 @@ impl PlayerVideoOutputTagCollection {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `tags`.
     pub fn tags(&self) -> Result<Vec<String>, AVPlayerError> {
         Ok(self.info()?.tags)
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `VideoOutputSpecification`.
 #[derive(Debug)]
 pub struct VideoOutputSpecification {
     pub(crate) ptr: *mut c_void,
@@ -192,6 +225,7 @@ impl Drop for VideoOutputSpecification {
 }
 
 impl VideoOutputSpecification {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(tag_collections: &[&PlayerVideoOutputTagCollection]) -> Result<Self, AVPlayerError> {
         if tag_collections.is_empty() {
             return Err(AVPlayerError::InvalidArgument(
@@ -223,6 +257,7 @@ impl VideoOutputSpecification {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `preferred_tag_collections`.
     pub fn preferred_tag_collections(&self) -> Result<Vec<Vec<String>>, AVPlayerError> {
         Ok(self
             .preferred_tag_collection_payloads()?
@@ -231,6 +266,7 @@ impl VideoOutputSpecification {
             .collect())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_default_output_settings`.
     pub fn set_default_output_settings(
         &self,
         settings: Option<&PlayerVideoOutputSettings>,
@@ -252,6 +288,7 @@ impl VideoOutputSpecification {
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_output_settings_for_tag_collection`.
     pub fn set_output_settings_for_tag_collection(
         &self,
         tag_collection: &PlayerVideoOutputTagCollection,
@@ -276,6 +313,7 @@ impl VideoOutputSpecification {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutput`.
 #[derive(Debug)]
 pub struct PlayerVideoOutput {
     pub(crate) ptr: *mut c_void,
@@ -297,6 +335,7 @@ unsafe impl Send for VideoOutputSpecification {}
 unsafe impl Send for PlayerVideoOutput {}
 
 impl PlayerVideoOutput {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(specification: &VideoOutputSpecification) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe { ffi::av_player_video_output_create(specification.ptr, &mut err) };
@@ -306,6 +345,7 @@ impl PlayerVideoOutput {
         Ok(Self { ptr })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `sample_for_host_time`.
     pub fn sample_for_host_time(
         &self,
         host_time: Time,
@@ -326,6 +366,7 @@ impl PlayerVideoOutput {
 }
 
 impl Player {
+/// Calls the `AVPlayer` framework counterpart for `set_video_output`.
     pub fn set_video_output(&self, output: Option<&PlayerVideoOutput>) {
         unsafe {
             ffi::av_player_set_video_output(
@@ -335,6 +376,7 @@ impl Player {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `video_output`.
     pub fn video_output(&self) -> Option<PlayerVideoOutput> {
         let ptr = unsafe { ffi::av_player_copy_video_output(self.ptr) };
         (!ptr.is_null()).then_some(PlayerVideoOutput { ptr })

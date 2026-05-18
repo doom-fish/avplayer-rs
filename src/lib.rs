@@ -3,10 +3,12 @@
 
 mod asset;
 mod error;
+/// Groups `AVPlayer` framework constants for `ffi`.
 pub mod ffi;
 mod metadata;
 mod player;
 mod player_item;
+/// Groups `AVPlayer` framework constants for `async_api`.
 #[cfg(feature = "async")]
 #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub mod async_api;
@@ -31,19 +33,27 @@ mod time;
 mod url_asset;
 mod util;
 
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use asset::{Asset, AssetTrack, KeyLoadStatus, KeyValueStatus, MediaType, Size, UrlAsset};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use error::AVPlayerError;
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use metadata::MetadataItem;
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player::{
     BoundaryTimeObserver, PeriodicTimeObserver, Player, PlayerItem, PlayerItemEvent,
     PlayerItemObserver, PlayerItemStatus, PlayerStatus,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item::{
     AudioTimePitchAlgorithm, ContentAuthorizationStatus, PlayerItemVideoCompositorInfo,
     VariantPreferences,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_access_log::{PlayerItemAccessLog, PlayerItemAccessLogEvent};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_error_log::{PlayerItemErrorLog, PlayerItemErrorLogEvent};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_integrated_timeline::{
     player_integrated_timeline_snapshots_out_of_sync_notification,
     player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed,
@@ -57,28 +67,36 @@ pub use player_item_integrated_timeline::{
     PlayerItemIntegratedTimelineSnapshot, PlayerItemIntegratedTimelineSnapshotInfo,
     PlayerItemSegmentType,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_legible_output::{
     PlayerItemLegibleOutput, PlayerItemLegibleOutputEvent, PlayerItemLegibleOutputObserver,
     PlayerItemLegibleOutputTextStylingResolution,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_metadata_collector::{
     DateRangeMetadataGroup, MetadataCollectorEvent, MetadataCollectorObserver,
     PlayerItemMediaDataCollectorInfo, PlayerItemMediaDataCollectorKind,
     PlayerItemMetadataCollector,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_metadata_output::{
     MetadataOutputEvent, MetadataOutputObserver, PlayerItemMetadataOutput, TimedMetadataGroup,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_output::PlayerItemOutput;
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_rendered_legible_output::{
     PlayerItemRenderedLegibleOutput, RenderedCaptionImage, RenderedLegibleOutputEvent,
     RenderedLegibleOutputObserver,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_track::{PlayerItemTrack, PlayerItemTrackVideoFieldMode};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_video_output::{
     PlayerItemVideoOutput, PlayerItemVideoOutputEvent, PlayerItemVideoOutputObserver,
     PlayerItemVideoOutputSettings,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_interstitial_event::{
     player_waiting_during_interstitial_event_reason, PlayerInterstitialEvent,
     PlayerInterstitialEventAssetListResponseStatus, PlayerInterstitialEventController,
@@ -87,45 +105,61 @@ pub use player_interstitial_event::{
     PlayerInterstitialEventMonitorState, PlayerInterstitialEventRestrictions,
     PlayerInterstitialEventSkippableEventState, PlayerInterstitialEventTimelineOccupancy,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_layer::{PlayerLayer, Rect, VideoGravity};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_looper::{PlayerLooper, PlayerLooperItemOrdering, PlayerLooperStatus};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_media_selection_criteria::{
     player_eligible_for_hdr_playback_did_change_notification, MediaCharacteristic,
     PlayerActionAtItemEnd, PlayerAudiovisualBackgroundPlaybackPolicy, PlayerMediaSelectionCriteria,
     PlayerNetworkResourcePriority, PlayerRateDidChangeEvent, PlayerRateDidChangeObserver,
     PlayerRateDidChangeReason, PlayerTimeControlStatus, PlayerWaitingReason,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_video_output::{
     AffineTransform, PlayerVideoOutput, PlayerVideoOutputConfiguration,
     PlayerVideoOutputSample, PlayerVideoOutputSettings, PlayerVideoOutputTagCollection,
     PlayerVideoOutputTagCollectionPreset, PlayerVideoTaggedBuffer,
     PlayerVideoTaggedBufferKind, VideoOutputSpecification,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use queue_player::QueuePlayer;
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use reader::{
     AssetReader, AssetReaderAudioMixOutput, AssetReaderStatus, AssetReaderTrackOutput,
     AssetReaderVideoCompositionOutput, AudioOutputSettings, VideoOutputSettings,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use time::{Time, TimeRange};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use url_asset::UrlAssetOptions;
 
 /// Common imports.
 pub mod prelude {
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::asset::{
         Asset, AssetTrack, KeyLoadStatus, KeyValueStatus, MediaType, Size, UrlAsset,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::error::AVPlayerError;
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::metadata::MetadataItem;
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player::{
         BoundaryTimeObserver, PeriodicTimeObserver, Player, PlayerItem, PlayerItemEvent,
         PlayerItemObserver, PlayerItemStatus, PlayerStatus,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item::{
         AudioTimePitchAlgorithm, ContentAuthorizationStatus, PlayerItemVideoCompositorInfo,
         VariantPreferences,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_access_log::{PlayerItemAccessLog, PlayerItemAccessLogEvent};
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_error_log::{PlayerItemErrorLog, PlayerItemErrorLogEvent};
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_integrated_timeline::{
         player_integrated_timeline_snapshots_out_of_sync_notification,
         player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed,
@@ -139,28 +173,36 @@ pub mod prelude {
         PlayerItemIntegratedTimelineSnapshot, PlayerItemIntegratedTimelineSnapshotInfo,
         PlayerItemSegmentType,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_legible_output::{
         PlayerItemLegibleOutput, PlayerItemLegibleOutputEvent, PlayerItemLegibleOutputObserver,
         PlayerItemLegibleOutputTextStylingResolution,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_metadata_collector::{
         DateRangeMetadataGroup, MetadataCollectorEvent, MetadataCollectorObserver,
         PlayerItemMediaDataCollectorInfo, PlayerItemMediaDataCollectorKind,
         PlayerItemMetadataCollector,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_metadata_output::{
         MetadataOutputEvent, MetadataOutputObserver, PlayerItemMetadataOutput, TimedMetadataGroup,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_output::PlayerItemOutput;
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_rendered_legible_output::{
         PlayerItemRenderedLegibleOutput, RenderedCaptionImage, RenderedLegibleOutputEvent,
         RenderedLegibleOutputObserver,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_track::{PlayerItemTrack, PlayerItemTrackVideoFieldMode};
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_video_output::{
         PlayerItemVideoOutput, PlayerItemVideoOutputEvent, PlayerItemVideoOutputObserver,
         PlayerItemVideoOutputSettings,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_interstitial_event::{
         player_waiting_during_interstitial_event_reason, PlayerInterstitialEvent,
         PlayerInterstitialEventAssetListResponseStatus, PlayerInterstitialEventController,
@@ -169,8 +211,11 @@ pub mod prelude {
         PlayerInterstitialEventMonitorState, PlayerInterstitialEventRestrictions,
         PlayerInterstitialEventSkippableEventState, PlayerInterstitialEventTimelineOccupancy,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_layer::{PlayerLayer, Rect, VideoGravity};
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_looper::{PlayerLooper, PlayerLooperItemOrdering, PlayerLooperStatus};
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_media_selection_criteria::{
         player_eligible_for_hdr_playback_did_change_notification, MediaCharacteristic,
         PlayerActionAtItemEnd, PlayerAudiovisualBackgroundPlaybackPolicy,
@@ -178,17 +223,22 @@ pub mod prelude {
         PlayerRateDidChangeObserver, PlayerRateDidChangeReason, PlayerTimeControlStatus,
         PlayerWaitingReason,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_video_output::{
         AffineTransform, PlayerVideoOutput, PlayerVideoOutputConfiguration,
         PlayerVideoOutputSample, PlayerVideoOutputSettings, PlayerVideoOutputTagCollection,
         PlayerVideoOutputTagCollectionPreset, PlayerVideoTaggedBuffer,
         PlayerVideoTaggedBufferKind, VideoOutputSpecification,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::queue_player::QueuePlayer;
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::reader::{
         AssetReader, AssetReaderAudioMixOutput, AssetReaderStatus, AssetReaderTrackOutput,
         AssetReaderVideoCompositionOutput, AudioOutputSettings, VideoOutputSettings,
     };
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::time::{Time, TimeRange};
+/// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::url_asset::UrlAssetOptions;
 }

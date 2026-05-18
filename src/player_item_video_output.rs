@@ -27,9 +27,12 @@ struct VideoOutputEventPayload {
     event: String,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemVideoOutputEvent`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlayerItemVideoOutputEvent {
+/// Mirrors the `AVPlayer` framework case `MediaDataWillChange`.
     MediaDataWillChange,
+/// Mirrors the `AVPlayer` framework case `SequenceWasFlushed`.
     SequenceWasFlushed,
 }
 
@@ -37,8 +40,10 @@ struct VideoOutputObserverState {
     callback: Box<dyn Fn(PlayerItemVideoOutputEvent) + Send + 'static>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemVideoOutputSettings`.
 pub type PlayerItemVideoOutputSettings = VideoOutputSettings;
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemVideoOutput`.
 #[derive(Debug)]
 pub struct PlayerItemVideoOutput {
     pub(crate) ptr: *mut c_void,
@@ -54,6 +59,7 @@ impl Drop for PlayerItemVideoOutput {
 }
 
 impl PlayerItemVideoOutput {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(settings: Option<&PlayerItemVideoOutputSettings>) -> Result<Self, AVPlayerError> {
         let settings = maybe_json_cstring(settings, "player-item video output settings")?;
         let mut err: *mut c_char = ptr::null_mut();
@@ -80,22 +86,27 @@ impl PlayerItemVideoOutput {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
     pub fn suppresses_player_rendering(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.suppresses_player_rendering)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `has_delegate`.
     pub fn has_delegate(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.has_delegate)
     }
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     pub const fn as_output(&self) -> PlayerItemOutput<'_> {
         PlayerItemOutput::from_ptr(self.ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_suppresses_player_rendering`.
     pub fn set_suppresses_player_rendering(&self, suppresses: bool) {
         unsafe { ffi::av_player_item_output_set_suppresses_player_rendering(self.ptr, suppresses) };
     }
 
+/// Calls the `AVPlayer` framework counterpart for `request_notification_of_media_data_change`.
     pub fn request_notification_of_media_data_change(&self, interval: f64) {
         unsafe {
             ffi::av_player_item_video_output_request_notification_of_media_data_change(
@@ -104,6 +115,7 @@ impl PlayerItemVideoOutput {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `observe`.
     pub fn observe<F>(
         &self,
         queue_label: Option<&str>,
@@ -139,6 +151,7 @@ impl PlayerItemVideoOutput {
         Ok(PlayerItemVideoOutputObserver { token })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `has_new_pixel_buffer_for_item_time`.
     pub fn has_new_pixel_buffer_for_item_time(&self, item_time: Time) -> bool {
         let (value, timescale, kind) = item_time.to_raw();
         unsafe {
@@ -148,6 +161,7 @@ impl PlayerItemVideoOutput {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `copy_pixel_buffer_for_item_time`.
     pub fn copy_pixel_buffer_for_item_time(&self, item_time: Time) -> Option<CVPixelBuffer> {
         let (value, timescale, kind) = item_time.to_raw();
         let ptr = unsafe {
@@ -159,6 +173,7 @@ impl PlayerItemVideoOutput {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemVideoOutputObserver`.
 #[derive(Debug)]
 pub struct PlayerItemVideoOutputObserver {
     token: *mut c_void,
@@ -179,6 +194,7 @@ unsafe impl Send for PlayerItemVideoOutput {}
 unsafe impl Send for PlayerItemVideoOutputObserver {}
 
 impl PlayerItem {
+/// Calls the `AVPlayer` framework counterpart for `add_video_output`.
     pub fn add_video_output(&self, output: &PlayerItemVideoOutput) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &mut err) };
@@ -188,6 +204,7 @@ impl PlayerItem {
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `remove_video_output`.
     pub fn remove_video_output(&self, output: &PlayerItemVideoOutput) {
         unsafe { ffi::av_player_item_remove_output(self.ptr, output.ptr) };
     }

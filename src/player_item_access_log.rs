@@ -47,31 +47,56 @@ struct AccessLogEventPayload {
     switch_bitrate: f64,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemAccessLogEvent`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerItemAccessLogEvent {
+/// Mirrors the `AVPlayer` framework property for `number_of_media_requests`.
     pub number_of_media_requests: i64,
+/// Mirrors the `AVPlayer` framework property for `playback_start_date`.
     pub playback_start_date: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `uri`.
     pub uri: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `server_address`.
     pub server_address: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `number_of_server_address_changes`.
     pub number_of_server_address_changes: i64,
+/// Mirrors the `AVPlayer` framework property for `playback_session_id`.
     pub playback_session_id: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `playback_start_offset`.
     pub playback_start_offset: f64,
+/// Mirrors the `AVPlayer` framework property for `segments_downloaded_duration`.
     pub segments_downloaded_duration: f64,
+/// Mirrors the `AVPlayer` framework property for `duration_watched`.
     pub duration_watched: f64,
+/// Mirrors the `AVPlayer` framework property for `number_of_stalls`.
     pub number_of_stalls: i64,
+/// Mirrors the `AVPlayer` framework property for `number_of_bytes_transferred`.
     pub number_of_bytes_transferred: i64,
+/// Mirrors the `AVPlayer` framework property for `transfer_duration`.
     pub transfer_duration: f64,
+/// Mirrors the `AVPlayer` framework property for `observed_bitrate`.
     pub observed_bitrate: f64,
+/// Mirrors the `AVPlayer` framework property for `indicated_bitrate`.
     pub indicated_bitrate: f64,
+/// Mirrors the `AVPlayer` framework property for `indicated_average_bitrate`.
     pub indicated_average_bitrate: f64,
+/// Mirrors the `AVPlayer` framework property for `average_video_bitrate`.
     pub average_video_bitrate: f64,
+/// Mirrors the `AVPlayer` framework property for `average_audio_bitrate`.
     pub average_audio_bitrate: f64,
+/// Mirrors the `AVPlayer` framework property for `number_of_dropped_video_frames`.
     pub number_of_dropped_video_frames: i64,
+/// Mirrors the `AVPlayer` framework property for `startup_time`.
     pub startup_time: f64,
+/// Mirrors the `AVPlayer` framework property for `download_overdue`.
     pub download_overdue: i64,
+/// Mirrors the `AVPlayer` framework property for `observed_bitrate_standard_deviation`.
     pub observed_bitrate_standard_deviation: f64,
+/// Mirrors the `AVPlayer` framework property for `playback_type`.
     pub playback_type: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `media_requests_wwan`.
     pub media_requests_wwan: i64,
+/// Mirrors the `AVPlayer` framework property for `switch_bitrate`.
     pub switch_bitrate: f64,
 }
 
@@ -106,6 +131,7 @@ impl From<AccessLogEventPayload> for PlayerItemAccessLogEvent {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemAccessLog`.
 #[derive(Debug)]
 pub struct PlayerItemAccessLog {
     pub(crate) ptr: *mut c_void,
@@ -134,14 +160,17 @@ impl PlayerItemAccessLog {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `extended_log`.
     pub fn extended_log(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.extended_log)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `extended_log_data_string_encoding`.
     pub fn extended_log_data_string_encoding(&self) -> Result<usize, AVPlayerError> {
         Ok(self.info()?.extended_log_data_string_encoding)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `events`.
     pub fn events(&self) -> Result<Vec<PlayerItemAccessLogEvent>, AVPlayerError> {
         Ok(self
             .info()?
@@ -153,6 +182,7 @@ impl PlayerItemAccessLog {
 }
 
 impl PlayerItem {
+/// Calls the `AVPlayer` framework counterpart for `access_log`.
     pub fn access_log(&self) -> Result<Option<PlayerItemAccessLog>, AVPlayerError> {
         let ptr = unsafe { ffi::av_player_item_copy_access_log(self.ptr) };
         if ptr.is_null() {

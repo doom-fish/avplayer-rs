@@ -12,11 +12,16 @@ use crate::ffi;
 use crate::player::Player;
 use crate::util::parse_json_and_free;
 
+/// Mirrors the `AVPlayer` framework counterpart for `Rect`.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 pub struct Rect {
+/// Mirrors the `AVPlayer` framework property for `x`.
     pub x: f64,
+/// Mirrors the `AVPlayer` framework property for `y`.
     pub y: f64,
+/// Mirrors the `AVPlayer` framework property for `width`.
     pub width: f64,
+/// Mirrors the `AVPlayer` framework property for `height`.
     pub height: f64,
 }
 
@@ -29,15 +34,20 @@ struct PlayerLayerInfoPayload {
     video_rect: Rect,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `VideoGravity`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum VideoGravity {
+/// Mirrors the `AVPlayer` framework case `ResizeAspect`.
     ResizeAspect,
+/// Mirrors the `AVPlayer` framework case `ResizeAspectFill`.
     ResizeAspectFill,
+/// Mirrors the `AVPlayer` framework case `Resize`.
     Resize,
 }
 
 impl VideoGravity {
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn as_raw(self) -> &'static str {
         match self {
@@ -47,6 +57,7 @@ impl VideoGravity {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `from_raw`.
     #[must_use]
     pub fn from_raw(raw: &str) -> Self {
         match raw {
@@ -57,6 +68,7 @@ impl VideoGravity {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerLayer`.
 #[derive(Debug)]
 pub struct PlayerLayer {
     ptr: *mut c_void,
@@ -76,6 +88,7 @@ impl Drop for PlayerLayer {
 unsafe impl Send for PlayerLayer {}
 
 impl PlayerLayer {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(player: Option<&Player>) -> Result<Self, AVPlayerError> {
         let ptr = unsafe {
             ffi::av_player_layer_create(player.map_or(ptr::null_mut(), |player| player.ptr))
@@ -97,10 +110,12 @@ impl PlayerLayer {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `has_player`.
     pub fn has_player(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.has_player)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_player`.
     pub fn set_player(&self, player: Option<&Player>) {
         unsafe {
             ffi::av_player_layer_set_player(
@@ -110,10 +125,12 @@ impl PlayerLayer {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `video_gravity`.
     pub fn video_gravity(&self) -> Result<VideoGravity, AVPlayerError> {
         Ok(VideoGravity::from_raw(&self.info()?.video_gravity))
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_video_gravity`.
     pub fn set_video_gravity(&self, video_gravity: VideoGravity) -> Result<(), AVPlayerError> {
         let video_gravity = CString::new(video_gravity.as_raw()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("video gravity contains NUL byte: {error}"))
@@ -122,14 +139,17 @@ impl PlayerLayer {
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `is_ready_for_display`.
     pub fn is_ready_for_display(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.ready_for_display)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `video_rect`.
     pub fn video_rect(&self) -> Result<Rect, AVPlayerError> {
         Ok(self.info()?.video_rect)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `copy_displayed_pixel_buffer`.
     pub fn copy_displayed_pixel_buffer(&self) -> Option<CVPixelBuffer> {
         let ptr = unsafe { ffi::av_player_layer_copy_displayed_pixel_buffer(self.ptr) };
         CVPixelBuffer::from_raw(ptr)

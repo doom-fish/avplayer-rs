@@ -18,31 +18,37 @@ pub enum Time {
 }
 
 impl Time {
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn new(value: i64, timescale: i32) -> Self {
         Self::Numeric { value, timescale }
     }
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn invalid() -> Self {
         Self::Invalid
     }
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn indefinite() -> Self {
         Self::Indefinite
     }
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn positive_infinity() -> Self {
         Self::PositiveInfinity
     }
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn negative_infinity() -> Self {
         Self::NegativeInfinity
     }
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn as_numeric(self) -> Option<(i64, i32)> {
         match self {
@@ -92,6 +98,7 @@ pub struct TimeRange {
 }
 
 impl TimeRange {
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn new(start: Time, duration: Time) -> Self {
         Self { start, duration }

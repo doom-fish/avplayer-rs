@@ -22,11 +22,15 @@ struct LegibleOutputInfoPayload {
     text_styling_resolution: String,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemLegibleOutputTextStylingResolution`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerItemLegibleOutputTextStylingResolution {
+/// Mirrors the `AVPlayer` framework case `Default`.
     Default,
+/// Mirrors the `AVPlayer` framework case `SourceAndRulesOnly`.
     SourceAndRulesOnly,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
@@ -57,9 +61,12 @@ struct LegibleOutputEventPayload {
     native_sample_buffer_count: usize,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemLegibleOutputEvent`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlayerItemLegibleOutputEvent {
+/// Mirrors the `AVPlayer` framework case `SequenceWasFlushed`.
     SequenceWasFlushed,
+/// Mirrors the `AVPlayer` framework case `AttributedStrings`.
     AttributedStrings {
         item_time: Time,
         strings: Vec<String>,
@@ -71,6 +78,7 @@ struct LegibleOutputObserverState {
     callback: Box<dyn Fn(PlayerItemLegibleOutputEvent) + Send + 'static>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemLegibleOutput`.
 #[derive(Debug)]
 pub struct PlayerItemLegibleOutput {
     pub(crate) ptr: *mut c_void,
@@ -86,6 +94,7 @@ impl Drop for PlayerItemLegibleOutput {
 }
 
 impl PlayerItemLegibleOutput {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(native_representation_subtypes: Option<&[u32]>) -> Result<Self, AVPlayerError> {
         let native_representation_subtypes = native_representation_subtypes
             .map(|subtypes| json_cstring(subtypes, "native legible output subtypes"))
@@ -114,22 +123,27 @@ impl PlayerItemLegibleOutput {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
     pub fn suppresses_player_rendering(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.suppresses_player_rendering)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `has_delegate`.
     pub fn has_delegate(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.has_delegate)
     }
 
+/// Mirrors the `AVPlayer` framework constant `fn`.
     pub const fn as_output(&self) -> PlayerItemOutput<'_> {
         PlayerItemOutput::from_ptr(self.ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_suppresses_player_rendering`.
     pub fn set_suppresses_player_rendering(&self, suppresses: bool) {
         unsafe { ffi::av_player_item_output_set_suppresses_player_rendering(self.ptr, suppresses) };
     }
 
+/// Calls the `AVPlayer` framework counterpart for `observe`.
     pub fn observe<F>(
         &self,
         queue_label: Option<&str>,
@@ -165,18 +179,22 @@ impl PlayerItemLegibleOutput {
         Ok(PlayerItemLegibleOutputObserver { token })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `advance_interval_for_delegate_invocation`.
     pub fn advance_interval_for_delegate_invocation(&self) -> Result<f64, AVPlayerError> {
         Ok(self.info()?.advance_interval_for_delegate_invocation)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_advance_interval_for_delegate_invocation`.
     pub fn set_advance_interval_for_delegate_invocation(&self, interval: f64) {
         unsafe { ffi::av_player_item_legible_output_set_advance_interval(self.ptr, interval) };
     }
 
+/// Calls the `AVPlayer` framework counterpart for `native_representation_subtypes`.
     pub fn native_representation_subtypes(&self) -> Result<Vec<u32>, AVPlayerError> {
         Ok(self.info()?.native_representation_subtypes)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `text_styling_resolution`.
     pub fn text_styling_resolution(
         &self,
     ) -> Result<PlayerItemLegibleOutputTextStylingResolution, AVPlayerError> {
@@ -185,6 +203,7 @@ impl PlayerItemLegibleOutput {
         ))
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_text_styling_resolution`.
     pub fn set_text_styling_resolution(
         &self,
         resolution: &PlayerItemLegibleOutputTextStylingResolution,
@@ -208,6 +227,7 @@ impl PlayerItemLegibleOutput {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemLegibleOutputObserver`.
 #[derive(Debug)]
 pub struct PlayerItemLegibleOutputObserver {
     token: *mut c_void,
@@ -228,6 +248,7 @@ unsafe impl Send for PlayerItemLegibleOutput {}
 unsafe impl Send for PlayerItemLegibleOutputObserver {}
 
 impl PlayerItem {
+/// Calls the `AVPlayer` framework counterpart for `add_legible_output`.
     pub fn add_legible_output(
         &self,
         output: &PlayerItemLegibleOutput,
@@ -240,6 +261,7 @@ impl PlayerItem {
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `remove_legible_output`.
     pub fn remove_legible_output(&self, output: &PlayerItemLegibleOutput) {
         unsafe { ffi::av_player_item_remove_output(self.ptr, output.ptr) };
     }

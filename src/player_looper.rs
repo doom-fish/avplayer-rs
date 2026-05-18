@@ -21,16 +21,22 @@ struct PlayerLooperInfoPayload {
     looping_item_count: i64,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerLooperStatus`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerLooperStatus {
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown,
+/// Mirrors the `AVPlayer` framework case `Ready`.
     Ready,
+/// Mirrors the `AVPlayer` framework case `Failed`.
     Failed,
+/// Mirrors the `AVPlayer` framework case `Cancelled`.
     Cancelled,
 }
 
 impl PlayerLooperStatus {
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
@@ -42,14 +48,18 @@ impl PlayerLooperStatus {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerLooperItemOrdering`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerLooperItemOrdering {
+/// Mirrors the `AVPlayer` framework case `LoopingItemsPrecedeExistingItems`.
     LoopingItemsPrecedeExistingItems,
+/// Mirrors the `AVPlayer` framework case `LoopingItemsFollowExistingItems`.
     LoopingItemsFollowExistingItems,
 }
 
 impl PlayerLooperItemOrdering {
+/// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn as_raw(self) -> i32 {
         match self {
@@ -59,6 +69,7 @@ impl PlayerLooperItemOrdering {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerLooper`.
 #[derive(Debug)]
 pub struct PlayerLooper {
     ptr: *mut c_void,
@@ -78,6 +89,7 @@ impl Drop for PlayerLooper {
 unsafe impl Send for PlayerLooper {}
 
 impl PlayerLooper {
+/// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(player: &QueuePlayer, template_item: &PlayerItem) -> Result<Self, AVPlayerError> {
         Self::with_time_range_and_ordering(
             player,
@@ -87,6 +99,7 @@ impl PlayerLooper {
         )
     }
 
+/// Calls the `AVPlayer` framework counterpart for `with_time_range`.
     pub fn with_time_range(
         player: &QueuePlayer,
         template_item: &PlayerItem,
@@ -100,6 +113,7 @@ impl PlayerLooper {
         )
     }
 
+/// Calls the `AVPlayer` framework counterpart for `with_time_range_and_ordering`.
     pub fn with_time_range_and_ordering(
         player: &QueuePlayer,
         template_item: &PlayerItem,
@@ -156,18 +170,22 @@ impl PlayerLooper {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `status`.
     pub fn status(&self) -> Result<PlayerLooperStatus, AVPlayerError> {
         Ok(PlayerLooperStatus::from_raw(self.info()?.status))
     }
 
+/// Calls the `AVPlayer` framework counterpart for `error`.
     pub fn error(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.error_message)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `loop_count`.
     pub fn loop_count(&self) -> Result<i64, AVPlayerError> {
         Ok(self.info()?.loop_count)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `looping_items`.
     pub fn looping_items(&self) -> Result<Vec<PlayerItem>, AVPlayerError> {
         let count = self.info()?.looping_item_count;
         if count < 0 {
@@ -203,6 +221,7 @@ impl PlayerLooper {
         Ok(items)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `disable_looping`.
     pub fn disable_looping(&self) {
         unsafe { ffi::av_player_looper_disable_looping(self.ptr) };
     }

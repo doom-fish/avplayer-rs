@@ -31,15 +31,24 @@ struct ErrorLogEventPayload {
     all_http_response_header_fields: Option<std::collections::BTreeMap<String, String>>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemErrorLogEvent`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlayerItemErrorLogEvent {
+/// Mirrors the `AVPlayer` framework property for `date`.
     pub date: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `uri`.
     pub uri: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `server_address`.
     pub server_address: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `playback_session_id`.
     pub playback_session_id: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `error_status_code`.
     pub error_status_code: i64,
+/// Mirrors the `AVPlayer` framework property for `error_domain`.
     pub error_domain: String,
+/// Mirrors the `AVPlayer` framework property for `error_comment`.
     pub error_comment: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `all_http_response_header_fields`.
     pub all_http_response_header_fields: Option<std::collections::BTreeMap<String, String>>,
 }
 
@@ -58,6 +67,7 @@ impl From<ErrorLogEventPayload> for PlayerItemErrorLogEvent {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemErrorLog`.
 #[derive(Debug)]
 pub struct PlayerItemErrorLog {
     pub(crate) ptr: *mut c_void,
@@ -86,14 +96,17 @@ impl PlayerItemErrorLog {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `extended_log`.
     pub fn extended_log(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.extended_log)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `extended_log_data_string_encoding`.
     pub fn extended_log_data_string_encoding(&self) -> Result<usize, AVPlayerError> {
         Ok(self.info()?.extended_log_data_string_encoding)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `events`.
     pub fn events(&self) -> Result<Vec<PlayerItemErrorLogEvent>, AVPlayerError> {
         Ok(self
             .info()?
@@ -105,6 +118,7 @@ impl PlayerItemErrorLog {
 }
 
 impl PlayerItem {
+/// Calls the `AVPlayer` framework counterpart for `error_log`.
     pub fn error_log(&self) -> Result<Option<PlayerItemErrorLog>, AVPlayerError> {
         let ptr = unsafe { ffi::av_player_item_copy_error_log(self.ptr) };
         if ptr.is_null() {

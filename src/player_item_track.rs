@@ -21,10 +21,13 @@ struct PlayerItemTrackInfoPayload {
     has_asset_track: bool,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemTrackVideoFieldMode`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerItemTrackVideoFieldMode {
+/// Mirrors the `AVPlayer` framework case `DeinterlaceFields`.
     DeinterlaceFields,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
@@ -44,6 +47,7 @@ impl PlayerItemTrackVideoFieldMode {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemTrack`.
 #[derive(Debug)]
 pub struct PlayerItemTrack {
     pub(crate) ptr: *mut c_void,
@@ -72,22 +76,27 @@ impl PlayerItemTrack {
         parse_json_and_free(json_ptr)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `is_enabled`.
     pub fn is_enabled(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.enabled)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_enabled`.
     pub fn set_enabled(&self, enabled: bool) {
         unsafe { ffi::av_player_item_track_set_enabled(self.ptr, enabled) };
     }
 
+/// Calls the `AVPlayer` framework counterpart for `current_video_frame_rate`.
     pub fn current_video_frame_rate(&self) -> Result<f32, AVPlayerError> {
         Ok(self.info()?.current_video_frame_rate)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `video_field_mode`.
     pub fn video_field_mode(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.video_field_mode)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `typed_video_field_mode`.
     pub fn typed_video_field_mode(
         &self,
     ) -> Result<Option<PlayerItemTrackVideoFieldMode>, AVPlayerError> {
@@ -98,6 +107,7 @@ impl PlayerItemTrack {
             .map(PlayerItemTrackVideoFieldMode::from_raw))
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_typed_video_field_mode`.
     pub fn set_typed_video_field_mode(
         &self,
         video_field_mode: Option<&PlayerItemTrackVideoFieldMode>,
@@ -105,6 +115,7 @@ impl PlayerItemTrack {
         self.set_video_field_mode(video_field_mode.map(PlayerItemTrackVideoFieldMode::as_raw))
     }
 
+/// Calls the `AVPlayer` framework counterpart for `set_video_field_mode`.
     pub fn set_video_field_mode(
         &self,
         video_field_mode: Option<&str>,
@@ -127,6 +138,7 @@ impl PlayerItemTrack {
         Ok(())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `asset_track`.
     pub fn asset_track(&self) -> Result<Option<AssetTrack>, AVPlayerError> {
         if !self.info()?.has_asset_track {
             return Ok(None);
@@ -140,6 +152,7 @@ impl PlayerItemTrack {
 }
 
 impl PlayerItem {
+/// Calls the `AVPlayer` framework counterpart for `tracks`.
     pub fn tracks(&self) -> Result<Vec<PlayerItemTrack>, AVPlayerError> {
         let count = unsafe { ffi::av_player_item_track_count(self.ptr) };
         if count < 0 {

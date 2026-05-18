@@ -18,11 +18,15 @@ use crate::player_interstitial_event::{
 use crate::time::{Time, TimeRange};
 use crate::util::{parse_json_and_free, to_cstring};
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemSegmentType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerItemSegmentType {
+/// Mirrors the `AVPlayer` framework case `Primary`.
     Primary,
+/// Mirrors the `AVPlayer` framework case `Interstitial`.
     Interstitial,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(i32),
 }
 
@@ -43,9 +47,12 @@ struct PlayerItemIntegratedTimelineInfoPayload {
     current_date: Option<String>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemIntegratedTimelineInfo`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlayerItemIntegratedTimelineInfo {
+/// Mirrors the `AVPlayer` framework property for `current_time`.
     pub current_time: Time,
+/// Mirrors the `AVPlayer` framework property for `current_date`.
     pub current_date: Option<String>,
 }
 
@@ -69,13 +76,20 @@ struct PlayerItemIntegratedTimelineSegmentPayload {
     interstitial_event: Option<PlayerInterstitialEventInfoPayload>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemIntegratedTimelineSegmentInfo`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerItemIntegratedTimelineSegmentInfo {
+/// Mirrors the `AVPlayer` framework property for `segment_type`.
     pub segment_type: PlayerItemSegmentType,
+/// Mirrors the `AVPlayer` framework property for `time_mapping_source`.
     pub time_mapping_source: TimeRange,
+/// Mirrors the `AVPlayer` framework property for `time_mapping_target`.
     pub time_mapping_target: TimeRange,
+/// Mirrors the `AVPlayer` framework property for `loaded_time_ranges`.
     pub loaded_time_ranges: Vec<TimeRange>,
+/// Mirrors the `AVPlayer` framework property for `start_date`.
     pub start_date: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `interstitial_event`.
     pub interstitial_event: Option<PlayerInterstitialEventInfo>,
 }
 
@@ -109,13 +123,20 @@ struct PlayerItemIntegratedTimelineSnapshotPayload {
     segments: Vec<PlayerItemIntegratedTimelineSegmentPayload>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemIntegratedTimelineSnapshotInfo`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerItemIntegratedTimelineSnapshotInfo {
+/// Mirrors the `AVPlayer` framework property for `duration`.
     pub duration: Time,
+/// Mirrors the `AVPlayer` framework property for `current_time`.
     pub current_time: Time,
+/// Mirrors the `AVPlayer` framework property for `current_date`.
     pub current_date: Option<String>,
+/// Mirrors the `AVPlayer` framework property for `current_segment_index`.
     pub current_segment_index: Option<usize>,
+/// Mirrors the `AVPlayer` framework property for `current_segment`.
     pub current_segment: Option<PlayerItemIntegratedTimelineSegmentInfo>,
+/// Mirrors the `AVPlayer` framework property for `segments`.
     pub segments: Vec<PlayerItemIntegratedTimelineSegmentInfo>,
 }
 
@@ -157,12 +178,17 @@ struct PlayerIntegratedTimelineOutOfSyncPayload {
     reason: String,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerIntegratedTimelineSnapshotsOutOfSyncReason`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerIntegratedTimelineSnapshotsOutOfSyncReason {
+/// Mirrors the `AVPlayer` framework case `SegmentsChanged`.
     SegmentsChanged,
+/// Mirrors the `AVPlayer` framework case `CurrentSegmentChanged`.
     CurrentSegmentChanged,
+/// Mirrors the `AVPlayer` framework case `LoadedTimeRangesChanged`.
     LoadedTimeRangesChanged,
+/// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
@@ -183,8 +209,10 @@ impl PlayerIntegratedTimelineSnapshotsOutOfSyncReason {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerIntegratedTimelineOutOfSyncEvent`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PlayerIntegratedTimelineOutOfSyncEvent {
+/// Mirrors the `AVPlayer` framework property for `reason`.
     pub reason: PlayerIntegratedTimelineSnapshotsOutOfSyncReason,
 }
 
@@ -196,6 +224,7 @@ struct TimelineOutOfSyncObserverState {
     callback: Box<dyn Fn(PlayerIntegratedTimelineOutOfSyncEvent) + Send + 'static>,
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemIntegratedTimeline`.
 #[derive(Debug)]
 pub struct PlayerItemIntegratedTimeline {
     pub(crate) ptr: *mut c_void,
@@ -211,6 +240,7 @@ impl Drop for PlayerItemIntegratedTimeline {
 }
 
 impl PlayerItemIntegratedTimeline {
+/// Calls the `AVPlayer` framework counterpart for `info`.
     pub fn info(&self) -> Result<PlayerItemIntegratedTimelineInfo, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
@@ -221,6 +251,7 @@ impl PlayerItemIntegratedTimeline {
         Ok(parse_json_and_free::<PlayerItemIntegratedTimelineInfoPayload>(json_ptr)?.into())
     }
 
+/// Calls the `AVPlayer` framework counterpart for `current_snapshot`.
     pub fn current_snapshot(&self) -> Result<PlayerItemIntegratedTimelineSnapshot, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
@@ -232,6 +263,7 @@ impl PlayerItemIntegratedTimeline {
         Ok(PlayerItemIntegratedTimelineSnapshot { ptr })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `seek_to_time`.
     pub fn seek_to_time(
         &self,
         time: Time,
@@ -265,6 +297,7 @@ impl PlayerItemIntegratedTimeline {
         Ok(success)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `seek_to_date`.
     pub fn seek_to_date(&self, date: &str) -> Result<bool, AVPlayerError> {
         let date = to_cstring(date, "integrated timeline date")?;
         let mut err: *mut c_char = ptr::null_mut();
@@ -283,6 +316,7 @@ impl PlayerItemIntegratedTimeline {
         Ok(success)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `observe_periodic_times`.
     pub fn observe_periodic_times<F>(
         &self,
         interval: Time,
@@ -316,6 +350,7 @@ impl PlayerItemIntegratedTimeline {
         Ok(PlayerItemIntegratedTimelineObserver { token })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `observe_boundary_times`.
     pub fn observe_boundary_times<F>(
         &self,
         segment: &PlayerItemIntegratedTimelineSegment,
@@ -354,6 +389,7 @@ impl PlayerItemIntegratedTimeline {
         Ok(PlayerItemIntegratedTimelineObserver { token })
     }
 
+/// Calls the `AVPlayer` framework counterpart for `observe_snapshots_out_of_sync`.
     pub fn observe_snapshots_out_of_sync<F>(
         &self,
         callback: F,
@@ -383,6 +419,7 @@ impl PlayerItemIntegratedTimeline {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemIntegratedTimelineSnapshot`.
 #[derive(Debug)]
 pub struct PlayerItemIntegratedTimelineSnapshot {
     pub(crate) ptr: *mut c_void,
@@ -398,6 +435,7 @@ impl Drop for PlayerItemIntegratedTimelineSnapshot {
 }
 
 impl PlayerItemIntegratedTimelineSnapshot {
+/// Calls the `AVPlayer` framework counterpart for `info`.
     pub fn info(&self) -> Result<PlayerItemIntegratedTimelineSnapshotInfo, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe {
@@ -411,6 +449,7 @@ impl PlayerItemIntegratedTimelineSnapshot {
         >(json_ptr)?)
     }
 
+/// Calls the `AVPlayer` framework counterpart for `current_segment`.
     pub fn current_segment(&self) -> Option<PlayerItemIntegratedTimelineSegment> {
         let ptr = unsafe {
             ffi::av_player_item_integrated_timeline_snapshot_copy_current_segment(self.ptr)
@@ -422,10 +461,12 @@ impl PlayerItemIntegratedTimelineSnapshot {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `segment_count`.
     pub fn segment_count(&self) -> usize {
         unsafe { ffi::av_player_item_integrated_timeline_snapshot_segment_count(self.ptr) }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `segment_at_index`.
     pub fn segment_at_index(&self, index: usize) -> Option<PlayerItemIntegratedTimelineSegment> {
         let ptr = unsafe {
             ffi::av_player_item_integrated_timeline_snapshot_copy_segment_at_index(self.ptr, index)
@@ -437,6 +478,7 @@ impl PlayerItemIntegratedTimelineSnapshot {
         }
     }
 
+/// Calls the `AVPlayer` framework counterpart for `segment_and_offset_into_segment`.
     pub fn segment_and_offset_into_segment(
         &self,
         timeline_time: Time,
@@ -460,6 +502,7 @@ impl PlayerItemIntegratedTimelineSnapshot {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemIntegratedTimelineSegment`.
 #[derive(Debug)]
 pub struct PlayerItemIntegratedTimelineSegment {
     pub(crate) ptr: *mut c_void,
@@ -475,6 +518,7 @@ impl Drop for PlayerItemIntegratedTimelineSegment {
 }
 
 impl PlayerItemIntegratedTimelineSegment {
+/// Calls the `AVPlayer` framework counterpart for `info`.
     pub fn info(&self) -> Result<PlayerItemIntegratedTimelineSegmentInfo, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe {
@@ -489,6 +533,7 @@ impl PlayerItemIntegratedTimelineSegment {
     }
 }
 
+/// Mirrors the `AVPlayer` framework counterpart for `PlayerItemIntegratedTimelineObserver`.
 #[derive(Debug)]
 pub struct PlayerItemIntegratedTimelineObserver {
     token: *mut c_void,
@@ -510,6 +555,7 @@ unsafe impl Send for PlayerItemIntegratedTimelineSnapshot {}
 unsafe impl Send for PlayerItemIntegratedTimelineSegment {}
 unsafe impl Send for PlayerItemIntegratedTimelineObserver {}
 
+/// Calls the `AVPlayer` framework counterpart for `player_integrated_timeline_snapshots_out_of_sync_notification`.
 pub fn player_integrated_timeline_snapshots_out_of_sync_notification(
 ) -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
@@ -521,6 +567,7 @@ pub fn player_integrated_timeline_snapshots_out_of_sync_notification(
     parse_json_and_free::<String>(ptr)
 }
 
+/// Calls the `AVPlayer` framework counterpart for `player_integrated_timeline_snapshots_out_of_sync_reason_key`.
 pub fn player_integrated_timeline_snapshots_out_of_sync_reason_key() -> Result<String, AVPlayerError>
 {
     let mut err: *mut c_char = ptr::null_mut();
@@ -532,6 +579,7 @@ pub fn player_integrated_timeline_snapshots_out_of_sync_reason_key() -> Result<S
     parse_json_and_free::<String>(ptr)
 }
 
+/// Calls the `AVPlayer` framework counterpart for `player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed`.
 pub fn player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed(
 ) -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
@@ -544,6 +592,7 @@ pub fn player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed(
     parse_json_and_free::<String>(ptr)
 }
 
+/// Calls the `AVPlayer` framework counterpart for `player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed`.
 pub fn player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed(
 ) -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
@@ -558,6 +607,7 @@ pub fn player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_c
     parse_json_and_free::<String>(ptr)
 }
 
+/// Calls the `AVPlayer` framework counterpart for `player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_ranges_changed`.
 pub fn player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_ranges_changed(
 ) -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
@@ -573,6 +623,7 @@ pub fn player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_range
 }
 
 impl PlayerItem {
+/// Calls the `AVPlayer` framework counterpart for `integrated_timeline`.
     pub fn integrated_timeline(&self) -> Result<PlayerItemIntegratedTimeline, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe { ffi::av_player_item_copy_integrated_timeline(self.ptr, &mut err) };
