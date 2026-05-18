@@ -134,6 +134,7 @@ impl From<PlayerVideoOutputSamplePayload> for PlayerVideoOutputSample {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerVideoOutputTagCollection {
     pub(crate) ptr: *mut c_void,
 }
@@ -176,6 +177,7 @@ impl PlayerVideoOutputTagCollection {
     }
 }
 
+#[derive(Debug)]
 pub struct VideoOutputSpecification {
     pub(crate) ptr: *mut c_void,
 }
@@ -274,6 +276,7 @@ impl VideoOutputSpecification {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerVideoOutput {
     pub(crate) ptr: *mut c_void,
 }

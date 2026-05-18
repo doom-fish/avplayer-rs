@@ -23,6 +23,7 @@ struct QueuePlayerInfoPayload {
     action_at_item_end: Option<i32>,
 }
 
+#[derive(Debug)]
 pub struct QueuePlayer {
     pub(crate) ptr: *mut c_void,
 }

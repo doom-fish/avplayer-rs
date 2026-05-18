@@ -115,6 +115,7 @@ pub struct KeyLoadStatus {
 }
 
 /// Safe wrapper around `AVAsset`.
+#[derive(Debug)]
 pub struct Asset {
     pub(crate) ptr: *mut c_void,
 }
@@ -229,6 +230,7 @@ impl Asset {
 }
 
 /// `AVURLAsset` convenience wrapper around [`Asset`].
+#[derive(Debug)]
 pub struct UrlAsset {
     pub(crate) asset: Asset,
 }
@@ -330,6 +332,7 @@ impl UrlAsset {
 }
 
 /// Safe wrapper around `AVAssetTrack`.
+#[derive(Debug)]
 pub struct AssetTrack {
     pub(crate) ptr: *mut c_void,
 }

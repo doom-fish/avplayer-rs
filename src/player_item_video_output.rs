@@ -39,6 +39,7 @@ struct VideoOutputObserverState {
 
 pub type PlayerItemVideoOutputSettings = VideoOutputSettings;
 
+#[derive(Debug)]
 pub struct PlayerItemVideoOutput {
     pub(crate) ptr: *mut c_void,
 }
@@ -158,6 +159,7 @@ impl PlayerItemVideoOutput {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerItemVideoOutputObserver {
     token: *mut c_void,
 }

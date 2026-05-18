@@ -196,6 +196,7 @@ struct TimelineOutOfSyncObserverState {
     callback: Box<dyn Fn(PlayerIntegratedTimelineOutOfSyncEvent) + Send + 'static>,
 }
 
+#[derive(Debug)]
 pub struct PlayerItemIntegratedTimeline {
     pub(crate) ptr: *mut c_void,
 }
@@ -382,6 +383,7 @@ impl PlayerItemIntegratedTimeline {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerItemIntegratedTimelineSnapshot {
     pub(crate) ptr: *mut c_void,
 }
@@ -458,6 +460,7 @@ impl PlayerItemIntegratedTimelineSnapshot {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerItemIntegratedTimelineSegment {
     pub(crate) ptr: *mut c_void,
 }
@@ -486,6 +489,7 @@ impl PlayerItemIntegratedTimelineSegment {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerItemIntegratedTimelineObserver {
     token: *mut c_void,
 }

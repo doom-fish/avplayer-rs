@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3] - 2026-05-18
+
+### Changed
+
+- Added `Debug` derives to the remaining 42 public raw-pointer wrapper structs and observer tokens, including the `Asset` / `Player` / `PlayerItem` families, output wrappers, timeline wrappers, and asset-reader wrappers.
+- Retained the existing manual non-exhaustive `Debug` implementations on the 9 async future / accessor structs whose internal state is intentionally opaque.
+
 ## [0.3.2] - 2026-05-18
 
 ### Changed

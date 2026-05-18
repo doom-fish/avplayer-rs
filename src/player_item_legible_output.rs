@@ -71,6 +71,7 @@ struct LegibleOutputObserverState {
     callback: Box<dyn Fn(PlayerItemLegibleOutputEvent) + Send + 'static>,
 }
 
+#[derive(Debug)]
 pub struct PlayerItemLegibleOutput {
     pub(crate) ptr: *mut c_void,
 }
@@ -207,6 +208,7 @@ impl PlayerItemLegibleOutput {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerItemLegibleOutputObserver {
     token: *mut c_void,
 }

@@ -58,6 +58,7 @@ impl From<ErrorLogEventPayload> for PlayerItemErrorLogEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerItemErrorLog {
     pub(crate) ptr: *mut c_void,
 }

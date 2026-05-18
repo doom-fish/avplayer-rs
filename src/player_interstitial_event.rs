@@ -312,6 +312,7 @@ struct PlayerInterstitialEventMonitorObserverState {
     callback: Box<dyn Fn(PlayerInterstitialEventMonitorEvent) + Send + 'static>,
 }
 
+#[derive(Debug)]
 pub struct PlayerInterstitialEvent {
     pub(crate) ptr: *mut c_void,
 }
@@ -428,6 +429,7 @@ impl PlayerInterstitialEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerInterstitialEventMonitor {
     pub(crate) ptr: *mut c_void,
 }
@@ -492,6 +494,7 @@ impl PlayerInterstitialEventMonitor {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerInterstitialEventController {
     pub(crate) ptr: *mut c_void,
 }
@@ -562,6 +565,7 @@ impl PlayerInterstitialEventController {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerInterstitialEventMonitorObserver {
     token: *mut c_void,
 }

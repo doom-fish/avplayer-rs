@@ -10,7 +10,7 @@ use crate::time::Time;
 use crate::util::parse_json_and_free;
 
 /// Borrowed view of the abstract `AVPlayerItemOutput` base class.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct PlayerItemOutput<'a> {
     pub(crate) ptr: *mut c_void,
     _marker: PhantomData<&'a c_void>,

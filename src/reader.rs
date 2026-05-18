@@ -132,6 +132,7 @@ impl AudioOutputSettings {
 }
 
 /// Safe wrapper around `AVAssetReader`.
+#[derive(Debug)]
 pub struct AssetReader {
     ptr: *mut c_void,
 }
@@ -259,6 +260,7 @@ impl AssetReader {
 }
 
 /// `AVAssetReaderTrackOutput`.
+#[derive(Debug)]
 pub struct AssetReaderTrackOutput {
     pub(crate) ptr: *mut c_void,
 }
@@ -318,6 +320,7 @@ impl AssetReaderTrackOutput {
 }
 
 /// `AVAssetReaderAudioMixOutput`.
+#[derive(Debug)]
 pub struct AssetReaderAudioMixOutput {
     pub(crate) ptr: *mut c_void,
 }
@@ -370,6 +373,7 @@ impl AssetReaderAudioMixOutput {
 }
 
 /// `AVAssetReaderVideoCompositionOutput`.
+#[derive(Debug)]
 pub struct AssetReaderVideoCompositionOutput {
     pub(crate) ptr: *mut c_void,
 }

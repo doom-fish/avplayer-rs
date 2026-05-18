@@ -44,6 +44,7 @@ impl PlayerItemTrackVideoFieldMode {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerItemTrack {
     pub(crate) ptr: *mut c_void,
 }

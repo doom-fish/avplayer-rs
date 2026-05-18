@@ -121,6 +121,7 @@ struct BoundaryTimeObserverState {
 }
 
 /// Safe wrapper around `AVPlayerItem`.
+#[derive(Debug)]
 pub struct PlayerItem {
     pub(crate) ptr: *mut c_void,
 }
@@ -267,6 +268,7 @@ impl PlayerItem {
 }
 
 /// KVO + notification observer for `AVPlayerItem`.
+#[derive(Debug)]
 pub struct PlayerItemObserver {
     token: *mut c_void,
 }
@@ -283,6 +285,7 @@ impl Drop for PlayerItemObserver {
 }
 
 /// Safe wrapper around `AVPlayer`.
+#[derive(Debug)]
 pub struct Player {
     pub(crate) ptr: *mut c_void,
 }
@@ -530,6 +533,7 @@ impl Player {
 }
 
 /// RAII token for `addPeriodicTimeObserver`.
+#[derive(Debug)]
 pub struct PeriodicTimeObserver {
     token: *mut c_void,
 }
@@ -546,6 +550,7 @@ impl Drop for PeriodicTimeObserver {
 }
 
 /// RAII token for `addBoundaryTimeObserver`.
+#[derive(Debug)]
 pub struct BoundaryTimeObserver {
     token: *mut c_void,
 }

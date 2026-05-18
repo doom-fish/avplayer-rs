@@ -59,6 +59,7 @@ impl PlayerLooperItemOrdering {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerLooper {
     ptr: *mut c_void,
 }

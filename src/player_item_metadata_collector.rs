@@ -87,6 +87,7 @@ struct MetadataCollectorObserverState {
     callback: Box<dyn Fn(MetadataCollectorEvent) + Send + 'static>,
 }
 
+#[derive(Debug)]
 pub struct PlayerItemMetadataCollector {
     pub(crate) ptr: *mut c_void,
 }
@@ -202,6 +203,7 @@ impl PlayerItemMetadataCollector {
     }
 }
 
+#[derive(Debug)]
 pub struct MetadataCollectorObserver {
     token: *mut c_void,
 }

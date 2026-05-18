@@ -65,6 +65,7 @@ struct MetadataOutputObserverState {
     callback: Box<dyn Fn(MetadataOutputEvent) + Send + 'static>,
 }
 
+#[derive(Debug)]
 pub struct PlayerItemMetadataOutput {
     pub(crate) ptr: *mut c_void,
 }
@@ -178,6 +179,7 @@ impl PlayerItemMetadataOutput {
     }
 }
 
+#[derive(Debug)]
 pub struct MetadataOutputObserver {
     token: *mut c_void,
 }

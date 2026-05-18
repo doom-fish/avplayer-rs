@@ -106,6 +106,7 @@ impl From<AccessLogEventPayload> for PlayerItemAccessLogEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerItemAccessLog {
     pub(crate) ptr: *mut c_void,
 }

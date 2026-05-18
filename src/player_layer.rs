@@ -57,6 +57,7 @@ impl VideoGravity {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerLayer {
     ptr: *mut c_void,
 }

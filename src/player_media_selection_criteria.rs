@@ -272,6 +272,7 @@ struct PlayerRateObserverState {
     callback: Box<dyn Fn(PlayerRateDidChangeEvent) + Send + 'static>,
 }
 
+#[derive(Debug)]
 pub struct PlayerMediaSelectionCriteria {
     pub(crate) ptr: *mut c_void,
 }
@@ -617,6 +618,7 @@ impl Player {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerRateDidChangeObserver {
     token: *mut c_void,
 }
