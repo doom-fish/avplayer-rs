@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-05-18
+
+### Changed
+
+- Re-exported the shared `SimpleCallback` and `DropCallback` aliases from `doom-fish-utils::ffi_callbacks` instead of maintaining local duplicate FFI typedefs.
+
 ## [0.3.1] - 2026-05-17
 
 ### Fixed

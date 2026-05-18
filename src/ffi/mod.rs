@@ -4,11 +4,11 @@
 
 use core::ffi::{c_char, c_void};
 
+pub use doom_fish_utils::ffi_callbacks::{DropCallback, SimpleCallback};
+
 pub type JsonCallback = unsafe extern "C" fn(userdata: *mut c_void, payload_json: *const c_char);
 pub type PeriodicTimeCallback =
     unsafe extern "C" fn(userdata: *mut c_void, value: i64, timescale: i32, kind: i32);
-pub type SimpleCallback = unsafe extern "C" fn(userdata: *mut c_void);
-pub type DropCallback = unsafe extern "C" fn(userdata: *mut c_void);
 
 extern "C" {
     pub fn avp_string_free(s: *mut c_char);
