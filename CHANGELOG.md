@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0] - 2026-05-19
+
+### Added
+
+- Expanded the AVFoundation wrapper surface with `AVMetadataGroup` / timed/date-range metadata groups, `AVMutableMetadataItem`, and `AVMetadataItemFilter`.
+- Added media-selection wrappers for `AVMediaSelection`, `AVMutableMediaSelection`, `AVMediaSelectionGroup`, `AVMediaSelectionOption`, and availability-guarded presentation/custom-scheme types.
+- Added `AVAssetVariant`, nested video/audio attribute wrappers, and `AVAssetVariantQualifier` accessors.
+- Added `AVFragmentedAsset`, `AVFragmentedAssetTrack`, `AVFragmentedAssetMinder`, and `AVMediaExtensionProperties` wrappers.
+- Added `AVAssetReaderOutput` base access, `AVAssetReaderSampleReferenceOutput`, `AVAssetReaderOutputMetadataAdaptor`, and `AVAssetReaderOutputCaptionAdaptor` wrappers.
+- Added `AVSampleBufferDisplayLayer`, borrowed `AVPlayerItemMediaDataCollector` access, and `PlayerItemSegment` / `PlayerItemSegmentInfo` re-exports.
+- Expanded `AVAsset` / `AVAssetTrack` property coverage with preferred-rate/volume, fragment/playability flags, chapter/metadata format access, language/timing flags, and sample-cursor helpers.
+- Added integration coverage for the new asset, fragmented-asset, media-selection, metadata-group, reader-output, and sample-buffer-display-layer surfaces.
+
+### Changed
+
+- Reconciled the coverage documentation with the broader 0.4.0 audit scope and documented the supplemental AVFoundation families now wrapped beyond the earlier 109-symbol playback-only audit.
+- Reworked `AVMutableDateRangeMetadataGroup` mutation to rebuild the underlying object instead of calling the current macOS SDK's crashing setters directly.
+- Changed optional asset-variant bitrate, frame-rate, and channel-count accessors to return `Option` values instead of undocumented sentinel numbers.
+
 ## [0.3.5] - 2026-05-18
 
 - Add one-line docs across the public safe and FFI surfaces, raising public-item rustdoc coverage to 95.0%.

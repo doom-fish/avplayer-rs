@@ -161,6 +161,18 @@ public func av_player_item_metadata_collector_info_json(
     }
 }
 
+@_cdecl("av_player_item_media_data_collector_kind")
+public func av_player_item_media_data_collector_kind(
+    _ collectorPtr: UnsafeMutableRawPointer,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutablePointer<CChar>? {
+    let collector = Unmanaged<AVPPlayerItemMediaDataCollectorBox>.fromOpaque(collectorPtr).takeUnretainedValue().collector
+    if collector is AVPlayerItemMetadataCollector {
+        return ffiString("metadata_collector")
+    }
+    return ffiString(String(describing: type(of: collector)))
+}
+
 @_cdecl("av_player_item_metadata_collector_add_observer")
 public func av_player_item_metadata_collector_add_observer(
     _ collectorPtr: UnsafeMutableRawPointer,

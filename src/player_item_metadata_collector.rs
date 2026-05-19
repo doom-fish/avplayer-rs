@@ -15,14 +15,14 @@ use crate::util::{json_cstring, parse_json_and_free};
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum PlayerItemMediaDataCollectorKind {
-/// Mirrors the `AVPlayer` framework case `MetadataCollector`.
+    /// Mirrors the `AVPlayer` framework case `MetadataCollector`.
     MetadataCollector,
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
 impl PlayerItemMediaDataCollectorKind {
-    fn from_raw(raw: &str) -> Self {
+    pub(crate) fn from_raw(raw: &str) -> Self {
         match raw {
             "metadata_collector" => Self::MetadataCollector,
             other => Self::Unknown(other.to_owned()),
@@ -39,7 +39,7 @@ struct PlayerItemMediaDataCollectorInfoPayload {
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemMediaDataCollectorInfo`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlayerItemMediaDataCollectorInfo {
-/// Mirrors the `AVPlayer` framework property for `kind`.
+    /// Mirrors the `AVPlayer` framework property for `kind`.
     pub kind: PlayerItemMediaDataCollectorKind,
 }
 
@@ -63,15 +63,15 @@ struct MetadataCollectorInfoPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DateRangeMetadataGroup {
-/// Mirrors the `AVPlayer` framework property for `start_date`.
+    /// Mirrors the `AVPlayer` framework property for `start_date`.
     pub start_date: String,
-/// Mirrors the `AVPlayer` framework property for `end_date`.
+    /// Mirrors the `AVPlayer` framework property for `end_date`.
     pub end_date: Option<String>,
-/// Mirrors the `AVPlayer` framework property for `classifying_label`.
+    /// Mirrors the `AVPlayer` framework property for `classifying_label`.
     pub classifying_label: Option<String>,
-/// Mirrors the `AVPlayer` framework property for `unique_id`.
+    /// Mirrors the `AVPlayer` framework property for `unique_id`.
     pub unique_id: Option<String>,
-/// Mirrors the `AVPlayer` framework property for `items`.
+    /// Mirrors the `AVPlayer` framework property for `items`.
     pub items: Vec<MetadataItem>,
 }
 
@@ -88,7 +88,7 @@ struct MetadataCollectorEventPayload {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum MetadataCollectorEvent {
-/// Mirrors the `AVPlayer` framework case `DidCollectDateRangeMetadataGroups`.
+    /// Mirrors the `AVPlayer` framework case `DidCollectDateRangeMetadataGroups`.
     DidCollectDateRangeMetadataGroups {
         groups: Vec<DateRangeMetadataGroup>,
         new_indices: Vec<usize>,
@@ -116,7 +116,7 @@ impl Drop for PlayerItemMetadataCollector {
 }
 
 impl PlayerItemMetadataCollector {
-/// Calls the `AVPlayer` framework counterpart for `new`.
+    /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(
         identifiers: Option<&[impl AsRef<str>]>,
         classifying_labels: Option<&[impl AsRef<str>]>,
@@ -170,22 +170,22 @@ impl PlayerItemMetadataCollector {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `identifiers`.
+    /// Calls the `AVPlayer` framework counterpart for `identifiers`.
     pub fn identifiers(&self) -> Result<Vec<String>, AVPlayerError> {
         Ok(self.info()?.identifiers.unwrap_or_default())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `classifying_labels`.
+    /// Calls the `AVPlayer` framework counterpart for `classifying_labels`.
     pub fn classifying_labels(&self) -> Result<Vec<String>, AVPlayerError> {
         Ok(self.info()?.classifying_labels.unwrap_or_default())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `has_delegate`.
+    /// Calls the `AVPlayer` framework counterpart for `has_delegate`.
     pub fn has_delegate(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.has_delegate)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `observe`.
+    /// Calls the `AVPlayer` framework counterpart for `observe`.
     pub fn observe<F>(
         &self,
         queue_label: Option<&str>,
@@ -243,7 +243,7 @@ unsafe impl Send for PlayerItemMetadataCollector {}
 unsafe impl Send for MetadataCollectorObserver {}
 
 impl PlayerItem {
-/// Calls the `AVPlayer` framework counterpart for `add_metadata_collector`.
+    /// Calls the `AVPlayer` framework counterpart for `add_metadata_collector`.
     pub fn add_metadata_collector(
         &self,
         collector: &PlayerItemMetadataCollector,
@@ -258,12 +258,12 @@ impl PlayerItem {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `remove_metadata_collector`.
+    /// Calls the `AVPlayer` framework counterpart for `remove_metadata_collector`.
     pub fn remove_metadata_collector(&self, collector: &PlayerItemMetadataCollector) {
         unsafe { ffi::av_player_item_remove_media_data_collector(self.ptr, collector.ptr) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `media_data_collectors`.
+    /// Calls the `AVPlayer` framework counterpart for `media_data_collectors`.
     pub fn media_data_collectors(
         &self,
     ) -> Result<Vec<PlayerItemMediaDataCollectorInfo>, AVPlayerError> {

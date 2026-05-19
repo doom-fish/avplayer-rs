@@ -6,7 +6,7 @@ GAPS: 0
 EXEMPT: 0
 COVERAGE_PCT: 100.00%
 
-This audit re-validates the v1 findings against macOS 26.2.sdk. All 109 public macOS-available symbols in the AVPlayer subsystem (AVPlayer, AVPlayerItem, AVAsset, AVPlayerLooper, AVQueuePlayer, AVPlayerInterstitialEventController, and related classes/protocols/typedefs) are present and verified as wrapped by the crate. No macOS-unavailable symbols (`API_UNAVAILABLE(macos)`), iOS-only symbols, or deprecated-but-active symbols remain unwrapped. Coverage remains at 100%.
+This audit re-validates the v1 findings against macOS 26.2.sdk. All 109 public macOS-available symbols in the original AVPlayer-focused subsystem audit are present and verified as wrapped by the crate. Release `0.4.0` also layers in a supplemental AVFoundation expansion set (metadata groups, media selection, asset variants, fragmented assets, reader adaptors, and sample-buffer display) that sits outside this narrower 109-symbol table; see `COVERAGE.md` for that broader file-by-file map.
 
 ## 🟢 VERIFIED
 | Symbol | Kind | Header | Wrapped by |

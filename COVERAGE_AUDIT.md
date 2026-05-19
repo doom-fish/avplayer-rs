@@ -6,7 +6,20 @@ GAPS: 0
 EXEMPT: 0
 COVERAGE_PCT: 100.00%
 
-> Filtered out macOS-unavailable top-level symbols (`AVPlayerHDRMode`, `AVPlayerAvailableHDRModesDidChangeNotification`). No deprecated-but-macOS-available top-level symbols remained, so EXEMPT is 0. All 109 remaining macOS-available top-level symbols are now wrapped.
+> Filtered out macOS-unavailable top-level symbols (`AVPlayerHDRMode`, `AVPlayerAvailableHDRModesDidChangeNotification`). No deprecated-but-macOS-available top-level symbols remained, so EXEMPT is 0. All 109 remaining macOS-available top-level symbols in the original playback-focused audit are wrapped.
+
+## Supplemental 0.4.0 expansion set
+
+The original 109-symbol audit was narrower than the follow-up re-audit that identified additional AVFoundation types worth wrapping around assets, metadata, media selection, variants, fragmented assets, reader adaptors, and display layers. Release `0.4.0` adds wrappers for that supplemental set, including:
+
+- `AVMetadataGroup`, `AVTimedMetadataGroup`, `AVMutableTimedMetadataGroup`, `AVDateRangeMetadataGroup`, `AVMutableDateRangeMetadataGroup`, `AVMutableMetadataItem`, `AVMetadataItemFilter`
+- `AVMediaSelection`, `AVMutableMediaSelection`, `AVMediaSelectionGroup`, `AVMediaSelectionOption`, `AVCustomMediaSelectionScheme`, `AVMediaPresentationSelector`, `AVMediaPresentationSetting`
+- `AVAssetVariant`, `AVAssetVariant.VideoAttributes`, `AVAssetVariant.VideoAttributes.LayoutAttributes`, `AVAssetVariant.AudioAttributes`, `AVAssetVariant.AudioAttributes.RenditionSpecificAttributes`, `AVAssetVariantQualifier`
+- `AVFragmentedAsset`, `AVFragmentedAssetTrack`, `AVFragmentedAssetMinder`, `AVMediaExtensionProperties`
+- `AVAssetReaderOutput`, `AVAssetReaderSampleReferenceOutput`, `AVAssetReaderOutputMetadataAdaptor`, `AVAssetReaderOutputCaptionAdaptor`, `AVAssetReaderCaptionValidationHandling`, `AVSampleBufferDisplayLayer`
+- Supplemental `AVAsset` / `AVAssetTrack` property coverage plus borrowed `AVPlayerItemMediaDataCollector` access and `PlayerItemSegment` re-exports
+
+See `COVERAGE.md` for the 0.4.0 file-by-file map and integration-test coverage for these additions.
 
 ## 🟢 VERIFIED
 | Symbol | Kind | Header | Wrapped by |

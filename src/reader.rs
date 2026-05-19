@@ -27,20 +27,20 @@ struct ReaderInfoPayload {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum AssetReaderStatus {
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown,
-/// Mirrors the `AVPlayer` framework case `Reading`.
+    /// Mirrors the `AVPlayer` framework case `Reading`.
     Reading,
-/// Mirrors the `AVPlayer` framework case `Completed`.
+    /// Mirrors the `AVPlayer` framework case `Completed`.
     Completed,
-/// Mirrors the `AVPlayer` framework case `Failed`.
+    /// Mirrors the `AVPlayer` framework case `Failed`.
     Failed,
-/// Mirrors the `AVPlayer` framework case `Cancelled`.
+    /// Mirrors the `AVPlayer` framework case `Cancelled`.
     Cancelled,
 }
 
 impl AssetReaderStatus {
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
@@ -63,7 +63,7 @@ pub struct VideoOutputSettings {
 }
 
 impl VideoOutputSettings {
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn new(pixel_format: u32) -> Self {
         Self {
@@ -73,13 +73,13 @@ impl VideoOutputSettings {
         }
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn bgra() -> Self {
         Self::new(u32::from_be_bytes(*b"BGRA"))
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn with_dimensions(mut self, width: i32, height: i32) -> Self {
         self.width = Some(width);
@@ -100,7 +100,7 @@ pub struct AudioOutputSettings {
 }
 
 impl AudioOutputSettings {
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn pcm_i16(sample_rate: f64, channel_count: u32) -> Self {
         Self {
@@ -112,7 +112,7 @@ impl AudioOutputSettings {
         }
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn pcm_i32(sample_rate: f64, channel_count: u32) -> Self {
         Self {
@@ -124,7 +124,7 @@ impl AudioOutputSettings {
         }
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn pcm_f32(sample_rate: f64, channel_count: u32) -> Self {
         Self {
@@ -136,7 +136,7 @@ impl AudioOutputSettings {
         }
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn non_interleaved(mut self, non_interleaved: bool) -> Self {
         self.is_non_interleaved = non_interleaved;
@@ -147,7 +147,7 @@ impl AudioOutputSettings {
 /// Safe wrapper around `AVAssetReader`.
 #[derive(Debug)]
 pub struct AssetReader {
-    ptr: *mut c_void,
+    pub(crate) ptr: *mut c_void,
 }
 
 impl Drop for AssetReader {
@@ -160,7 +160,7 @@ impl Drop for AssetReader {
 }
 
 impl AssetReader {
-/// Calls the `AVPlayer` framework counterpart for `new`.
+    /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(asset: &Asset) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe { ffi::av_reader_create(asset.ptr, &mut err) };
@@ -179,27 +179,27 @@ impl AssetReader {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `status`.
+    /// Calls the `AVPlayer` framework counterpart for `status`.
     pub fn status(&self) -> Result<AssetReaderStatus, AVPlayerError> {
         Ok(AssetReaderStatus::from_raw(self.info()?.status))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `error`.
+    /// Calls the `AVPlayer` framework counterpart for `error`.
     pub fn error(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.error_message)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `time_range`.
+    /// Calls the `AVPlayer` framework counterpart for `time_range`.
     pub fn time_range(&self) -> Result<TimeRange, AVPlayerError> {
         Ok(self.info()?.time_range)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `output_count`.
+    /// Calls the `AVPlayer` framework counterpart for `output_count`.
     pub fn output_count(&self) -> Result<usize, AVPlayerError> {
         Ok(self.info()?.output_count)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_time_range`.
+    /// Calls the `AVPlayer` framework counterpart for `set_time_range`.
     pub fn set_time_range(&self, time_range: TimeRange) -> Result<(), AVPlayerError> {
         let (start_value, start_timescale, start_kind) = time_range.start.to_raw();
         let (duration_value, duration_timescale, duration_kind) = time_range.duration.to_raw();
@@ -222,7 +222,7 @@ impl AssetReader {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `start_reading`.
+    /// Calls the `AVPlayer` framework counterpart for `start_reading`.
     pub fn start_reading(&self) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let status = unsafe { ffi::av_reader_start(self.ptr, &mut err) };
@@ -232,22 +232,22 @@ impl AssetReader {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `cancel_reading`.
+    /// Calls the `AVPlayer` framework counterpart for `cancel_reading`.
     pub fn cancel_reading(&self) {
         unsafe { ffi::av_reader_cancel(self.ptr) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `can_add_track_output`.
+    /// Calls the `AVPlayer` framework counterpart for `can_add_track_output`.
     pub fn can_add_track_output(&self, output: &AssetReaderTrackOutput) -> bool {
         unsafe { ffi::av_reader_can_add_output(self.ptr, output.ptr) }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `can_add_audio_mix_output`.
+    /// Calls the `AVPlayer` framework counterpart for `can_add_audio_mix_output`.
     pub fn can_add_audio_mix_output(&self, output: &AssetReaderAudioMixOutput) -> bool {
         unsafe { ffi::av_reader_can_add_output(self.ptr, output.ptr) }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `can_add_video_composition_output`.
+    /// Calls the `AVPlayer` framework counterpart for `can_add_video_composition_output`.
     pub fn can_add_video_composition_output(
         &self,
         output: &AssetReaderVideoCompositionOutput,
@@ -255,12 +255,12 @@ impl AssetReader {
         unsafe { ffi::av_reader_can_add_output(self.ptr, output.ptr) }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `add_track_output`.
+    /// Calls the `AVPlayer` framework counterpart for `add_track_output`.
     pub fn add_track_output(&self, output: &AssetReaderTrackOutput) -> Result<(), AVPlayerError> {
         self.add_output_ptr(output.ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `add_audio_mix_output`.
+    /// Calls the `AVPlayer` framework counterpart for `add_audio_mix_output`.
     pub fn add_audio_mix_output(
         &self,
         output: &AssetReaderAudioMixOutput,
@@ -268,7 +268,7 @@ impl AssetReader {
         self.add_output_ptr(output.ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `add_video_composition_output`.
+    /// Calls the `AVPlayer` framework counterpart for `add_video_composition_output`.
     pub fn add_video_composition_output(
         &self,
         output: &AssetReaderVideoCompositionOutput,
@@ -302,7 +302,7 @@ impl Drop for AssetReaderTrackOutput {
 }
 
 impl AssetReaderTrackOutput {
-/// Calls the `AVPlayer` framework counterpart for `video`.
+    /// Calls the `AVPlayer` framework counterpart for `video`.
     pub fn video(
         track: &AssetTrack,
         settings: Option<&VideoOutputSettings>,
@@ -311,7 +311,7 @@ impl AssetReaderTrackOutput {
             .map(|ptr| Self { ptr })
     }
 
-/// Calls the `AVPlayer` framework counterpart for `audio`.
+    /// Calls the `AVPlayer` framework counterpart for `audio`.
     pub fn audio(
         track: &AssetTrack,
         settings: Option<&AudioOutputSettings>,
@@ -320,7 +320,7 @@ impl AssetReaderTrackOutput {
             .map(|ptr| Self { ptr })
     }
 
-/// Calls the `AVPlayer` framework counterpart for `passthrough`.
+    /// Calls the `AVPlayer` framework counterpart for `passthrough`.
     pub fn passthrough(track: &AssetTrack) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe { ffi::av_reader_track_output_create_passthrough(track.ptr, &mut err) };
@@ -330,23 +330,23 @@ impl AssetReaderTrackOutput {
         Ok(Self { ptr })
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
+    /// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
     pub fn set_always_copies_sample_data(&self, always_copies: bool) {
         unsafe { ffi::av_reader_output_set_always_copies_sample_data(self.ptr, always_copies) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `media_type`.
+    /// Calls the `AVPlayer` framework counterpart for `media_type`.
     pub fn media_type(&self) -> Result<MediaType, AVPlayerError> {
         output_media_type(self.ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
+    /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
     pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
         CMSampleBuffer::from_raw(ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `copy_next_video_pixel_buffer`.
+    /// Calls the `AVPlayer` framework counterpart for `copy_next_video_pixel_buffer`.
     pub fn copy_next_video_pixel_buffer(&self) -> Option<CVPixelBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(self.ptr) };
         CVPixelBuffer::from_raw(ptr)
@@ -369,7 +369,7 @@ impl Drop for AssetReaderAudioMixOutput {
 }
 
 impl AssetReaderAudioMixOutput {
-/// Calls the `AVPlayer` framework counterpart for `new`.
+    /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(
         tracks: &[AssetTrack],
         settings: Option<&AudioOutputSettings>,
@@ -393,17 +393,17 @@ impl AssetReaderAudioMixOutput {
         Ok(Self { ptr })
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
+    /// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
     pub fn set_always_copies_sample_data(&self, always_copies: bool) {
         unsafe { ffi::av_reader_output_set_always_copies_sample_data(self.ptr, always_copies) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `media_type`.
+    /// Calls the `AVPlayer` framework counterpart for `media_type`.
     pub fn media_type(&self) -> Result<MediaType, AVPlayerError> {
         output_media_type(self.ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
+    /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
     pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
         CMSampleBuffer::from_raw(ptr)
@@ -433,7 +433,7 @@ unsafe impl Send for AssetReaderAudioMixOutput {}
 unsafe impl Send for AssetReaderVideoCompositionOutput {}
 
 impl AssetReaderVideoCompositionOutput {
-/// Calls the `AVPlayer` framework counterpart for `new`.
+    /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(
         tracks: &[AssetTrack],
         settings: Option<&VideoOutputSettings>,
@@ -457,23 +457,23 @@ impl AssetReaderVideoCompositionOutput {
         Ok(Self { ptr })
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
+    /// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
     pub fn set_always_copies_sample_data(&self, always_copies: bool) {
         unsafe { ffi::av_reader_output_set_always_copies_sample_data(self.ptr, always_copies) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `media_type`.
+    /// Calls the `AVPlayer` framework counterpart for `media_type`.
     pub fn media_type(&self) -> Result<MediaType, AVPlayerError> {
         output_media_type(self.ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
+    /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
     pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
         CMSampleBuffer::from_raw(ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `copy_next_video_pixel_buffer`.
+    /// Calls the `AVPlayer` framework counterpart for `copy_next_video_pixel_buffer`.
     pub fn copy_next_video_pixel_buffer(&self) -> Option<CVPixelBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(self.ptr) };
         CVPixelBuffer::from_raw(ptr)

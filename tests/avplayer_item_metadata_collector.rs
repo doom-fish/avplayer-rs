@@ -17,6 +17,10 @@ fn avplayer_item_metadata_collector_can_be_attached() -> support::TestResult {
     assert!(collector.identifiers()?.is_empty());
     assert!(collector.classifying_labels()?.is_empty());
     assert!(collector.has_delegate()?);
+    assert!(matches!(
+        collector.as_media_data_collector().kind()?,
+        PlayerItemMediaDataCollectorKind::MetadataCollector
+    ));
 
     drop(observer);
     item.remove_metadata_collector(&collector);
