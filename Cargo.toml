@@ -1,6 +1,6 @@
 [package]
 name = "avplayer"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/doom-fish/avplayer-rs"
@@ -9,7 +9,7 @@ description = "Safe Rust bindings for Apple's AVPlayer + AVAssetReader — playb
 authors = ["Per Johansson <per@doom.fish>"]
 keywords = ["avplayer", "avassetreader", "avfoundation", "macos", "video"]
 categories = ["multimedia::video", "api-bindings", "os::macos-apis"]
-rust-version = "1.70"
+rust-version = "1.76"
 readme = "README.md"
 build = "build.rs"
 include = [
