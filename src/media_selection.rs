@@ -29,7 +29,7 @@ struct MediaSelectionOptionPayload {
 /// Safe wrapper around `AVMediaSelection`.
 #[derive(Debug)]
 pub struct MediaSelection {
-    ptr: *mut c_void,
+    pub(crate) ptr: *mut c_void,
 }
 
 impl Drop for MediaSelection {

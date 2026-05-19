@@ -303,7 +303,7 @@ impl AssetVariantAudioRenditionSpecificAttributes {
 /// Safe wrapper around `AVAssetVariantQualifier`.
 #[derive(Debug)]
 pub struct AssetVariantQualifier {
-    ptr: *mut c_void,
+    pub(crate) ptr: *mut c_void,
 }
 
 impl Drop for AssetVariantQualifier {

@@ -12,6 +12,12 @@ pub type JsonCallback = unsafe extern "C" fn(userdata: *mut c_void, payload_json
 /// Mirrors the `AVPlayer` framework counterpart for `PeriodicTimeCallback`.
 pub type PeriodicTimeCallback =
     unsafe extern "C" fn(userdata: *mut c_void, value: i64, timescale: i32, kind: i32);
+/// Mirrors the `AVPlayer` framework counterpart for `BoolObjectCallback`.
+pub type BoolObjectCallback = unsafe extern "C" fn(
+    userdata: *mut c_void,
+    event_name: *const c_char,
+    object: *mut c_void,
+) -> bool;
 
 extern "C" {
     /// Calls the `AVPlayer` framework counterpart for `avp_string_free`.
@@ -67,6 +73,378 @@ extern "C" {
         track: *mut c_void,
         out_error_message: *mut *mut c_char,
     ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_create`.
+    pub fn av_asset_image_generator_create(asset: *mut c_void) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_info_json`.
+    pub fn av_asset_image_generator_info_json(
+        generator: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_set_applies_preferred_track_transform`.
+    pub fn av_asset_image_generator_set_applies_preferred_track_transform(
+        generator: *mut c_void,
+        applies: bool,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_set_maximum_size`.
+    pub fn av_asset_image_generator_set_maximum_size(
+        generator: *mut c_void,
+        width: f64,
+        height: f64,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_set_aperture_mode`.
+    pub fn av_asset_image_generator_set_aperture_mode(generator: *mut c_void, mode: *const c_char);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_set_requested_time_tolerance_before`.
+    pub fn av_asset_image_generator_set_requested_time_tolerance_before(
+        generator: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_set_requested_time_tolerance_after`.
+    pub fn av_asset_image_generator_set_requested_time_tolerance_after(
+        generator: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_set_dynamic_range_policy`.
+    pub fn av_asset_image_generator_set_dynamic_range_policy(
+        generator: *mut c_void,
+        policy: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_copy_image_at_time`.
+    pub fn av_asset_image_generator_copy_image_at_time(
+        generator: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        out_actual_value: *mut i64,
+        out_actual_timescale: *mut i32,
+        out_actual_kind: *mut i32,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_generator_cancel_all_image_generation`.
+    pub fn av_asset_image_generator_cancel_all_image_generation(generator: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_image_info_json`.
+    pub fn av_asset_image_info_json(
+        image: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_playback_assistant_create`.
+    pub fn av_asset_playback_assistant_create(
+        asset: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_playback_assistant_copy_options_json`.
+    pub fn av_asset_playback_assistant_copy_options_json(
+        assistant: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_url_asset_copy_asset_cache`.
+    pub fn av_url_asset_copy_asset_cache(asset: *mut c_void) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_cache_info_json`.
+    pub fn av_asset_cache_info_json(
+        cache: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_cache_media_selection_option_count`.
+    pub fn av_asset_cache_media_selection_option_count(
+        cache: *mut c_void,
+        group: *mut c_void,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_cache_copy_media_selection_option_at_index`.
+    pub fn av_asset_cache_copy_media_selection_option_at_index(
+        cache: *mut c_void,
+        group: *mut c_void,
+        index: i32,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_url_asset_copy_resource_loader`.
+    pub fn av_url_asset_copy_resource_loader(asset: *mut c_void) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loader_info_json`.
+    pub fn av_asset_resource_loader_info_json(
+        loader: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loader_set_preloads_eligible_content_keys`.
+    pub fn av_asset_resource_loader_set_preloads_eligible_content_keys(
+        loader: *mut c_void,
+        enabled: bool,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loader_set_sends_common_media_client_data_as_http_headers`.
+    pub fn av_asset_resource_loader_set_sends_common_media_client_data_as_http_headers(
+        loader: *mut c_void,
+        enabled: bool,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loader_add_delegate`.
+    pub fn av_asset_resource_loader_add_delegate(
+        loader: *mut c_void,
+        queue_label: *const c_char,
+        callback: Option<BoolObjectCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loader_delegate_release`.
+    pub fn av_asset_resource_loader_delegate_release(observer: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_request_info_json`.
+    pub fn av_asset_resource_loading_request_info_json(
+        request: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_request_finish_loading`.
+    pub fn av_asset_resource_loading_request_finish_loading(request: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_request_finish_loading_with_error`.
+    pub fn av_asset_resource_loading_request_finish_loading_with_error(
+        request: *mut c_void,
+        message: *const c_char,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_request_copy_content_information_request`.
+    pub fn av_asset_resource_loading_request_copy_content_information_request(
+        request: *mut c_void,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_request_copy_data_request`.
+    pub fn av_asset_resource_loading_request_copy_data_request(request: *mut c_void)
+        -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_request_copy_requestor`.
+    pub fn av_asset_resource_loading_request_copy_requestor(request: *mut c_void) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_content_information_request_info_json`.
+    pub fn av_asset_resource_loading_content_information_request_info_json(
+        request: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_content_information_request_set_content_type`.
+    pub fn av_asset_resource_loading_content_information_request_set_content_type(
+        request: *mut c_void,
+        content_type: *const c_char,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_content_information_request_set_content_length`.
+    pub fn av_asset_resource_loading_content_information_request_set_content_length(
+        request: *mut c_void,
+        content_length: i64,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_content_information_request_set_byte_range_access_supported`.
+    pub fn av_asset_resource_loading_content_information_request_set_byte_range_access_supported(
+        request: *mut c_void,
+        supported: bool,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_content_information_request_set_renewal_date_iso8601`.
+    pub fn av_asset_resource_loading_content_information_request_set_renewal_date_iso8601(
+        request: *mut c_void,
+        renewal_date: *const c_char,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_content_information_request_set_entire_length_available_on_demand`.
+    pub fn av_asset_resource_loading_content_information_request_set_entire_length_available_on_demand(
+        request: *mut c_void,
+        available: bool,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_data_request_info_json`.
+    pub fn av_asset_resource_loading_data_request_info_json(
+        request: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_data_request_respond_with_data`.
+    pub fn av_asset_resource_loading_data_request_respond_with_data(
+        request: *mut c_void,
+        bytes: *const u8,
+        count: usize,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_resource_loading_requestor_info_json`.
+    pub fn av_asset_resource_loading_requestor_info_json(
+        requestor: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_storage_manager_shared`.
+    pub fn av_asset_download_storage_manager_shared() -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_storage_manager_set_policy_for_file_path`.
+    pub fn av_asset_download_storage_manager_set_policy_for_file_path(
+        manager: *mut c_void,
+        policy: *mut c_void,
+        path: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_storage_manager_copy_policy_for_file_path`.
+    pub fn av_asset_download_storage_manager_copy_policy_for_file_path(
+        manager: *mut c_void,
+        path: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_storage_management_policy_create_mutable`.
+    pub fn av_asset_download_storage_management_policy_create_mutable() -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_storage_management_policy_info_json`.
+    pub fn av_asset_download_storage_management_policy_info_json(
+        policy: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_storage_management_policy_set_priority`.
+    pub fn av_asset_download_storage_management_policy_set_priority(
+        policy: *mut c_void,
+        priority: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_storage_management_policy_set_expiration_date_iso8601`.
+    pub fn av_asset_download_storage_management_policy_set_expiration_date_iso8601(
+        policy: *mut c_void,
+        value: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_create`.
+    pub fn av_asset_download_configuration_create(
+        asset: *mut c_void,
+        title: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_info_json`.
+    pub fn av_asset_download_configuration_info_json(
+        configuration: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_set_optimizes_auxiliary_content_configurations`.
+    pub fn av_asset_download_configuration_set_optimizes_auxiliary_content_configurations(
+        configuration: *mut c_void,
+        enabled: bool,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_set_downloads_interstitial_assets`.
+    pub fn av_asset_download_configuration_set_downloads_interstitial_assets(
+        configuration: *mut c_void,
+        enabled: bool,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_set_artwork_data`.
+    pub fn av_asset_download_configuration_set_artwork_data(
+        configuration: *mut c_void,
+        bytes: *const u8,
+        count: usize,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_copy_primary_content_configuration`.
+    pub fn av_asset_download_configuration_copy_primary_content_configuration(
+        configuration: *mut c_void,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_auxiliary_content_configuration_count`.
+    pub fn av_asset_download_configuration_auxiliary_content_configuration_count(
+        configuration: *mut c_void,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_copy_auxiliary_content_configuration_at_index`.
+    pub fn av_asset_download_configuration_copy_auxiliary_content_configuration_at_index(
+        configuration: *mut c_void,
+        index: i32,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_configuration_set_auxiliary_content_configurations`.
+    pub fn av_asset_download_configuration_set_auxiliary_content_configurations(
+        configuration: *mut c_void,
+        content_configurations: *const *mut c_void,
+        count: usize,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_content_configuration_create`.
+    pub fn av_asset_download_content_configuration_create() -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_content_configuration_info_json`.
+    pub fn av_asset_download_content_configuration_info_json(
+        configuration: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_content_configuration_media_selection_count`.
+    pub fn av_asset_download_content_configuration_media_selection_count(
+        configuration: *mut c_void,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_content_configuration_copy_media_selection_at_index`.
+    pub fn av_asset_download_content_configuration_copy_media_selection_at_index(
+        configuration: *mut c_void,
+        index: i32,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_content_configuration_set_media_selections`.
+    pub fn av_asset_download_content_configuration_set_media_selections(
+        configuration: *mut c_void,
+        media_selections: *const *mut c_void,
+        count: usize,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_content_configuration_set_variant_qualifiers`.
+    pub fn av_asset_download_content_configuration_set_variant_qualifiers(
+        configuration: *mut c_void,
+        variant_qualifiers: *const *mut c_void,
+        count: usize,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_url_session_create_background`.
+    pub fn av_asset_download_url_session_create_background(
+        identifier: *const c_char,
+        queue_label: *const c_char,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_url_session_release`.
+    pub fn av_asset_download_url_session_release(session: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_url_session_finish_tasks_and_invalidate`.
+    pub fn av_asset_download_url_session_finish_tasks_and_invalidate(session: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_url_session_invalidate_and_cancel`.
+    pub fn av_asset_download_url_session_invalidate_and_cancel(session: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_url_session_create_task_with_configuration`.
+    pub fn av_asset_download_url_session_create_task_with_configuration(
+        session: *mut c_void,
+        configuration: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_url_session_create_aggregate_task`.
+    pub fn av_asset_download_url_session_create_aggregate_task(
+        session: *mut c_void,
+        asset: *mut c_void,
+        media_selections: *const *mut c_void,
+        count: usize,
+        title: *const c_char,
+        artwork_bytes: *const u8,
+        artwork_len: usize,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_task_info_json`.
+    pub fn av_asset_download_task_info_json(
+        task: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_aggregate_asset_download_task_info_json`.
+    pub fn av_aggregate_asset_download_task_info_json(
+        task: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_task_resume`.
+    pub fn av_asset_download_task_resume(task: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_task_suspend`.
+    pub fn av_asset_download_task_suspend(task: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_asset_download_task_cancel`.
+    pub fn av_asset_download_task_cancel(task: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_url_asset_may_require_content_keys_for_media_data_processing`.
+    pub fn av_url_asset_may_require_content_keys_for_media_data_processing(
+        asset: *mut c_void,
+    ) -> bool;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_create`.
+    pub fn av_content_key_session_create(
+        key_system: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_create_with_storage_directory`.
+    pub fn av_content_key_session_create_with_storage_directory(
+        key_system: *const c_char,
+        path: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_info_json`.
+    pub fn av_content_key_session_info_json(
+        session: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_add_content_key_recipient`.
+    pub fn av_content_key_session_add_content_key_recipient(
+        session: *mut c_void,
+        recipient: *mut c_void,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_remove_content_key_recipient`.
+    pub fn av_content_key_session_remove_content_key_recipient(
+        session: *mut c_void,
+        recipient: *mut c_void,
+    );
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_expire`.
+    pub fn av_content_key_session_expire(session: *mut c_void);
 
     /// Calls the `AVPlayer` framework counterpart for `av_player_item_create_with_url`.
     pub fn av_player_item_create_with_url(

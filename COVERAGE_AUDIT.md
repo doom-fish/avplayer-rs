@@ -21,6 +21,22 @@ The original 109-symbol audit was narrower than the follow-up re-audit that iden
 
 See `COVERAGE.md` for the 0.4.0 file-by-file map and integration-test coverage for these additions.
 
+## Supplemental 0.5.0 shared AVFoundation expansion set
+
+Release `0.5.0` adds a new shared-AVFoundation expansion layer in `avplayer-rs`, prioritizing the highest-value asset and loader APIs first while keeping the crate buildable and safe.
+
+Implemented in this release:
+
+- `AVAssetImageGenerator`, including configurable tolerances / aperture / dynamic-range policy plus retained image snapshots
+- `AVAssetCache` and `AVAssetPlaybackAssistant`
+- `AVAssetResourceLoader`, `AVAssetResourceLoaderDelegate`, `AVAssetResourceLoadingRequest`, `AVAssetResourceLoadingContentInformationRequest`, `AVAssetResourceLoadingDataRequest`, `AVAssetResourceLoadingRequestor`, and `AVAssetResourceRenewalRequest`
+- `AVAssetDownloadTask`, `AVAssetDownloadURLSession`, `AVAssetDownloadConfiguration`, `AVAssetDownloadContentConfiguration`, `AVAssetDownloadStorageManager`, `AVAssetDownloadStorageManagementPolicy`, `AVAssetDownloadDelegate`, and `AVAggregateAssetDownloadTask`
+- `AVContentKeySession` basics plus `AVContentKeyRecipient` eligibility surfaced through `AVURLAsset`
+
+Not yet wrapped from the requested family:
+
+- Full `AVContentKey` object handling and content-key-session delegate / request / response flows
+
 ## 🟢 VERIFIED
 | Symbol | Kind | Header | Wrapped by |
 | --- | --- | --- | --- |

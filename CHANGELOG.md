@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0] - 2026-05-19
+
+### Added
+
+- Added shared AVFoundation wrappers for `AVAssetImageGenerator`, `AVAssetCache`, and `AVAssetPlaybackAssistant`.
+- Added the asset-resource-loading family: `AVAssetResourceLoader`, `AVAssetResourceLoaderDelegate`, `AVAssetResourceLoadingRequest`, `AVAssetResourceLoadingContentInformationRequest`, `AVAssetResourceLoadingDataRequest`, `AVAssetResourceLoadingRequestor`, and `AVAssetResourceRenewalRequest`.
+- Added the HLS/offline-download family: `AVAssetDownloadTask`, `AVAggregateAssetDownloadTask`, `AVAssetDownloadURLSession`, `AVAssetDownloadConfiguration`, `AVAssetDownloadContentConfiguration`, `AVAssetDownloadStorageManager`, `AVAssetDownloadStorageManagementPolicy`, and `AVAssetDownloadDelegate`.
+- Added `AVContentKeySession` basics plus `AVContentKeyRecipient` eligibility through `AVURLAsset`.
+
+### Changed
+
+- Bumped the crate version to `0.5.0` for the shared AVFoundation expansion and updated the coverage audit to document the new wrapped families plus the remaining `AVContentKey` request/response gap.
+
 ## [0.4.0] - 2026-05-19
 
 ### Added

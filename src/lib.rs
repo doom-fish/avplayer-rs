@@ -2,12 +2,17 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod asset;
+mod asset_cache;
+mod asset_download;
 mod asset_extras;
+mod asset_image_generator;
+mod asset_playback_assistant;
 mod asset_variant;
 /// Groups `AVPlayer` framework constants for `async_api`.
 #[cfg(feature = "async")]
 #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub mod async_api;
+mod content_key_session;
 mod error;
 /// Groups `AVPlayer` framework constants for `ffi`.
 pub mod ffi;
@@ -36,6 +41,7 @@ mod player_video_output;
 mod queue_player;
 mod reader;
 mod reader_extras;
+mod resource_loader;
 mod sample_buffer_display_layer;
 mod time;
 mod url_asset;
@@ -44,10 +50,28 @@ mod util;
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use asset::{Asset, AssetTrack, KeyLoadStatus, KeyValueStatus, MediaType, Size, UrlAsset};
 /// Re-exports the `AVPlayer` framework surface for this item.
+pub use asset_cache::AssetCache;
+/// Re-exports the `AVPlayer` framework surface for this item.
+pub use asset_download::{
+    AggregateAssetDownloadTask, AssetDownloadConfiguration, AssetDownloadContentConfiguration,
+    AssetDownloadDelegateEvent, AssetDownloadStorageManagementPolicy,
+    AssetDownloadStorageManager, AssetDownloadTask, AssetDownloadTaskState,
+    AssetDownloadURLSession, AssetDownloadedAssetEvictionPriority,
+};
+/// Re-exports the `AVPlayer` framework surface for this item.
+pub use asset_image_generator::{
+    AssetImage, AssetImageGenerator, AssetImageGeneratorApertureMode,
+    AssetImageGeneratorDynamicRangePolicy, GeneratedAssetImage,
+};
+/// Re-exports the `AVPlayer` framework surface for this item.
+pub use asset_playback_assistant::{AssetPlaybackAssistant, AssetPlaybackConfigurationOption};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use asset_variant::{
     AssetVariant, AssetVariantAudioAttributes, AssetVariantAudioRenditionSpecificAttributes,
     AssetVariantQualifier, AssetVariantVideoAttributes, AssetVariantVideoLayoutAttributes,
 };
+/// Re-exports the `AVPlayer` framework surface for this item.
+pub use content_key_session::{ContentKeySession, ContentKeySystem};
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use error::AVPlayerError;
 /// Re-exports the `AVPlayer` framework surface for this item.
@@ -171,6 +195,12 @@ pub use reader_extras::{
     CaptionValidationObserver,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
+pub use resource_loader::{
+    AssetResourceLoader, AssetResourceLoaderEvent, AssetResourceLoaderObserver,
+    AssetResourceLoadingContentInformationRequest, AssetResourceLoadingDataRequest,
+    AssetResourceLoadingRequest, AssetResourceLoadingRequestor, AssetResourceRenewalRequest,
+};
+/// Re-exports the `AVPlayer` framework surface for this item.
 pub use sample_buffer_display_layer::{
     QueuedSampleBufferRenderingStatus, SampleBufferDisplayLayer,
 };
@@ -186,10 +216,31 @@ pub mod prelude {
         Asset, AssetTrack, KeyLoadStatus, KeyValueStatus, MediaType, Size, UrlAsset,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
+    pub use crate::asset_cache::AssetCache;
+    /// Re-exports the `AVPlayer` framework surface for this item.
+    pub use crate::asset_download::{
+        AggregateAssetDownloadTask, AssetDownloadConfiguration,
+        AssetDownloadContentConfiguration, AssetDownloadDelegateEvent,
+        AssetDownloadStorageManagementPolicy, AssetDownloadStorageManager,
+        AssetDownloadTask, AssetDownloadTaskState, AssetDownloadURLSession,
+        AssetDownloadedAssetEvictionPriority,
+    };
+    /// Re-exports the `AVPlayer` framework surface for this item.
+    pub use crate::asset_image_generator::{
+        AssetImage, AssetImageGenerator, AssetImageGeneratorApertureMode,
+        AssetImageGeneratorDynamicRangePolicy, GeneratedAssetImage,
+    };
+    /// Re-exports the `AVPlayer` framework surface for this item.
+    pub use crate::asset_playback_assistant::{
+        AssetPlaybackAssistant, AssetPlaybackConfigurationOption,
+    };
+    /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::asset_variant::{
         AssetVariant, AssetVariantAudioAttributes, AssetVariantAudioRenditionSpecificAttributes,
         AssetVariantQualifier, AssetVariantVideoAttributes, AssetVariantVideoLayoutAttributes,
     };
+    /// Re-exports the `AVPlayer` framework surface for this item.
+    pub use crate::content_key_session::{ContentKeySession, ContentKeySystem};
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::error::AVPlayerError;
     /// Re-exports the `AVPlayer` framework surface for this item.
@@ -313,6 +364,12 @@ pub mod prelude {
         AssetReaderOutput, AssetReaderOutputCaptionAdaptor, AssetReaderOutputMetadataAdaptor,
         AssetReaderSampleReferenceOutput, CaptionGroupInfo, CaptionValidationEvent,
         CaptionValidationObserver,
+    };
+    /// Re-exports the `AVPlayer` framework surface for this item.
+    pub use crate::resource_loader::{
+        AssetResourceLoader, AssetResourceLoaderEvent, AssetResourceLoaderObserver,
+        AssetResourceLoadingContentInformationRequest, AssetResourceLoadingDataRequest,
+        AssetResourceLoadingRequest, AssetResourceLoadingRequestor, AssetResourceRenewalRequest,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::sample_buffer_display_layer::{

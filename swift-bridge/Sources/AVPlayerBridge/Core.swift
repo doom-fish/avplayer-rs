@@ -24,6 +24,11 @@ public typealias AVPPeriodicTimeCallback = @convention(c) (
     Int32
 ) -> Void
 public typealias AVPSimpleCallback = @convention(c) (UnsafeMutableRawPointer?) -> Void
+public typealias AVPBoolObjectCallback = @convention(c) (
+    UnsafeMutableRawPointer?,
+    UnsafePointer<CChar>?,
+    UnsafeMutableRawPointer?
+) -> Bool
 public typealias AVPDropCallback = @convention(c) (UnsafeMutableRawPointer?) -> Void
 
 @_cdecl("avp_string_free")
