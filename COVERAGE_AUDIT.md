@@ -33,9 +33,12 @@ Implemented in this release:
 - `AVAssetDownloadTask`, `AVAssetDownloadURLSession`, `AVAssetDownloadConfiguration`, `AVAssetDownloadContentConfiguration`, `AVAssetDownloadStorageManager`, `AVAssetDownloadStorageManagementPolicy`, `AVAssetDownloadDelegate`, and `AVAggregateAssetDownloadTask`
 - `AVContentKeySession` basics plus `AVContentKeyRecipient` eligibility surfaced through `AVURLAsset`
 
-Not yet wrapped from the requested family:
+## Supplemental 0.6.0 content-key flow completion
 
-- Full `AVContentKey` object handling and content-key-session delegate / request / response flows
+Release `0.6.0` closes the remaining content-key gap with wrappers for:
+
+- `AVContentKeyRequest`, `AVPersistableContentKeyRequest`, `AVContentKeyResponse`, `AVContentKeySessionDelegate`, `AVContentKeyRequestRetryReason`, `AVContentKeyRequestStatus`, `AVContentKeySpecifier`, and `AVContentKey`
+- `ContentKeySessionEventStream`-backed delegate observation plus FairPlay / Clear Key / authorization-token response helpers for synthetic and playback-driven key fulfilment
 
 ## 🟢 VERIFIED
 | Symbol | Kind | Header | Wrapped by |

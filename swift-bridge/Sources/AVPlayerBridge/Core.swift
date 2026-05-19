@@ -17,6 +17,10 @@ public typealias AVPJsonCallback = @convention(c) (
     UnsafeMutableRawPointer?,
     UnsafePointer<CChar>?
 ) -> Void
+public typealias AVPBoolJsonCallback = @convention(c) (
+    UnsafeMutableRawPointer?,
+    UnsafePointer<CChar>?
+) -> Bool
 public typealias AVPPeriodicTimeCallback = @convention(c) (
     UnsafeMutableRawPointer?,
     Int64,

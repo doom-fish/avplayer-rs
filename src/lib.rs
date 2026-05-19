@@ -71,7 +71,13 @@ pub use asset_variant::{
     AssetVariantQualifier, AssetVariantVideoAttributes, AssetVariantVideoLayoutAttributes,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
-pub use content_key_session::{ContentKeySession, ContentKeySystem};
+pub use content_key_session::{
+    ContentKey, ContentKeyEvent, ContentKeyIdentifier, ContentKeyRequest,
+    ContentKeyRequestOptions, ContentKeyRequestRetryReason, ContentKeyRequestStatus,
+    ContentKeyResponse, ContentKeySession, ContentKeySessionEvent, ContentKeySessionEventStream,
+    ContentKeySessionObserver, ContentKeySpecifier, ContentKeySystem,
+    ExternalContentProtectionStatus, PersistableContentKeyRequest,
+};
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use error::AVPlayerError;
 /// Re-exports the `AVPlayer` framework surface for this item.
@@ -240,7 +246,13 @@ pub mod prelude {
         AssetVariantQualifier, AssetVariantVideoAttributes, AssetVariantVideoLayoutAttributes,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
-    pub use crate::content_key_session::{ContentKeySession, ContentKeySystem};
+    pub use crate::content_key_session::{
+        ContentKey, ContentKeyEvent, ContentKeyIdentifier, ContentKeyRequest,
+        ContentKeyRequestOptions, ContentKeyRequestRetryReason, ContentKeyRequestStatus,
+        ContentKeyResponse, ContentKeySession, ContentKeySessionEvent,
+        ContentKeySessionEventStream, ContentKeySessionObserver, ContentKeySpecifier,
+        ContentKeySystem, ExternalContentProtectionStatus, PersistableContentKeyRequest,
+    };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::error::AVPlayerError;
     /// Re-exports the `AVPlayer` framework surface for this item.

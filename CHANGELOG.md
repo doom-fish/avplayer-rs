@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0] - 2026-05-19
+
+### Added
+
+- Completed the `AVContentKey` request/response flow with wrappers for `AVContentKeyRequest`, `AVPersistableContentKeyRequest`, `AVContentKeyResponse`, `AVContentKeySessionDelegate`, `AVContentKeyRequestRetryReason`, `AVContentKeyRequestStatus`, `AVContentKeySpecifier`, and `AVContentKey` plus FairPlay response-data helpers.
+- Added `ContentKeySessionEventStream`-backed delegate observation so content-key session events surface as typed Rust enums.
+- Added `tests/content_key_smoke.rs` covering synthetic clear-key request/response completion and content-key specifier round-tripping.
+
+### Changed
+
+- Bumped the crate version to `0.6.0` and widened the local `doom-fish-utils` compatibility bound to include the shared 0.3.x async-stream utilities used by the new content-key event stream.
+
 ## [0.5.1] - 2026-05-19
 
 - Bump MSRV from 1.70 to 1.76 to match fleet baseline.

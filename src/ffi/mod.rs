@@ -9,6 +9,9 @@ pub use doom_fish_utils::ffi_callbacks::{DropCallback, SimpleCallback};
 
 /// Mirrors the `AVPlayer` framework counterpart for `JsonCallback`.
 pub type JsonCallback = unsafe extern "C" fn(userdata: *mut c_void, payload_json: *const c_char);
+/// Mirrors the `AVPlayer` framework counterpart for `BoolJsonCallback`.
+pub type BoolJsonCallback =
+    unsafe extern "C" fn(userdata: *mut c_void, payload_json: *const c_char) -> bool;
 /// Mirrors the `AVPlayer` framework counterpart for `PeriodicTimeCallback`.
 pub type PeriodicTimeCallback =
     unsafe extern "C" fn(userdata: *mut c_void, value: i64, timescale: i32, kind: i32);
@@ -433,6 +436,120 @@ extern "C" {
         session: *mut c_void,
         out_error_message: *mut *mut c_char,
     ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_add_observer`.
+    pub fn av_content_key_session_add_observer(
+        session: *mut c_void,
+        queue_label: *const c_char,
+        callback: Option<BoolJsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_observer_release`.
+    pub fn av_content_key_session_observer_release(observer: *mut c_void);
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_process_content_key_request`.
+    pub fn av_content_key_session_process_content_key_request(
+        session: *mut c_void,
+        identifier_json: *const c_char,
+        initialization_data_bytes: *const u8,
+        initialization_data_count: usize,
+        options_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_renew_expiring_response_data_for_request`.
+    pub fn av_content_key_session_renew_expiring_response_data_for_request(
+        session: *mut c_void,
+        request: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_request_info_json`.
+    pub fn av_content_key_request_info_json(
+        request: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_request_copy_content_key_specifier`.
+    pub fn av_content_key_request_copy_content_key_specifier(request: *mut c_void) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_request_copy_content_key`.
+    pub fn av_content_key_request_copy_content_key(request: *mut c_void) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_request_make_streaming_content_key_request_data_json`.
+    pub fn av_content_key_request_make_streaming_content_key_request_data_json(
+        request: *mut c_void,
+        app_identifier_bytes: *const u8,
+        app_identifier_count: usize,
+        content_identifier_bytes: *const u8,
+        content_identifier_count: usize,
+        options_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_request_process_content_key_response`.
+    pub fn av_content_key_request_process_content_key_response(
+        request: *mut c_void,
+        response: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_request_process_content_key_response_error`.
+    pub fn av_content_key_request_process_content_key_response_error(
+        request: *mut c_void,
+        message: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_request_request_persistable_content_key`.
+    pub fn av_content_key_request_request_persistable_content_key(
+        request: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    /// Calls the `AVPlayer` framework counterpart for `av_persistable_content_key_request_persistable_content_key_json`.
+    pub fn av_persistable_content_key_request_persistable_content_key_json(
+        request: *mut c_void,
+        key_vendor_response_bytes: *const u8,
+        key_vendor_response_count: usize,
+        options_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_response_create_fair_play_streaming`.
+    pub fn av_content_key_response_create_fair_play_streaming(
+        bytes: *const u8,
+        count: usize,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_response_create_clear_key`.
+    pub fn av_content_key_response_create_clear_key(
+        key_data_bytes: *const u8,
+        key_data_count: usize,
+        initialization_vector_bytes: *const u8,
+        initialization_vector_count: usize,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_response_create_authorization_token`.
+    pub fn av_content_key_response_create_authorization_token(
+        bytes: *const u8,
+        count: usize,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_specifier_create`.
+    pub fn av_content_key_specifier_create(
+        key_system: *const c_char,
+        identifier_json: *const c_char,
+        options_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_specifier_info_json`.
+    pub fn av_content_key_specifier_info_json(
+        specifier: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_info_json`.
+    pub fn av_content_key_info_json(
+        content_key: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_char;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_copy_content_key_specifier`.
+    pub fn av_content_key_copy_content_key_specifier(content_key: *mut c_void) -> *mut c_void;
+    /// Calls the `AVPlayer` framework counterpart for `av_content_key_revoke`.
+    pub fn av_content_key_revoke(
+        content_key: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
     /// Calls the `AVPlayer` framework counterpart for `av_content_key_session_add_content_key_recipient`.
     pub fn av_content_key_session_add_content_key_recipient(
         session: *mut c_void,
