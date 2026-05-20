@@ -7,6 +7,7 @@ use std::ffi::CStr;
 
 use apple_cf::cm::CMSampleBuffer;
 use apple_cf::cv::CVPixelBuffer;
+use doom_fish_utils::stream::{BoundedAsyncStream, NextItem};
 use serde::Deserialize;
 
 use crate::asset::{AssetTrack, MediaType};
@@ -269,11 +270,72 @@ impl AssetReaderOutputCaptionAdaptor {
         }
         Ok(CaptionValidationObserver { token })
     }
+
+    /// Returns an async stream of caption-validation callbacks.
+    pub fn observe_validation_events(
+        &self,
+        capacity: usize,
+    ) -> Result<CaptionValidationEventStream, AVPlayerError> {
+        let (inner, sender) = BoundedAsyncStream::new(capacity);
+        let observer = self.observe_validation(move |event| {
+            sender.push(event);
+        })?;
+        Ok(CaptionValidationEventStream {
+            inner,
+            _observer: observer,
+        })
+    }
+
+    /// Returns a caption-validation stream.
+    pub fn validation_event_stream(
+        &self,
+        capacity: usize,
+    ) -> Result<CaptionValidationEventStream, AVPlayerError> {
+        self.observe_validation_events(capacity)
+    }
 }
 
 #[derive(Debug)]
 pub struct CaptionValidationObserver {
     token: *mut c_void,
+}
+
+#[derive(Debug)]
+/// Async stream of validation callbacks sourced from `AVAssetReaderOutputCaptionAdaptor`.
+pub struct CaptionValidationEventStream {
+    inner: BoundedAsyncStream<CaptionValidationEvent>,
+    _observer: CaptionValidationObserver,
+}
+
+impl CaptionValidationEventStream {
+    #[must_use]
+    /// Returns the next buffered validation event.
+    pub const fn next(&self) -> NextItem<'_, CaptionValidationEvent> {
+        self.inner.next()
+    }
+
+    #[must_use]
+    /// Returns the next buffered validation event if one is available.
+    pub fn try_next(&self) -> Option<CaptionValidationEvent> {
+        self.inner.try_next()
+    }
+
+    #[must_use]
+    /// Returns the number of currently buffered validation events.
+    pub fn buffered_count(&self) -> usize {
+        self.inner.buffered_count()
+    }
+
+    /// Drops all currently buffered validation events without closing the stream.
+    pub fn clear_buffer(&self) {
+        self.inner.clear_buffer();
+    }
+
+    #[must_use]
+    /// Returns whether the stream has been closed.
+    pub fn is_closed(&self) -> bool {
+        self.inner.is_closed()
+    }
 }
 
 impl Drop for CaptionValidationObserver {

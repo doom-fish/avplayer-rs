@@ -43,7 +43,7 @@ impl Drop for QueuePlayer {
 unsafe impl Send for QueuePlayer {}
 
 impl QueuePlayer {
-/// Calls the `AVPlayer` framework counterpart for `new`.
+    /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new() -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe { ffi::av_queue_player_create(&mut err) };
@@ -53,7 +53,7 @@ impl QueuePlayer {
         Ok(Self { ptr })
     }
 
-/// Calls the `AVPlayer` framework counterpart for `with_items`.
+    /// Calls the `AVPlayer` framework counterpart for `with_items`.
     pub fn with_items(items: &[&PlayerItem]) -> Result<Self, AVPlayerError> {
         let items = items.iter().map(|item| item.ptr).collect::<Vec<_>>();
         let mut err: *mut c_char = ptr::null_mut();
@@ -75,39 +75,39 @@ impl QueuePlayer {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `status`.
+    /// Calls the `AVPlayer` framework counterpart for `status`.
     pub fn status(&self) -> Result<PlayerStatus, AVPlayerError> {
         Ok(PlayerStatus::from_raw(self.info()?.status))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `error`.
+    /// Calls the `AVPlayer` framework counterpart for `error`.
     pub fn error(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info()?.error_message)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `rate`.
+    /// Calls the `AVPlayer` framework counterpart for `rate`.
     pub fn rate(&self) -> Result<f32, AVPlayerError> {
         Ok(self.info()?.rate)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `current_time`.
+    /// Calls the `AVPlayer` framework counterpart for `current_time`.
     pub fn current_time(&self) -> Result<Time, AVPlayerError> {
         Ok(self.info()?.current_time)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `duration`.
+    /// Calls the `AVPlayer` framework counterpart for `duration`.
     pub fn duration(&self) -> Result<Time, AVPlayerError> {
         Ok(self.info()?.duration)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `action_at_item_end`.
+    /// Calls the `AVPlayer` framework counterpart for `action_at_item_end`.
     pub fn action_at_item_end(&self) -> Result<PlayerActionAtItemEnd, AVPlayerError> {
         Ok(PlayerActionAtItemEnd::from_raw(
             self.info()?.action_at_item_end.unwrap_or(1),
         ))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_action_at_item_end`.
+    /// Calls the `AVPlayer` framework counterpart for `set_action_at_item_end`.
     pub fn set_action_at_item_end(
         &self,
         action: PlayerActionAtItemEnd,
@@ -121,22 +121,22 @@ impl QueuePlayer {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `play`.
+    /// Calls the `AVPlayer` framework counterpart for `play`.
     pub fn play(&self) {
         unsafe { ffi::av_player_play(self.ptr) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `pause`.
+    /// Calls the `AVPlayer` framework counterpart for `pause`.
     pub fn pause(&self) {
         unsafe { ffi::av_player_pause(self.ptr) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_rate`.
+    /// Calls the `AVPlayer` framework counterpart for `set_rate`.
     pub fn set_rate(&self, rate: f32) {
         unsafe { ffi::av_player_set_rate(self.ptr, rate) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `current_item`.
+    /// Calls the `AVPlayer` framework counterpart for `current_item`.
     pub fn current_item(&self) -> Option<PlayerItem> {
         let ptr = unsafe { ffi::av_player_copy_current_item(self.ptr) };
         if ptr.is_null() {
@@ -146,7 +146,7 @@ impl QueuePlayer {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `items`.
+    /// Calls the `AVPlayer` framework counterpart for `items`.
     pub fn items(&self) -> Result<Vec<PlayerItem>, AVPlayerError> {
         let count = unsafe { ffi::av_queue_player_item_count(self.ptr) };
         if count < 0 {
@@ -182,12 +182,12 @@ impl QueuePlayer {
         Ok(items)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `advance_to_next_item`.
+    /// Calls the `AVPlayer` framework counterpart for `advance_to_next_item`.
     pub fn advance_to_next_item(&self) {
         unsafe { ffi::av_queue_player_advance_to_next_item(self.ptr) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `can_insert_item_after`.
+    /// Calls the `AVPlayer` framework counterpart for `can_insert_item_after`.
     pub fn can_insert_item_after(
         &self,
         item: &PlayerItem,
@@ -202,7 +202,7 @@ impl QueuePlayer {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `insert_item_after`.
+    /// Calls the `AVPlayer` framework counterpart for `insert_item_after`.
     pub fn insert_item_after(
         &self,
         item: &PlayerItem,
@@ -223,12 +223,12 @@ impl QueuePlayer {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `remove_item`.
+    /// Calls the `AVPlayer` framework counterpart for `remove_item`.
     pub fn remove_item(&self, item: &PlayerItem) {
         unsafe { ffi::av_queue_player_remove_item(self.ptr, item.ptr) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `remove_all_items`.
+    /// Calls the `AVPlayer` framework counterpart for `remove_all_items`.
     pub fn remove_all_items(&self) {
         unsafe { ffi::av_queue_player_remove_all_items(self.ptr) };
     }

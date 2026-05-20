@@ -5,6 +5,7 @@ use core::ptr;
 use std::ffi::{CStr, CString};
 use std::path::Path;
 
+use doom_fish_utils::stream::{BoundedAsyncStream, NextItem};
 use serde::Deserialize;
 
 use crate::asset::UrlAsset;
@@ -481,7 +482,8 @@ struct AssetDownloadDelegateEventPayload {
 
 impl AssetDownloadDelegateEventPayload {
     fn require_location(self) -> Option<(usize, String)> {
-        self.location.map(|location| (self.task_identifier, location))
+        self.location
+            .map(|location| (self.task_identifier, location))
     }
 
     fn require_time_ranges(self) -> Option<(usize, TimeRange, Vec<TimeRange>, TimeRange)> {
@@ -601,9 +603,67 @@ struct AssetDownloadDelegateState {
     callback: Box<dyn Fn(AssetDownloadDelegateEvent) + Send + 'static>,
 }
 
+#[derive(Debug)]
+/// Async stream of delegate events sourced from `AVAssetDownloadURLSession`.
+pub struct AssetDownloadDelegateEventStream {
+    inner: BoundedAsyncStream<AssetDownloadDelegateEvent>,
+}
+
+impl AssetDownloadDelegateEventStream {
+    #[must_use]
+    /// Returns the next buffered delegate event.
+    pub const fn next(&self) -> NextItem<'_, AssetDownloadDelegateEvent> {
+        self.inner.next()
+    }
+
+    #[must_use]
+    /// Returns the next buffered delegate event if one is available.
+    pub fn try_next(&self) -> Option<AssetDownloadDelegateEvent> {
+        self.inner.try_next()
+    }
+
+    #[must_use]
+    /// Returns the number of currently buffered delegate events.
+    pub fn buffered_count(&self) -> usize {
+        self.inner.buffered_count()
+    }
+
+    /// Drops all currently buffered delegate events without closing the stream.
+    pub fn clear_buffer(&self) {
+        self.inner.clear_buffer();
+    }
+
+    #[must_use]
+    /// Returns whether the stream has been closed.
+    pub fn is_closed(&self) -> bool {
+        self.inner.is_closed()
+    }
+}
+
 impl AssetDownloadURLSession {
     pub fn background(identifier: &str) -> Result<Self, AVPlayerError> {
         Self::background_with_handler(identifier, None, |_| {})
+    }
+
+    /// Creates a background download session together with an async delegate-event stream.
+    pub fn background_with_events(
+        identifier: &str,
+        queue_label: Option<&str>,
+        capacity: usize,
+    ) -> Result<(Self, AssetDownloadDelegateEventStream), AVPlayerError> {
+        let (inner, sender) = BoundedAsyncStream::new(capacity);
+        let session = Self::background_with_handler(identifier, queue_label, move |event| {
+            sender.push(event);
+        })?;
+        Ok((session, AssetDownloadDelegateEventStream { inner }))
+    }
+
+    /// Creates a background download session with the default queue choice and an async delegate-event stream.
+    pub fn background_events(
+        identifier: &str,
+        capacity: usize,
+    ) -> Result<(Self, AssetDownloadDelegateEventStream), AVPlayerError> {
+        Self::background_with_events(identifier, None, capacity)
     }
 
     pub fn background_with_handler<F>(
@@ -672,9 +732,8 @@ impl AssetDownloadURLSession {
             .map(|selection| selection.ptr)
             .collect::<Vec<_>>();
         let title = to_cstring(title, "aggregate-download title")?;
-        let (artwork_ptr, artwork_len) = artwork_data.map_or((ptr::null(), 0), |data| {
-            (data.as_ptr(), data.len())
-        });
+        let (artwork_ptr, artwork_len) =
+            artwork_data.map_or((ptr::null(), 0), |data| (data.as_ptr(), data.len()));
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_asset_download_url_session_create_aggregate_task(
@@ -745,7 +804,8 @@ impl AssetDownloadTask {
 impl AggregateAssetDownloadTask {
     fn info(&self) -> Result<AssetDownloadTaskInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_aggregate_asset_download_task_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_aggregate_asset_download_task_info_json(self.ptr, &mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -872,8 +932,6 @@ unsafe extern "C" fn asset_download_delegate_event_trampoline(
 
 unsafe extern "C" fn asset_download_delegate_drop(userdata: *mut c_void) {
     if !userdata.is_null() {
-        drop(Box::from_raw(
-            userdata.cast::<AssetDownloadDelegateState>(),
-        ));
+        drop(Box::from_raw(userdata.cast::<AssetDownloadDelegateState>()));
     }
 }

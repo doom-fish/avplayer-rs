@@ -45,20 +45,20 @@ struct ExtendedPlayerItemInfoPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum AudioTimePitchAlgorithm {
-/// Mirrors the `AVPlayer` framework case `Spectral`.
+    /// Mirrors the `AVPlayer` framework case `Spectral`.
     Spectral,
-/// Mirrors the `AVPlayer` framework case `TimeDomain`.
+    /// Mirrors the `AVPlayer` framework case `TimeDomain`.
     TimeDomain,
-/// Mirrors the `AVPlayer` framework case `Varispeed`.
+    /// Mirrors the `AVPlayer` framework case `Varispeed`.
     Varispeed,
-/// Mirrors the `AVPlayer` framework case `LowQualityZeroLatency`.
+    /// Mirrors the `AVPlayer` framework case `LowQualityZeroLatency`.
     LowQualityZeroLatency,
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
 impl AudioTimePitchAlgorithm {
-/// Calls the `AVPlayer` framework counterpart for `from_raw`.
+    /// Calls the `AVPlayer` framework counterpart for `from_raw`.
     #[must_use]
     pub fn from_raw(raw: &str) -> Self {
         match raw {
@@ -70,7 +70,7 @@ impl AudioTimePitchAlgorithm {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `as_raw`.
+    /// Calls the `AVPlayer` framework counterpart for `as_raw`.
     #[must_use]
     pub fn as_raw(&self) -> &str {
         match self {
@@ -88,18 +88,18 @@ impl AudioTimePitchAlgorithm {
 pub struct VariantPreferences(u64);
 
 impl VariantPreferences {
-/// Mirrors the `AVPlayer` framework constant `NONE`.
+    /// Mirrors the `AVPlayer` framework constant `NONE`.
     pub const NONE: Self = Self(0);
-/// Mirrors the `AVPlayer` framework constant `SCALABILITY_TO_LOSSLESS_AUDIO`.
+    /// Mirrors the `AVPlayer` framework constant `SCALABILITY_TO_LOSSLESS_AUDIO`.
     pub const SCALABILITY_TO_LOSSLESS_AUDIO: Self = Self(1 << 0);
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn bits(self) -> u64 {
         self.0
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn contains(self, other: Self) -> bool {
         (self.0 & other.0) == other.0
@@ -128,21 +128,21 @@ impl BitOrAssign for VariantPreferences {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ContentAuthorizationStatus {
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown,
-/// Mirrors the `AVPlayer` framework case `Completed`.
+    /// Mirrors the `AVPlayer` framework case `Completed`.
     Completed,
-/// Mirrors the `AVPlayer` framework case `Cancelled`.
+    /// Mirrors the `AVPlayer` framework case `Cancelled`.
     Cancelled,
-/// Mirrors the `AVPlayer` framework case `TimedOut`.
+    /// Mirrors the `AVPlayer` framework case `TimedOut`.
     TimedOut,
-/// Mirrors the `AVPlayer` framework case `Busy`.
+    /// Mirrors the `AVPlayer` framework case `Busy`.
     Busy,
-/// Mirrors the `AVPlayer` framework case `NotAvailable`.
+    /// Mirrors the `AVPlayer` framework case `NotAvailable`.
     NotAvailable,
-/// Mirrors the `AVPlayer` framework case `NotPossible`.
+    /// Mirrors the `AVPlayer` framework case `NotPossible`.
     NotPossible,
-/// Mirrors the `AVPlayer` framework case `Other`.
+    /// Mirrors the `AVPlayer` framework case `Other`.
     Other(i32),
 }
 
@@ -174,15 +174,15 @@ struct PlayerItemVideoCompositorPayload {
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemVideoCompositorInfo`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlayerItemVideoCompositorInfo {
-/// Mirrors the `AVPlayer` framework property for `class_name`.
+    /// Mirrors the `AVPlayer` framework property for `class_name`.
     pub class_name: String,
-/// Mirrors the `AVPlayer` framework property for `supports_wide_color_source_frames`.
+    /// Mirrors the `AVPlayer` framework property for `supports_wide_color_source_frames`.
     pub supports_wide_color_source_frames: Option<bool>,
-/// Mirrors the `AVPlayer` framework property for `supports_hdr_source_frames`.
+    /// Mirrors the `AVPlayer` framework property for `supports_hdr_source_frames`.
     pub supports_hdr_source_frames: Option<bool>,
-/// Mirrors the `AVPlayer` framework property for `supports_source_tagged_buffers`.
+    /// Mirrors the `AVPlayer` framework property for `supports_source_tagged_buffers`.
     pub supports_source_tagged_buffers: Option<bool>,
-/// Mirrors the `AVPlayer` framework property for `can_conform_color_of_source_frames`.
+    /// Mirrors the `AVPlayer` framework property for `can_conform_color_of_source_frames`.
     pub can_conform_color_of_source_frames: Option<bool>,
 }
 
@@ -208,22 +208,22 @@ impl PlayerItem {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `automatically_loaded_asset_keys`.
+    /// Calls the `AVPlayer` framework counterpart for `automatically_loaded_asset_keys`.
     pub fn automatically_loaded_asset_keys(&self) -> Result<Vec<String>, AVPlayerError> {
         Ok(self.extended_info()?.automatically_loaded_asset_keys)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `seekable_time_ranges`.
+    /// Calls the `AVPlayer` framework counterpart for `seekable_time_ranges`.
     pub fn seekable_time_ranges(&self) -> Result<Vec<TimeRange>, AVPlayerError> {
         Ok(self.extended_info()?.seekable_time_ranges)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `loaded_time_ranges`.
+    /// Calls the `AVPlayer` framework counterpart for `loaded_time_ranges`.
     pub fn loaded_time_ranges(&self) -> Result<Vec<TimeRange>, AVPlayerError> {
         Ok(self.extended_info()?.loaded_time_ranges)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `can_use_network_resources_for_live_streaming_while_paused`.
+    /// Calls the `AVPlayer` framework counterpart for `can_use_network_resources_for_live_streaming_while_paused`.
     pub fn can_use_network_resources_for_live_streaming_while_paused(
         &self,
     ) -> Result<bool, AVPlayerError> {
@@ -232,7 +232,7 @@ impl PlayerItem {
             .can_use_network_resources_for_live_streaming_while_paused)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_can_use_network_resources_for_live_streaming_while_paused`.
+    /// Calls the `AVPlayer` framework counterpart for `set_can_use_network_resources_for_live_streaming_while_paused`.
     pub fn set_can_use_network_resources_for_live_streaming_while_paused(&self, enabled: bool) {
         unsafe {
             ffi::av_player_item_set_can_use_network_resources_for_live_streaming_while_paused(
@@ -241,46 +241,46 @@ impl PlayerItem {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `preferred_forward_buffer_duration`.
+    /// Calls the `AVPlayer` framework counterpart for `preferred_forward_buffer_duration`.
     pub fn preferred_forward_buffer_duration(&self) -> Result<f64, AVPlayerError> {
         Ok(self.extended_info()?.preferred_forward_buffer_duration)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_preferred_forward_buffer_duration`.
+    /// Calls the `AVPlayer` framework counterpart for `set_preferred_forward_buffer_duration`.
     pub fn set_preferred_forward_buffer_duration(&self, duration: f64) {
         unsafe { ffi::av_player_item_set_preferred_forward_buffer_duration(self.ptr, duration) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `preferred_peak_bit_rate`.
+    /// Calls the `AVPlayer` framework counterpart for `preferred_peak_bit_rate`.
     pub fn preferred_peak_bit_rate(&self) -> Result<f64, AVPlayerError> {
         Ok(self.extended_info()?.preferred_peak_bit_rate)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_preferred_peak_bit_rate`.
+    /// Calls the `AVPlayer` framework counterpart for `set_preferred_peak_bit_rate`.
     pub fn set_preferred_peak_bit_rate(&self, value: f64) {
         unsafe { ffi::av_player_item_set_preferred_peak_bit_rate(self.ptr, value) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `preferred_peak_bit_rate_for_expensive_networks`.
+    /// Calls the `AVPlayer` framework counterpart for `preferred_peak_bit_rate_for_expensive_networks`.
     pub fn preferred_peak_bit_rate_for_expensive_networks(&self) -> Result<f64, AVPlayerError> {
         Ok(self
             .extended_info()?
             .preferred_peak_bit_rate_for_expensive_networks)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_preferred_peak_bit_rate_for_expensive_networks`.
+    /// Calls the `AVPlayer` framework counterpart for `set_preferred_peak_bit_rate_for_expensive_networks`.
     pub fn set_preferred_peak_bit_rate_for_expensive_networks(&self, value: f64) {
         unsafe {
             ffi::av_player_item_set_preferred_peak_bit_rate_for_expensive_networks(self.ptr, value);
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `preferred_maximum_resolution`.
+    /// Calls the `AVPlayer` framework counterpart for `preferred_maximum_resolution`.
     pub fn preferred_maximum_resolution(&self) -> Result<Size, AVPlayerError> {
         Ok(self.extended_info()?.preferred_maximum_resolution)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_preferred_maximum_resolution`.
+    /// Calls the `AVPlayer` framework counterpart for `set_preferred_maximum_resolution`.
     pub fn set_preferred_maximum_resolution(&self, value: Size) {
         unsafe {
             ffi::av_player_item_set_preferred_maximum_resolution(
@@ -291,7 +291,7 @@ impl PlayerItem {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `preferred_maximum_resolution_for_expensive_networks`.
+    /// Calls the `AVPlayer` framework counterpart for `preferred_maximum_resolution_for_expensive_networks`.
     pub fn preferred_maximum_resolution_for_expensive_networks(
         &self,
     ) -> Result<Size, AVPlayerError> {
@@ -300,7 +300,7 @@ impl PlayerItem {
             .preferred_maximum_resolution_for_expensive_networks)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_preferred_maximum_resolution_for_expensive_networks`.
+    /// Calls the `AVPlayer` framework counterpart for `set_preferred_maximum_resolution_for_expensive_networks`.
     pub fn set_preferred_maximum_resolution_for_expensive_networks(&self, value: Size) {
         unsafe {
             ffi::av_player_item_set_preferred_maximum_resolution_for_expensive_networks(
@@ -311,14 +311,14 @@ impl PlayerItem {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `audio_time_pitch_algorithm`.
+    /// Calls the `AVPlayer` framework counterpart for `audio_time_pitch_algorithm`.
     pub fn audio_time_pitch_algorithm(&self) -> Result<AudioTimePitchAlgorithm, AVPlayerError> {
         Ok(AudioTimePitchAlgorithm::from_raw(
             &self.extended_info()?.audio_time_pitch_algorithm,
         ))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_audio_time_pitch_algorithm`.
+    /// Calls the `AVPlayer` framework counterpart for `set_audio_time_pitch_algorithm`.
     pub fn set_audio_time_pitch_algorithm(
         &self,
         algorithm: &AudioTimePitchAlgorithm,
@@ -332,17 +332,17 @@ impl PlayerItem {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `output_count`.
+    /// Calls the `AVPlayer` framework counterpart for `output_count`.
     pub fn output_count(&self) -> Result<usize, AVPlayerError> {
         Ok(self.extended_info()?.output_count)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `track_count`.
+    /// Calls the `AVPlayer` framework counterpart for `track_count`.
     pub fn track_count(&self) -> Result<usize, AVPlayerError> {
         Ok(self.extended_info()?.track_count)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `variant_preferences`.
+    /// Calls the `AVPlayer` framework counterpart for `variant_preferences`.
     pub fn variant_preferences(&self) -> Result<VariantPreferences, AVPlayerError> {
         Ok(VariantPreferences::from_bits(
             self.extended_info()?
@@ -351,8 +351,11 @@ impl PlayerItem {
         ))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_variant_preferences`.
-    pub fn set_variant_preferences(&self, preferences: VariantPreferences) -> Result<(), AVPlayerError> {
+    /// Calls the `AVPlayer` framework counterpart for `set_variant_preferences`.
+    pub fn set_variant_preferences(
+        &self,
+        preferences: VariantPreferences,
+    ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_item_set_variant_preferences(self.ptr, preferences.bits(), &mut err)
@@ -363,22 +366,22 @@ impl PlayerItem {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `authorization_required_for_playback`.
+    /// Calls the `AVPlayer` framework counterpart for `authorization_required_for_playback`.
     pub fn authorization_required_for_playback(&self) -> Result<bool, AVPlayerError> {
         Ok(self.extended_info()?.authorization_required_for_playback)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `application_authorized_for_playback`.
+    /// Calls the `AVPlayer` framework counterpart for `application_authorized_for_playback`.
     pub fn application_authorized_for_playback(&self) -> Result<bool, AVPlayerError> {
         Ok(self.extended_info()?.application_authorized_for_playback)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `content_authorized_for_playback`.
+    /// Calls the `AVPlayer` framework counterpart for `content_authorized_for_playback`.
     pub fn content_authorized_for_playback(&self) -> Result<bool, AVPlayerError> {
         Ok(self.extended_info()?.content_authorized_for_playback)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `content_authorization_request_status`.
+    /// Calls the `AVPlayer` framework counterpart for `content_authorization_request_status`.
     pub fn content_authorization_request_status(
         &self,
     ) -> Result<ContentAuthorizationStatus, AVPlayerError> {
@@ -387,7 +390,7 @@ impl PlayerItem {
         ))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `custom_video_compositor`.
+    /// Calls the `AVPlayer` framework counterpart for `custom_video_compositor`.
     pub fn custom_video_compositor(
         &self,
     ) -> Result<Option<PlayerItemVideoCompositorInfo>, AVPlayerError> {

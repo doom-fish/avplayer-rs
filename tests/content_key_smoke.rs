@@ -39,7 +39,10 @@ fn content_key_clear_key_event_stream_smoke() -> support::TestResult {
         ContentKeyEvent::Requested(request) => request,
         other => return Err(format!("expected requested event, got {other:?}").into()),
     };
-    assert_eq!(request.status()?, ContentKeyRequestStatus::RequestingResponse);
+    assert_eq!(
+        request.status()?,
+        ContentKeyRequestStatus::RequestingResponse
+    );
     assert_eq!(request.identifier()?, Some(identifier.clone()));
     assert_eq!(request.initialization_data()?, None);
     assert!(!request.can_provide_persistable_content_key()?);
@@ -58,7 +61,10 @@ fn content_key_clear_key_event_stream_smoke() -> support::TestResult {
         ContentKeyEvent::Succeeded(request) => request,
         other => return Err(format!("expected succeeded event, got {other:?}").into()),
     };
-    assert_eq!(succeeded.status()?, ContentKeyRequestStatus::ReceivedResponse);
+    assert_eq!(
+        succeeded.status()?,
+        ContentKeyRequestStatus::ReceivedResponse
+    );
 
     let content_key = succeeded
         .content_key()?
@@ -85,11 +91,8 @@ fn content_key_specifier_round_trips() -> support::TestResult {
         protocol_versions: vec![1, 2],
         ..ContentKeyRequestOptions::default()
     };
-    let specifier = ContentKeySpecifier::new(
-        &ContentKeySystem::ClearKey,
-        &identifier,
-        Some(&options),
-    )?;
+    let specifier =
+        ContentKeySpecifier::new(&ContentKeySystem::ClearKey, &identifier, Some(&options))?;
 
     assert_eq!(specifier.key_system()?, ContentKeySystem::ClearKey);
     assert_eq!(specifier.identifier()?, Some(identifier));

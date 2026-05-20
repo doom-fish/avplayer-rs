@@ -15,7 +15,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("status: {:?}", player.status()?);
     println!("time-control: {:?}", player.time_control_status()?);
-    println!("waiting reason raw: {:?}", player.reason_for_waiting_to_play()?);
+    println!(
+        "waiting reason raw: {:?}",
+        player.reason_for_waiting_to_play()?
+    );
     println!("waiting reason typed: {:?}", player.waiting_reason()?);
     println!("current item present: {}", player.current_item().is_some());
     println!("volume: {}", player.volume()?);
@@ -24,7 +27,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match player_eligible_for_hdr_playback_did_change_notification() {
         Ok(notification) => {
             println!("HDR notification: {notification}");
-            println!("eligible for HDR playback: {}", player.eligible_for_hdr_playback()?);
+            println!(
+                "eligible for HDR playback: {}",
+                player.eligible_for_hdr_playback()?
+            );
         }
         Err(error) => println!("HDR APIs unavailable: {error}"),
     }

@@ -29,17 +29,17 @@ impl PlayerItemOutput<'_> {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
+    /// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
     pub fn suppresses_player_rendering(&self) -> bool {
         unsafe { ffi::av_player_item_output_suppresses_player_rendering(self.ptr) }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_suppresses_player_rendering`.
+    /// Calls the `AVPlayer` framework counterpart for `set_suppresses_player_rendering`.
     pub fn set_suppresses_player_rendering(&self, suppresses: bool) {
         unsafe { ffi::av_player_item_output_set_suppresses_player_rendering(self.ptr, suppresses) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `item_time_for_host_time`.
+    /// Calls the `AVPlayer` framework counterpart for `item_time_for_host_time`.
     pub fn item_time_for_host_time(&self, host_time_seconds: f64) -> Result<Time, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe {
@@ -55,7 +55,7 @@ impl PlayerItemOutput<'_> {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `item_time_for_mach_absolute_time`.
+    /// Calls the `AVPlayer` framework counterpart for `item_time_for_mach_absolute_time`.
     pub fn item_time_for_mach_absolute_time(
         &self,
         mach_absolute_time: i64,

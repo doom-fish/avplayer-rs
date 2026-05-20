@@ -16,11 +16,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     #![allow(clippy::future_not_send)]
+    use avplayer::Time;
     use avplayer::{
         async_api::{AsyncAsset, AsyncPlayer, AsyncPlayerItem},
         Player, PlayerItem, UrlAsset,
     };
-    use avplayer::Time;
 
     let path = "target/example-artifacts/test.aiff";
     if !std::path::Path::new(path).exists() {
@@ -32,9 +32,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Asset property loading ────────────────────────────────────────────────
     println!("=== AsyncAsset::load_properties ===");
     let asset = UrlAsset::from_file_path(path)?;
-    let props = AsyncAsset::new(asset.as_asset())
-        .load_properties()
-        .await?;
+    let props = AsyncAsset::new(asset.as_asset()).load_properties().await?;
     println!("  duration       : {:?}", props.duration);
     println!("  is_playable    : {}", props.is_playable);
     println!("  is_exportable  : {}", props.is_exportable);
@@ -70,7 +68,11 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         let by_id = AsyncAsset::new(asset.as_asset())
             .load_track_with_id(first.track_id)
             .await?;
-        println!("  found track by id={}: {}", first.track_id, by_id.is_some());
+        println!(
+            "  found track by id={}: {}",
+            first.track_id,
+            by_id.is_some()
+        );
     }
     let missing = AsyncAsset::new(asset.as_asset())
         .load_track_with_id(99999)
@@ -87,9 +89,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Player seek ───────────────────────────────────────────────────────────
     println!("=== AsyncPlayer::seek ===");
     let player = Player::from_item(&item)?;
-    let finished = AsyncPlayer::new(&player)
-        .seek(Time::new(0, 1))
-        .await?;
+    let finished = AsyncPlayer::new(&player).seek(Time::new(0, 1)).await?;
     println!("  player seek finished: {finished}");
 
     // ── Player preroll ────────────────────────────────────────────────────────

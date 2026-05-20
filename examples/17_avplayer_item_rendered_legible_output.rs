@@ -20,8 +20,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     println!("output count after add: {}", item.output_count()?);
-    println!("suppresses rendering: {}", output.suppresses_player_rendering()?);
-    println!("advance interval: {}", output.advance_interval_for_delegate_invocation()?);
+    println!(
+        "suppresses rendering: {}",
+        output.suppresses_player_rendering()?
+    );
+    println!(
+        "advance interval: {}",
+        output.advance_interval_for_delegate_invocation()?
+    );
     println!("video display size: {:?}", output.video_display_size()?);
     item.remove_rendered_legible_output(&output);
     Ok(())

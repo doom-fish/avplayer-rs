@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.0] - 2026-05-20
+
+### Added
+
+- Bounded async stream wrappers for `AVAssetDownloadURLSession` background delegate events, `AVAssetResourceLoader` loading-request observation, and `AVAssetReaderOutputCaptionAdaptor` caption-validation observation, complementing the existing `AVContentKeySession` event stream support.
+- Async stream smoke coverage for the new asset-download and resource-loader helpers plus compile coverage for caption-validation streams.
+
+### Notes
+
+- Phase 32 completeness + async sweep.
+
 ## [0.6.1] - 2026-05-20
 
 - Added in-`src/` unit tests across `time`, `url_asset`, `player_interstitial_event`, and `player_media_selection_criteria` (Tier 2 quality polish), providing fast `cargo test --lib` fail-fast signal alongside the existing integration tests under `tests/`.

@@ -16,7 +16,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = PlayerVideoOutput::new(&spec)?;
     player.set_video_output(Some(&output));
 
-    println!("preferred tag collections: {:?}", spec.preferred_tag_collections()?);
+    println!(
+        "preferred tag collections: {:?}",
+        spec.preferred_tag_collections()?
+    );
     println!("tag collection tags: {:?}", mono.tags()?);
     println!(
         "sample at host t=0 available: {}",

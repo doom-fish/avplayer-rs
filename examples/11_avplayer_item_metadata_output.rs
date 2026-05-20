@@ -29,9 +29,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         output.as_output().item_time_for_mach_absolute_time(0)?
     );
     {
-        let _observer = output.observe(Some("examples.avplayer-item-metadata-output"), |event| {
-            println!("metadata output event: {event:?}");
-        })?;
+        let _observer =
+            output.observe(Some("examples.avplayer-item-metadata-output"), |event| {
+                println!("metadata output event: {event:?}");
+            })?;
         println!("has delegate after observe: {}", output.has_delegate()?);
     }
     println!(

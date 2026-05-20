@@ -531,7 +531,10 @@ impl ContentKeySession {
 
         if let Some(identifier) = identifier {
             match (self.key_system()?, identifier) {
-                (ContentKeySystem::ClearKey | ContentKeySystem::AuthorizationToken, ContentKeyIdentifier::String(_)) => {}
+                (
+                    ContentKeySystem::ClearKey | ContentKeySystem::AuthorizationToken,
+                    ContentKeyIdentifier::String(_),
+                ) => {}
                 (ContentKeySystem::ClearKey | ContentKeySystem::AuthorizationToken, _) => {
                     return Err(AVPlayerError::InvalidArgument(
                         "clear-key and authorization-token content-key requests require string identifiers"
@@ -560,7 +563,9 @@ impl ContentKeySession {
                     initialization_data.as_ptr()
                 },
                 initialization_data.len(),
-                options_json.as_ref().map_or(ptr::null(), |json| json.as_ptr()),
+                options_json
+                    .as_ref()
+                    .map_or(ptr::null(), |json| json.as_ptr()),
                 &mut err,
             )
         };
@@ -663,7 +668,11 @@ impl ContentKeyResponse {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_content_key_response_create_fair_play_streaming(
-                if bytes.is_empty() { ptr::null() } else { bytes.as_ptr() },
+                if bytes.is_empty() {
+                    ptr::null()
+                } else {
+                    bytes.as_ptr()
+                },
                 bytes.len(),
                 &mut err,
             )
@@ -709,7 +718,11 @@ impl ContentKeyResponse {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_content_key_response_create_authorization_token(
-                if bytes.is_empty() { ptr::null() } else { bytes.as_ptr() },
+                if bytes.is_empty() {
+                    ptr::null()
+                } else {
+                    bytes.as_ptr()
+                },
                 bytes.len(),
                 &mut err,
             )
@@ -759,7 +772,10 @@ impl ContentKeySpecifier {
     }
 
     pub fn identifier(&self) -> Result<Option<ContentKeyIdentifier>, AVPlayerError> {
-        Ok(self.info()?.identifier.map(ContentKeyIdentifier::from_payload))
+        Ok(self
+            .info()?
+            .identifier
+            .map(ContentKeyIdentifier::from_payload))
     }
 
     pub fn options(&self) -> Result<ContentKeyRequestOptions, AVPlayerError> {
@@ -819,7 +835,10 @@ impl ContentKeyRequest {
     }
 
     pub fn identifier(&self) -> Result<Option<ContentKeyIdentifier>, AVPlayerError> {
-        Ok(self.info()?.identifier.map(ContentKeyIdentifier::from_payload))
+        Ok(self
+            .info()?
+            .identifier
+            .map(ContentKeyIdentifier::from_payload))
     }
 
     pub fn initialization_data(&self) -> Result<Option<Vec<u8>>, AVPlayerError> {
@@ -906,7 +925,9 @@ impl ContentKeyRequest {
         request_process_response_error(self.ptr, message.as_ref())
     }
 
-    pub fn respond_by_requesting_persistable_content_key_request(&self) -> Result<(), AVPlayerError> {
+    pub fn respond_by_requesting_persistable_content_key_request(
+        &self,
+    ) -> Result<(), AVPlayerError> {
         request_request_persistable_content_key(self.ptr)
     }
 }
@@ -925,7 +946,10 @@ impl PersistableContentKeyRequest {
     }
 
     pub fn identifier(&self) -> Result<Option<ContentKeyIdentifier>, AVPlayerError> {
-        Ok(self.info()?.identifier.map(ContentKeyIdentifier::from_payload))
+        Ok(self
+            .info()?
+            .identifier
+            .map(ContentKeyIdentifier::from_payload))
     }
 
     pub fn initialization_data(&self) -> Result<Option<Vec<u8>>, AVPlayerError> {
@@ -1187,7 +1211,9 @@ fn content_key_session_event_from_payload(
         "updated_persistable_content_key" => {
             Some(ContentKeySessionEvent::UpdatedPersistableContentKey {
                 persistable_content_key: payload.persistable_content_key.unwrap_or_default(),
-                key_identifier: payload.key_identifier.map(ContentKeyIdentifier::from_payload),
+                key_identifier: payload
+                    .key_identifier
+                    .map(ContentKeyIdentifier::from_payload),
             })
         }
         "failed" => Some(ContentKeySessionEvent::Failed {

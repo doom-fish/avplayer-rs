@@ -32,13 +32,13 @@ struct RenderedCaptionImagePayload {
 /// Mirrors the `AVPlayer` framework counterpart for `RenderedCaptionImage`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderedCaptionImage {
-/// Mirrors the `AVPlayer` framework property for `x`.
+    /// Mirrors the `AVPlayer` framework property for `x`.
     pub x: f64,
-/// Mirrors the `AVPlayer` framework property for `y`.
+    /// Mirrors the `AVPlayer` framework property for `y`.
     pub y: f64,
-/// Mirrors the `AVPlayer` framework property for `width`.
+    /// Mirrors the `AVPlayer` framework property for `width`.
     pub width: usize,
-/// Mirrors the `AVPlayer` framework property for `height`.
+    /// Mirrors the `AVPlayer` framework property for `height`.
     pub height: usize,
 }
 
@@ -65,9 +65,9 @@ struct RenderedLegibleOutputEventPayload {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum RenderedLegibleOutputEvent {
-/// Mirrors the `AVPlayer` framework case `SequenceWasFlushed`.
+    /// Mirrors the `AVPlayer` framework case `SequenceWasFlushed`.
     SequenceWasFlushed,
-/// Mirrors the `AVPlayer` framework case `RenderedCaptionImages`.
+    /// Mirrors the `AVPlayer` framework case `RenderedCaptionImages`.
     RenderedCaptionImages {
         item_time: Time,
         caption_images: Vec<RenderedCaptionImage>,
@@ -94,7 +94,7 @@ impl Drop for PlayerItemRenderedLegibleOutput {
 }
 
 impl PlayerItemRenderedLegibleOutput {
-/// Calls the `AVPlayer` framework counterpart for `new`.
+    /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(video_display_size: Size) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
@@ -120,34 +120,34 @@ impl PlayerItemRenderedLegibleOutput {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
+    /// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
     pub fn suppresses_player_rendering(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.suppresses_player_rendering)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_suppresses_player_rendering`.
+    /// Calls the `AVPlayer` framework counterpart for `set_suppresses_player_rendering`.
     pub fn set_suppresses_player_rendering(&self, suppresses: bool) {
         unsafe { ffi::av_player_item_output_set_suppresses_player_rendering(self.ptr, suppresses) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `advance_interval_for_delegate_invocation`.
+    /// Calls the `AVPlayer` framework counterpart for `advance_interval_for_delegate_invocation`.
     pub fn advance_interval_for_delegate_invocation(&self) -> Result<f64, AVPlayerError> {
         Ok(self.info()?.advance_interval_for_delegate_invocation)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_advance_interval_for_delegate_invocation`.
+    /// Calls the `AVPlayer` framework counterpart for `set_advance_interval_for_delegate_invocation`.
     pub fn set_advance_interval_for_delegate_invocation(&self, interval: f64) {
         unsafe {
             ffi::av_player_item_rendered_legible_output_set_advance_interval(self.ptr, interval);
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `video_display_size`.
+    /// Calls the `AVPlayer` framework counterpart for `video_display_size`.
     pub fn video_display_size(&self) -> Result<Size, AVPlayerError> {
         Ok(self.info()?.video_display_size)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_video_display_size`.
+    /// Calls the `AVPlayer` framework counterpart for `set_video_display_size`.
     pub fn set_video_display_size(&self, value: Size) {
         unsafe {
             ffi::av_player_item_rendered_legible_output_set_video_display_size(
@@ -158,7 +158,7 @@ impl PlayerItemRenderedLegibleOutput {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `observe`.
+    /// Calls the `AVPlayer` framework counterpart for `observe`.
     pub fn observe<F>(
         &self,
         queue_label: Option<&str>,
@@ -216,7 +216,7 @@ unsafe impl Send for PlayerItemRenderedLegibleOutput {}
 unsafe impl Send for RenderedLegibleOutputObserver {}
 
 impl PlayerItem {
-/// Calls the `AVPlayer` framework counterpart for `add_rendered_legible_output`.
+    /// Calls the `AVPlayer` framework counterpart for `add_rendered_legible_output`.
     pub fn add_rendered_legible_output(
         &self,
         output: &PlayerItemRenderedLegibleOutput,
@@ -229,7 +229,7 @@ impl PlayerItem {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `remove_rendered_legible_output`.
+    /// Calls the `AVPlayer` framework counterpart for `remove_rendered_legible_output`.
     pub fn remove_rendered_legible_output(&self, output: &PlayerItemRenderedLegibleOutput) {
         unsafe { ffi::av_player_item_remove_output(self.ptr, output.ptr) };
     }

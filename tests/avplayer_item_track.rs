@@ -14,9 +14,8 @@ fn avplayer_item_track_exposes_bridge_state() -> support::TestResult {
         assert_eq!(track.is_enabled()?, !was_enabled);
         track.set_enabled(was_enabled);
         let _ = track.video_field_mode()?;
-        track.set_typed_video_field_mode(Some(
-            &PlayerItemTrackVideoFieldMode::DeinterlaceFields,
-        ))?;
+        track
+            .set_typed_video_field_mode(Some(&PlayerItemTrackVideoFieldMode::DeinterlaceFields))?;
         let _ = track.typed_video_field_mode()?;
         track.set_typed_video_field_mode(None)?;
         if let Some(asset_track) = track.asset_track()? {

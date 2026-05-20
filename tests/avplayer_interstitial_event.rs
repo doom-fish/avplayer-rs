@@ -5,7 +5,9 @@ use avplayer::prelude::*;
 #[test]
 fn avplayer_interstitial_event_surfaces_smoke() -> support::TestResult {
     let player = support::player("test-avplayer-interstitial-event")?;
-    let item = player.current_item().expect("player should have a current item");
+    let item = player
+        .current_item()
+        .expect("player should have a current item");
 
     let event = PlayerInterstitialEvent::new(&item, Time::new(0, 1))?;
     event.set_identifier("smoke-interstitial")?;

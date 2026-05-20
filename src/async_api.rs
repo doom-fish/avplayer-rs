@@ -15,7 +15,11 @@
 //!
 //! KVO-based observation (`PlayerItemObserver`, `PeriodicTimeObserver`, etc.)
 //! fires multiple times and therefore belongs to a Stream-based "Tier 2" async
-//! pattern — **not** this module.
+//! pattern — **not** this module. The stream-based wrappers live on their
+//! owning safe wrappers, e.g. `ContentKeySession::observe_events`,
+//! `AssetDownloadURLSession::background_with_events`,
+//! `AssetResourceLoader::observe_loading_request_events`, and
+//! `AssetReaderOutputCaptionAdaptor::observe_validation_events`.
 //!
 //! ## Example
 //!

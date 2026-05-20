@@ -38,36 +38,36 @@ struct PlayerInfoPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum MediaCharacteristic {
-/// Mirrors the `AVPlayer` framework case `Audible`.
+    /// Mirrors the `AVPlayer` framework case `Audible`.
     Audible,
-/// Mirrors the `AVPlayer` framework case `Legible`.
+    /// Mirrors the `AVPlayer` framework case `Legible`.
     Legible,
-/// Mirrors the `AVPlayer` framework case `Visual`.
+    /// Mirrors the `AVPlayer` framework case `Visual`.
     Visual,
-/// Mirrors the `AVPlayer` framework case `ContainsOnlyForcedSubtitles`.
+    /// Mirrors the `AVPlayer` framework case `ContainsOnlyForcedSubtitles`.
     ContainsOnlyForcedSubtitles,
-/// Mirrors the `AVPlayer` framework case `TranscribesSpokenDialogForAccessibility`.
+    /// Mirrors the `AVPlayer` framework case `TranscribesSpokenDialogForAccessibility`.
     TranscribesSpokenDialogForAccessibility,
-/// Mirrors the `AVPlayer` framework case `DescribesMusicAndSoundForAccessibility`.
+    /// Mirrors the `AVPlayer` framework case `DescribesMusicAndSoundForAccessibility`.
     DescribesMusicAndSoundForAccessibility,
-/// Mirrors the `AVPlayer` framework case `DescribesVideoForAccessibility`.
+    /// Mirrors the `AVPlayer` framework case `DescribesVideoForAccessibility`.
     DescribesVideoForAccessibility,
-/// Mirrors the `AVPlayer` framework case `EasyToRead`.
+    /// Mirrors the `AVPlayer` framework case `EasyToRead`.
     EasyToRead,
-/// Mirrors the `AVPlayer` framework case `LanguageTranslation`.
+    /// Mirrors the `AVPlayer` framework case `LanguageTranslation`.
     LanguageTranslation,
-/// Mirrors the `AVPlayer` framework case `DubbedTranslation`.
+    /// Mirrors the `AVPlayer` framework case `DubbedTranslation`.
     DubbedTranslation,
-/// Mirrors the `AVPlayer` framework case `VoiceOverTranslation`.
+    /// Mirrors the `AVPlayer` framework case `VoiceOverTranslation`.
     VoiceOverTranslation,
-/// Mirrors the `AVPlayer` framework case `IsOriginalContent`.
+    /// Mirrors the `AVPlayer` framework case `IsOriginalContent`.
     IsOriginalContent,
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
 impl MediaCharacteristic {
-/// Calls the `AVPlayer` framework counterpart for `as_raw`.
+    /// Calls the `AVPlayer` framework counterpart for `as_raw`.
     #[must_use]
     pub fn as_raw(&self) -> &str {
         match self {
@@ -91,7 +91,7 @@ impl MediaCharacteristic {
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `from_raw`.
+    /// Calls the `AVPlayer` framework counterpart for `from_raw`.
     #[must_use]
     pub fn from_raw(raw: &str) -> Self {
         match raw {
@@ -120,16 +120,16 @@ impl MediaCharacteristic {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerActionAtItemEnd {
-/// Mirrors the `AVPlayer` framework case `Advance`.
+    /// Mirrors the `AVPlayer` framework case `Advance`.
     Advance,
-/// Mirrors the `AVPlayer` framework case `Pause`.
+    /// Mirrors the `AVPlayer` framework case `Pause`.
     Pause,
-/// Mirrors the `AVPlayer` framework case `None`.
+    /// Mirrors the `AVPlayer` framework case `None`.
     None,
 }
 
 impl PlayerActionAtItemEnd {
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
@@ -139,7 +139,7 @@ impl PlayerActionAtItemEnd {
         }
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn as_raw(self) -> i32 {
         match self {
@@ -154,18 +154,18 @@ impl PlayerActionAtItemEnd {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerTimeControlStatus {
-/// Mirrors the `AVPlayer` framework case `Paused`.
+    /// Mirrors the `AVPlayer` framework case `Paused`.
     Paused,
-/// Mirrors the `AVPlayer` framework case `WaitingToPlayAtSpecifiedRate`.
+    /// Mirrors the `AVPlayer` framework case `WaitingToPlayAtSpecifiedRate`.
     WaitingToPlayAtSpecifiedRate,
-/// Mirrors the `AVPlayer` framework case `Playing`.
+    /// Mirrors the `AVPlayer` framework case `Playing`.
     Playing,
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(i32),
 }
 
 impl PlayerTimeControlStatus {
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
@@ -181,15 +181,15 @@ impl PlayerTimeControlStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerWaitingReason {
-/// Mirrors the `AVPlayer` framework case `ToMinimizeStalls`.
+    /// Mirrors the `AVPlayer` framework case `ToMinimizeStalls`.
     ToMinimizeStalls,
-/// Mirrors the `AVPlayer` framework case `WhileEvaluatingBufferingRate`.
+    /// Mirrors the `AVPlayer` framework case `WhileEvaluatingBufferingRate`.
     WhileEvaluatingBufferingRate,
-/// Mirrors the `AVPlayer` framework case `WithNoItemToPlay`.
+    /// Mirrors the `AVPlayer` framework case `WithNoItemToPlay`.
     WithNoItemToPlay,
-/// Mirrors the `AVPlayer` framework case `ForCoordinatedPlayback`.
+    /// Mirrors the `AVPlayer` framework case `ForCoordinatedPlayback`.
     ForCoordinatedPlayback,
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
@@ -211,13 +211,13 @@ impl PlayerWaitingReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerAudiovisualBackgroundPlaybackPolicy {
-/// Mirrors the `AVPlayer` framework case `Automatic`.
+    /// Mirrors the `AVPlayer` framework case `Automatic`.
     Automatic,
-/// Mirrors the `AVPlayer` framework case `Pauses`.
+    /// Mirrors the `AVPlayer` framework case `Pauses`.
     Pauses,
-/// Mirrors the `AVPlayer` framework case `ContinuesIfPossible`.
+    /// Mirrors the `AVPlayer` framework case `ContinuesIfPossible`.
     ContinuesIfPossible,
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(i32),
 }
 
@@ -245,13 +245,13 @@ impl PlayerAudiovisualBackgroundPlaybackPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerNetworkResourcePriority {
-/// Mirrors the `AVPlayer` framework case `Default`.
+    /// Mirrors the `AVPlayer` framework case `Default`.
     Default,
-/// Mirrors the `AVPlayer` framework case `Low`.
+    /// Mirrors the `AVPlayer` framework case `Low`.
     Low,
-/// Mirrors the `AVPlayer` framework case `High`.
+    /// Mirrors the `AVPlayer` framework case `High`.
     High,
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(i32),
 }
 
@@ -279,15 +279,15 @@ impl PlayerNetworkResourcePriority {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PlayerRateDidChangeReason {
-/// Mirrors the `AVPlayer` framework case `SetRateCalled`.
+    /// Mirrors the `AVPlayer` framework case `SetRateCalled`.
     SetRateCalled,
-/// Mirrors the `AVPlayer` framework case `SetRateFailed`.
+    /// Mirrors the `AVPlayer` framework case `SetRateFailed`.
     SetRateFailed,
-/// Mirrors the `AVPlayer` framework case `AudioSessionInterrupted`.
+    /// Mirrors the `AVPlayer` framework case `AudioSessionInterrupted`.
     AudioSessionInterrupted,
-/// Mirrors the `AVPlayer` framework case `AppBackgrounded`.
+    /// Mirrors the `AVPlayer` framework case `AppBackgrounded`.
     AppBackgrounded,
-/// Mirrors the `AVPlayer` framework case `Unknown`.
+    /// Mirrors the `AVPlayer` framework case `Unknown`.
     Unknown(String),
 }
 
@@ -314,11 +314,11 @@ struct PlayerRateDidChangeEventPayload {
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerRateDidChangeEvent`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerRateDidChangeEvent {
-/// Mirrors the `AVPlayer` framework property for `rate`.
+    /// Mirrors the `AVPlayer` framework property for `rate`.
     pub rate: f32,
-/// Mirrors the `AVPlayer` framework property for `reason`.
+    /// Mirrors the `AVPlayer` framework property for `reason`.
     pub reason: Option<PlayerRateDidChangeReason>,
-/// Mirrors the `AVPlayer` framework property for `has_originating_participant`.
+    /// Mirrors the `AVPlayer` framework property for `has_originating_participant`.
     pub has_originating_participant: bool,
 }
 
@@ -342,7 +342,7 @@ impl Drop for PlayerMediaSelectionCriteria {
 }
 
 impl PlayerMediaSelectionCriteria {
-/// Calls the `AVPlayer` framework counterpart for `new`.
+    /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(
         preferred_languages: &[impl AsRef<str>],
         preferred_media_characteristics: &[MediaCharacteristic],
@@ -354,7 +354,7 @@ impl PlayerMediaSelectionCriteria {
         )
     }
 
-/// Calls the `AVPlayer` framework counterpart for `with_principal_media_characteristics`.
+    /// Calls the `AVPlayer` framework counterpart for `with_principal_media_characteristics`.
     pub fn with_principal_media_characteristics(
         principal_media_characteristics: &[MediaCharacteristic],
         preferred_languages: &[impl AsRef<str>],
@@ -414,12 +414,12 @@ impl PlayerMediaSelectionCriteria {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `preferred_languages`.
+    /// Calls the `AVPlayer` framework counterpart for `preferred_languages`.
     pub fn preferred_languages(&self) -> Result<Vec<String>, AVPlayerError> {
         Ok(self.info()?.preferred_languages.unwrap_or_default())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `preferred_media_characteristics`.
+    /// Calls the `AVPlayer` framework counterpart for `preferred_media_characteristics`.
     pub fn preferred_media_characteristics(
         &self,
     ) -> Result<Vec<MediaCharacteristic>, AVPlayerError> {
@@ -432,7 +432,7 @@ impl PlayerMediaSelectionCriteria {
             .collect())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `principal_media_characteristics`.
+    /// Calls the `AVPlayer` framework counterpart for `principal_media_characteristics`.
     pub fn principal_media_characteristics(
         &self,
     ) -> Result<Vec<MediaCharacteristic>, AVPlayerError> {
@@ -456,7 +456,7 @@ impl Player {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `time_control_status`.
+    /// Calls the `AVPlayer` framework counterpart for `time_control_status`.
     pub fn time_control_status(&self) -> Result<PlayerTimeControlStatus, AVPlayerError> {
         Ok(PlayerTimeControlStatus::from_raw(
             self.info_for_media_selection()?
@@ -465,12 +465,12 @@ impl Player {
         ))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `reason_for_waiting_to_play`.
+    /// Calls the `AVPlayer` framework counterpart for `reason_for_waiting_to_play`.
     pub fn reason_for_waiting_to_play(&self) -> Result<Option<String>, AVPlayerError> {
         Ok(self.info_for_media_selection()?.reason_for_waiting_to_play)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `waiting_reason`.
+    /// Calls the `AVPlayer` framework counterpart for `waiting_reason`.
     pub fn waiting_reason(&self) -> Result<Option<PlayerWaitingReason>, AVPlayerError> {
         Ok(self
             .info_for_media_selection()?
@@ -479,7 +479,7 @@ impl Player {
             .map(PlayerWaitingReason::from_raw))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `action_at_item_end`.
+    /// Calls the `AVPlayer` framework counterpart for `action_at_item_end`.
     pub fn action_at_item_end(&self) -> Result<PlayerActionAtItemEnd, AVPlayerError> {
         Ok(PlayerActionAtItemEnd::from_raw(
             self.info_for_media_selection()?
@@ -488,7 +488,7 @@ impl Player {
         ))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_action_at_item_end`.
+    /// Calls the `AVPlayer` framework counterpart for `set_action_at_item_end`.
     pub fn set_action_at_item_end(
         &self,
         action: PlayerActionAtItemEnd,
@@ -502,27 +502,27 @@ impl Player {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `volume`.
+    /// Calls the `AVPlayer` framework counterpart for `volume`.
     pub fn volume(&self) -> Result<f32, AVPlayerError> {
         Ok(self.info_for_media_selection()?.volume.unwrap_or(1.0))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_volume`.
+    /// Calls the `AVPlayer` framework counterpart for `set_volume`.
     pub fn set_volume(&self, volume: f32) {
         unsafe { ffi::av_player_set_volume(self.ptr, volume) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `is_muted`.
+    /// Calls the `AVPlayer` framework counterpart for `is_muted`.
     pub fn is_muted(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info_for_media_selection()?.muted.unwrap_or(false))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_muted`.
+    /// Calls the `AVPlayer` framework counterpart for `set_muted`.
     pub fn set_muted(&self, muted: bool) {
         unsafe { ffi::av_player_set_muted(self.ptr, muted) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `automatically_waits_to_minimize_stalling`.
+    /// Calls the `AVPlayer` framework counterpart for `automatically_waits_to_minimize_stalling`.
     pub fn automatically_waits_to_minimize_stalling(&self) -> Result<bool, AVPlayerError> {
         Ok(self
             .info_for_media_selection()?
@@ -530,12 +530,12 @@ impl Player {
             .unwrap_or(false))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_automatically_waits_to_minimize_stalling`.
+    /// Calls the `AVPlayer` framework counterpart for `set_automatically_waits_to_minimize_stalling`.
     pub fn set_automatically_waits_to_minimize_stalling(&self, enabled: bool) {
         unsafe { ffi::av_player_set_automatically_waits_to_minimize_stalling(self.ptr, enabled) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `applies_media_selection_criteria_automatically`.
+    /// Calls the `AVPlayer` framework counterpart for `applies_media_selection_criteria_automatically`.
     pub fn applies_media_selection_criteria_automatically(&self) -> Result<bool, AVPlayerError> {
         Ok(self
             .info_for_media_selection()?
@@ -543,21 +543,21 @@ impl Player {
             .unwrap_or(false))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_applies_media_selection_criteria_automatically`.
+    /// Calls the `AVPlayer` framework counterpart for `set_applies_media_selection_criteria_automatically`.
     pub fn set_applies_media_selection_criteria_automatically(&self, enabled: bool) {
         unsafe {
             ffi::av_player_set_applies_media_selection_criteria_automatically(self.ptr, enabled);
         }
     }
 
-/// Calls the `AVPlayer` framework counterpart for `eligible_for_hdr_playback`.
+    /// Calls the `AVPlayer` framework counterpart for `eligible_for_hdr_playback`.
     pub fn eligible_for_hdr_playback(&self) -> Result<bool, AVPlayerError> {
         self.info_for_media_selection()?
             .eligible_for_hdr_playback
             .ok_or_else(|| availability_error("AVPlayer.eligibleForHDRPlayback", "10.15"))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `audiovisual_background_playback_policy`.
+    /// Calls the `AVPlayer` framework counterpart for `audiovisual_background_playback_policy`.
     pub fn audiovisual_background_playback_policy(
         &self,
     ) -> Result<PlayerAudiovisualBackgroundPlaybackPolicy, AVPlayerError> {
@@ -570,7 +570,7 @@ impl Player {
         ))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_audiovisual_background_playback_policy`.
+    /// Calls the `AVPlayer` framework counterpart for `set_audiovisual_background_playback_policy`.
     pub fn set_audiovisual_background_playback_policy(
         &self,
         policy: PlayerAudiovisualBackgroundPlaybackPolicy,
@@ -589,7 +589,7 @@ impl Player {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `network_resource_priority`.
+    /// Calls the `AVPlayer` framework counterpart for `network_resource_priority`.
     pub fn network_resource_priority(
         &self,
     ) -> Result<PlayerNetworkResourcePriority, AVPlayerError> {
@@ -600,7 +600,7 @@ impl Player {
         ))
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_network_resource_priority`.
+    /// Calls the `AVPlayer` framework counterpart for `set_network_resource_priority`.
     pub fn set_network_resource_priority(
         &self,
         priority: PlayerNetworkResourcePriority,
@@ -615,7 +615,7 @@ impl Player {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `observe_rate_changes`.
+    /// Calls the `AVPlayer` framework counterpart for `observe_rate_changes`.
     pub fn observe_rate_changes<F>(
         &self,
         queue_label: Option<&str>,
@@ -651,7 +651,7 @@ impl Player {
         Ok(PlayerRateDidChangeObserver { token })
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_media_selection_criteria`.
+    /// Calls the `AVPlayer` framework counterpart for `set_media_selection_criteria`.
     pub fn set_media_selection_criteria(
         &self,
         media_characteristic: &MediaCharacteristic,
@@ -674,7 +674,7 @@ impl Player {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `media_selection_criteria`.
+    /// Calls the `AVPlayer` framework counterpart for `media_selection_criteria`.
     pub fn media_selection_criteria(
         &self,
         media_characteristic: &MediaCharacteristic,
@@ -782,7 +782,10 @@ mod tests {
             (MediaCharacteristic::Audible, "audible"),
             (MediaCharacteristic::Legible, "legible"),
             (MediaCharacteristic::Visual, "visual"),
-            (MediaCharacteristic::IsOriginalContent, "is_original_content"),
+            (
+                MediaCharacteristic::IsOriginalContent,
+                "is_original_content",
+            ),
         ] {
             assert_eq!(characteristic.as_raw(), raw);
             assert_eq!(MediaCharacteristic::from_raw(raw), characteristic);
@@ -857,10 +860,16 @@ mod tests {
         for (raw, policy) in [
             (1, PlayerAudiovisualBackgroundPlaybackPolicy::Automatic),
             (2, PlayerAudiovisualBackgroundPlaybackPolicy::Pauses),
-            (3, PlayerAudiovisualBackgroundPlaybackPolicy::ContinuesIfPossible),
+            (
+                3,
+                PlayerAudiovisualBackgroundPlaybackPolicy::ContinuesIfPossible,
+            ),
             (9, PlayerAudiovisualBackgroundPlaybackPolicy::Unknown(9)),
         ] {
-            assert_eq!(PlayerAudiovisualBackgroundPlaybackPolicy::from_raw(raw), policy);
+            assert_eq!(
+                PlayerAudiovisualBackgroundPlaybackPolicy::from_raw(raw),
+                policy
+            );
             assert_eq!(policy.as_raw(), raw);
         }
     }

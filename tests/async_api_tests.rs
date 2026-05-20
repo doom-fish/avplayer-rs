@@ -4,8 +4,7 @@
 mod async_tests {
     use avplayer::{
         async_api::{AsyncAsset, AsyncPlayer, AsyncPlayerItem},
-        Time,
-        Player, PlayerItem, UrlAsset,
+        Player, PlayerItem, Time, UrlAsset,
     };
 
     // Helper: resolve the shared test artifact path.
@@ -43,7 +42,10 @@ mod async_tests {
             .expect("load_properties");
         assert!(props.is_playable, "AIFF should be playable");
         assert!(!props.has_protected_content, "test AIFF has no DRM");
-        assert!((props.preferred_rate - 1.0_f32).abs() < f32::EPSILON, "default preferred rate");
+        assert!(
+            (props.preferred_rate - 1.0_f32).abs() < f32::EPSILON,
+            "default preferred rate"
+        );
     }
 
     #[test]
@@ -120,10 +122,9 @@ mod async_tests {
         let tracks = pollster::block_on(AsyncAsset::new(asset.as_asset()).load_tracks())
             .expect("load_tracks");
         let first_id = tracks[0].track_id;
-        let found = pollster::block_on(
-            AsyncAsset::new(asset.as_asset()).load_track_with_id(first_id),
-        )
-        .expect("load_track_with_id");
+        let found =
+            pollster::block_on(AsyncAsset::new(asset.as_asset()).load_track_with_id(first_id))
+                .expect("load_track_with_id");
         assert!(found.is_some(), "should find track with id={first_id}");
         assert_eq!(found.unwrap().track_id, first_id);
     }
@@ -150,9 +151,8 @@ mod async_tests {
             return;
         }
         let item = PlayerItem::from_file_path(&path).expect("PlayerItem::from_file_path");
-        let finished =
-            pollster::block_on(AsyncPlayerItem::new(&item).seek(Time::new(0, 1)))
-                .expect("PlayerItem seek");
+        let finished = pollster::block_on(AsyncPlayerItem::new(&item).seek(Time::new(0, 1)))
+            .expect("PlayerItem seek");
         assert!(finished, "seek to 0.0 on a ready item should complete");
     }
 
@@ -166,9 +166,8 @@ mod async_tests {
         }
         let item = PlayerItem::from_file_path(&path).expect("PlayerItem::from_file_path");
         let player = Player::from_item(&item).expect("Player::from_item");
-        let finished =
-            pollster::block_on(AsyncPlayer::new(&player).seek(Time::new(0, 1)))
-                .expect("Player seek");
+        let finished = pollster::block_on(AsyncPlayer::new(&player).seek(Time::new(0, 1)))
+            .expect("Player seek");
         assert!(finished, "seek to 0.0 should complete");
     }
 
@@ -182,8 +181,8 @@ mod async_tests {
         }
         let item = PlayerItem::from_file_path(&path).expect("PlayerItem::from_file_path");
         let player = Player::from_item(&item).expect("Player::from_item");
-        let finished = pollster::block_on(AsyncPlayer::new(&player).preroll(1.0))
-            .expect("Player preroll");
+        let finished =
+            pollster::block_on(AsyncPlayer::new(&player).preroll(1.0)).expect("Player preroll");
         // preroll may return false if item is not ready; both outcomes are valid.
         let _ = finished;
     }

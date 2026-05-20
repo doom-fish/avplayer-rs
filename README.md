@@ -2,10 +2,11 @@
 
 Safe Rust bindings for Apple's [AVFoundation playback stack](https://developer.apple.com/documentation/avfoundation) on macOS: `AVPlayer`, `AVPlayerItem`, `AVPlayerLayer`, `AVQueuePlayer`, `AVPlayerLooper`, `AVAsset`, `AVURLAsset`, and `AVAssetReader`.
 
-> **Status:** `0.4.0` expands the crate beyond the original playback-only audit
+> **Status:** `0.7.0` expands the crate beyond the original playback-only audit
 > with metadata-group, media-selection, asset-variant, fragmented-asset,
 > reader-adaptor, and sample-buffer-display-layer wrappers while retaining the
-> Tier-1 `async_api` module. See [`COVERAGE.md`](COVERAGE.md).
+> Tier-1 `async_api` module plus Tier-2 delegate/event streams for content-key,
+> asset-download, resource-loader, and caption-validation observation. See [`COVERAGE.md`](COVERAGE.md).
 
 ## Quick start
 
@@ -35,7 +36,7 @@ Enable the `async` Cargo feature for executor-agnostic `Future` wrappers around
 `AVFoundation`'s `async throws` and completion-handler APIs:
 
 ```toml
-avplayer = { version = "0.4", features = ["async"] }
+avplayer = { version = "0.7", features = ["async"] }
 ```
 
 ```rust,no_run
@@ -59,8 +60,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `async_api::AsyncPlayerItem` | `AVPlayerItem.seek(to:completionHandler:)` |
 | `async_api::AsyncPlayer` | `AVPlayer.seek(to:completionHandler:)`, `preroll(atRate:completionHandler:)` |
 
-KVO / notification streams (multi-fire) belong to a Tier-2 pattern and are not
-included in this module.
+The Tier-1 `async_api` module covers one-shot futures. Multi-fire delegate
+streams live alongside their owning types: use `ContentKeySession::observe_events`
+/ `event_stream`, `AssetDownloadURLSession::background_with_events` /
+`background_events`, `AssetResourceLoader::observe_loading_request_events` /
+`loading_request_stream`, and `AssetReaderOutputCaptionAdaptor::observe_validation_events`
+/ `validation_event_stream`.
 
 ## Highlights
 

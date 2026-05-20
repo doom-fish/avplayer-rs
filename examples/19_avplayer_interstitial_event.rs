@@ -5,7 +5,9 @@ use avplayer::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let player = support::player("example-avplayer-interstitial-event")?;
-    let item = player.current_item().expect("player should have a current item");
+    let item = player
+        .current_item()
+        .expect("player should have a current item");
 
     let event = PlayerInterstitialEvent::new(&item, Time::new(0, 1))?;
     event.set_identifier("example-interstitial")?;

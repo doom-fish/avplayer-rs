@@ -27,8 +27,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match item.variant_preferences() {
         Ok(preferences) => {
             println!("variant preferences: {preferences:?}");
-            item.set_variant_preferences(preferences | VariantPreferences::SCALABILITY_TO_LOSSLESS_AUDIO)?;
-            println!("updated variant preferences: {:?}", item.variant_preferences()?);
+            item.set_variant_preferences(
+                preferences | VariantPreferences::SCALABILITY_TO_LOSSLESS_AUDIO,
+            )?;
+            println!(
+                "updated variant preferences: {:?}",
+                item.variant_preferences()?
+            );
         }
         Err(error) => println!("variant preferences unavailable: {error}"),
     }
@@ -40,7 +45,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         item.content_authorized_for_playback()?,
         item.content_authorization_request_status()?
     );
-    println!("custom video compositor: {:?}", item.custom_video_compositor()?);
+    println!(
+        "custom video compositor: {:?}",
+        item.custom_video_compositor()?
+    );
 
     let player = Player::from_item(&item)?;
     player.play();

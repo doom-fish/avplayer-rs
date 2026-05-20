@@ -9,6 +9,7 @@ use core::ptr;
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
 
+use doom_fish_utils::stream::{BoundedAsyncStream, NextItem};
 use serde::Deserialize;
 
 use crate::asset::UrlAsset;
@@ -172,6 +173,44 @@ impl Drop for AssetResourceLoaderObserver {
     }
 }
 
+#[derive(Debug)]
+/// Async stream of delegate events sourced from `AVAssetResourceLoader`.
+pub struct AssetResourceLoaderEventStream {
+    inner: BoundedAsyncStream<AssetResourceLoaderEvent>,
+    _observer: AssetResourceLoaderObserver,
+}
+
+impl AssetResourceLoaderEventStream {
+    #[must_use]
+    /// Returns the next buffered loader event.
+    pub const fn next(&self) -> NextItem<'_, AssetResourceLoaderEvent> {
+        self.inner.next()
+    }
+
+    #[must_use]
+    /// Returns the next buffered loader event if one is available.
+    pub fn try_next(&self) -> Option<AssetResourceLoaderEvent> {
+        self.inner.try_next()
+    }
+
+    #[must_use]
+    /// Returns the number of currently buffered loader events.
+    pub fn buffered_count(&self) -> usize {
+        self.inner.buffered_count()
+    }
+
+    /// Drops all currently buffered loader events without closing the stream.
+    pub fn clear_buffer(&self) {
+        self.inner.clear_buffer();
+    }
+
+    #[must_use]
+    /// Returns whether the stream has been closed.
+    pub fn is_closed(&self) -> bool {
+        self.inner.is_closed()
+    }
+}
+
 impl UrlAsset {
     pub fn resource_loader(&self) -> AssetResourceLoader {
         let ptr = unsafe { ffi::av_url_asset_copy_resource_loader(self.asset.ptr) };
@@ -258,6 +297,39 @@ impl AssetResourceLoader {
             return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
         }
         Ok(AssetResourceLoaderObserver { token })
+    }
+
+    /// Returns an async stream of loading-request delegate callbacks.
+    ///
+    /// The underlying delegate returns `true` for loading and renewal request
+    /// events so callers can complete those requests asynchronously.
+    pub fn observe_loading_request_events(
+        &self,
+        queue_label: Option<&str>,
+        capacity: usize,
+    ) -> Result<AssetResourceLoaderEventStream, AVPlayerError> {
+        let (inner, sender) = BoundedAsyncStream::new(capacity);
+        let observer = self.observe_loading_requests(queue_label, move |event| {
+            let should_wait = matches!(
+                &event,
+                AssetResourceLoaderEvent::LoadingRequested(_)
+                    | AssetResourceLoaderEvent::RenewalRequested(_)
+            );
+            sender.push(event);
+            should_wait
+        })?;
+        Ok(AssetResourceLoaderEventStream {
+            inner,
+            _observer: observer,
+        })
+    }
+
+    /// Returns an async loading-request stream on the default resource-loader queue label.
+    pub fn loading_request_stream(
+        &self,
+        capacity: usize,
+    ) -> Result<AssetResourceLoaderEventStream, AVPlayerError> {
+        self.observe_loading_request_events(Some("avplayer.resource-loader"), capacity)
     }
 }
 
@@ -640,3 +712,13 @@ unsafe extern "C" fn asset_resource_loader_observer_drop(userdata: *mut c_void) 
         ));
     }
 }
+
+// SAFETY: AVFoundation resource-loader wrappers and observer tokens are opaque
+// retained objects that may cross thread boundaries for async delegate handling.
+unsafe impl Send for AssetResourceLoader {}
+unsafe impl Send for AssetResourceLoadingRequest {}
+unsafe impl Send for AssetResourceRenewalRequest {}
+unsafe impl Send for AssetResourceLoadingContentInformationRequest {}
+unsafe impl Send for AssetResourceLoadingDataRequest {}
+unsafe impl Send for AssetResourceLoadingRequestor {}
+unsafe impl Send for AssetResourceLoaderObserver {}

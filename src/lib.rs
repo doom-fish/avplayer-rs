@@ -54,9 +54,9 @@ pub use asset_cache::AssetCache;
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use asset_download::{
     AggregateAssetDownloadTask, AssetDownloadConfiguration, AssetDownloadContentConfiguration,
-    AssetDownloadDelegateEvent, AssetDownloadStorageManagementPolicy,
-    AssetDownloadStorageManager, AssetDownloadTask, AssetDownloadTaskState,
-    AssetDownloadURLSession, AssetDownloadedAssetEvictionPriority,
+    AssetDownloadDelegateEvent, AssetDownloadDelegateEventStream,
+    AssetDownloadStorageManagementPolicy, AssetDownloadStorageManager, AssetDownloadTask,
+    AssetDownloadTaskState, AssetDownloadURLSession, AssetDownloadedAssetEvictionPriority,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use asset_image_generator::{
@@ -72,11 +72,11 @@ pub use asset_variant::{
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use content_key_session::{
-    ContentKey, ContentKeyEvent, ContentKeyIdentifier, ContentKeyRequest,
-    ContentKeyRequestOptions, ContentKeyRequestRetryReason, ContentKeyRequestStatus,
-    ContentKeyResponse, ContentKeySession, ContentKeySessionEvent, ContentKeySessionEventStream,
-    ContentKeySessionObserver, ContentKeySpecifier, ContentKeySystem,
-    ExternalContentProtectionStatus, PersistableContentKeyRequest,
+    ContentKey, ContentKeyEvent, ContentKeyIdentifier, ContentKeyRequest, ContentKeyRequestOptions,
+    ContentKeyRequestRetryReason, ContentKeyRequestStatus, ContentKeyResponse, ContentKeySession,
+    ContentKeySessionEvent, ContentKeySessionEventStream, ContentKeySessionObserver,
+    ContentKeySpecifier, ContentKeySystem, ExternalContentProtectionStatus,
+    PersistableContentKeyRequest,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use error::AVPlayerError;
@@ -198,13 +198,14 @@ pub use reader::{
 pub use reader_extras::{
     AssetReaderOutput, AssetReaderOutputCaptionAdaptor, AssetReaderOutputMetadataAdaptor,
     AssetReaderSampleReferenceOutput, CaptionGroupInfo, CaptionValidationEvent,
-    CaptionValidationObserver,
+    CaptionValidationEventStream, CaptionValidationObserver,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use resource_loader::{
-    AssetResourceLoader, AssetResourceLoaderEvent, AssetResourceLoaderObserver,
-    AssetResourceLoadingContentInformationRequest, AssetResourceLoadingDataRequest,
-    AssetResourceLoadingRequest, AssetResourceLoadingRequestor, AssetResourceRenewalRequest,
+    AssetResourceLoader, AssetResourceLoaderEvent, AssetResourceLoaderEventStream,
+    AssetResourceLoaderObserver, AssetResourceLoadingContentInformationRequest,
+    AssetResourceLoadingDataRequest, AssetResourceLoadingRequest, AssetResourceLoadingRequestor,
+    AssetResourceRenewalRequest,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use sample_buffer_display_layer::{
@@ -225,11 +226,10 @@ pub mod prelude {
     pub use crate::asset_cache::AssetCache;
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::asset_download::{
-        AggregateAssetDownloadTask, AssetDownloadConfiguration,
-        AssetDownloadContentConfiguration, AssetDownloadDelegateEvent,
-        AssetDownloadStorageManagementPolicy, AssetDownloadStorageManager,
-        AssetDownloadTask, AssetDownloadTaskState, AssetDownloadURLSession,
-        AssetDownloadedAssetEvictionPriority,
+        AggregateAssetDownloadTask, AssetDownloadConfiguration, AssetDownloadContentConfiguration,
+        AssetDownloadDelegateEvent, AssetDownloadDelegateEventStream,
+        AssetDownloadStorageManagementPolicy, AssetDownloadStorageManager, AssetDownloadTask,
+        AssetDownloadTaskState, AssetDownloadURLSession, AssetDownloadedAssetEvictionPriority,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::asset_image_generator::{
@@ -375,13 +375,14 @@ pub mod prelude {
     pub use crate::reader_extras::{
         AssetReaderOutput, AssetReaderOutputCaptionAdaptor, AssetReaderOutputMetadataAdaptor,
         AssetReaderSampleReferenceOutput, CaptionGroupInfo, CaptionValidationEvent,
-        CaptionValidationObserver,
+        CaptionValidationEventStream, CaptionValidationObserver,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::resource_loader::{
-        AssetResourceLoader, AssetResourceLoaderEvent, AssetResourceLoaderObserver,
-        AssetResourceLoadingContentInformationRequest, AssetResourceLoadingDataRequest,
-        AssetResourceLoadingRequest, AssetResourceLoadingRequestor, AssetResourceRenewalRequest,
+        AssetResourceLoader, AssetResourceLoaderEvent, AssetResourceLoaderEventStream,
+        AssetResourceLoaderObserver, AssetResourceLoadingContentInformationRequest,
+        AssetResourceLoadingDataRequest, AssetResourceLoadingRequest,
+        AssetResourceLoadingRequestor, AssetResourceRenewalRequest,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::sample_buffer_display_layer::{

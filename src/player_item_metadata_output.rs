@@ -32,9 +32,9 @@ struct TimedMetadataGroupPayload {
 /// Mirrors the `AVPlayer` framework counterpart for `TimedMetadataGroup`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimedMetadataGroup {
-/// Mirrors the `AVPlayer` framework property for `time_range`.
+    /// Mirrors the `AVPlayer` framework property for `time_range`.
     pub time_range: TimeRange,
-/// Mirrors the `AVPlayer` framework property for `items`.
+    /// Mirrors the `AVPlayer` framework property for `items`.
     pub items: Vec<MetadataItem>,
 }
 
@@ -58,9 +58,9 @@ struct MetadataOutputEventPayload {
 /// Mirrors the `AVPlayer` framework counterpart for `MetadataOutputEvent`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MetadataOutputEvent {
-/// Mirrors the `AVPlayer` framework case `SequenceWasFlushed`.
+    /// Mirrors the `AVPlayer` framework case `SequenceWasFlushed`.
     SequenceWasFlushed,
-/// Mirrors the `AVPlayer` framework case `TimedMetadataGroups`.
+    /// Mirrors the `AVPlayer` framework case `TimedMetadataGroups`.
     TimedMetadataGroups {
         groups: Vec<TimedMetadataGroup>,
         track_present: bool,
@@ -87,7 +87,7 @@ impl Drop for PlayerItemMetadataOutput {
 }
 
 impl PlayerItemMetadataOutput {
-/// Calls the `AVPlayer` framework counterpart for `new`.
+    /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(identifiers: Option<&[impl AsRef<str>]>) -> Result<Self, AVPlayerError> {
         let identifiers = identifiers.map(|identifiers| {
             identifiers
@@ -123,27 +123,27 @@ impl PlayerItemMetadataOutput {
         parse_json_and_free(json_ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
+    /// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
     pub fn suppresses_player_rendering(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.suppresses_player_rendering)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `has_delegate`.
+    /// Calls the `AVPlayer` framework counterpart for `has_delegate`.
     pub fn has_delegate(&self) -> Result<bool, AVPlayerError> {
         Ok(self.info()?.has_delegate)
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     pub const fn as_output(&self) -> PlayerItemOutput<'_> {
         PlayerItemOutput::from_ptr(self.ptr)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_suppresses_player_rendering`.
+    /// Calls the `AVPlayer` framework counterpart for `set_suppresses_player_rendering`.
     pub fn set_suppresses_player_rendering(&self, suppresses: bool) {
         unsafe { ffi::av_player_item_output_set_suppresses_player_rendering(self.ptr, suppresses) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `observe`.
+    /// Calls the `AVPlayer` framework counterpart for `observe`.
     pub fn observe<F>(
         &self,
         queue_label: Option<&str>,
@@ -179,17 +179,17 @@ impl PlayerItemMetadataOutput {
         Ok(MetadataOutputObserver { token })
     }
 
-/// Calls the `AVPlayer` framework counterpart for `advance_interval_for_delegate_invocation`.
+    /// Calls the `AVPlayer` framework counterpart for `advance_interval_for_delegate_invocation`.
     pub fn advance_interval_for_delegate_invocation(&self) -> Result<f64, AVPlayerError> {
         Ok(self.info()?.advance_interval_for_delegate_invocation)
     }
 
-/// Calls the `AVPlayer` framework counterpart for `set_advance_interval_for_delegate_invocation`.
+    /// Calls the `AVPlayer` framework counterpart for `set_advance_interval_for_delegate_invocation`.
     pub fn set_advance_interval_for_delegate_invocation(&self, interval: f64) {
         unsafe { ffi::av_player_item_metadata_output_set_advance_interval(self.ptr, interval) };
     }
 
-/// Calls the `AVPlayer` framework counterpart for `identifiers`.
+    /// Calls the `AVPlayer` framework counterpart for `identifiers`.
     pub fn identifiers(&self) -> Result<Vec<String>, AVPlayerError> {
         Ok(self.info()?.identifiers.unwrap_or_default())
     }
@@ -216,7 +216,7 @@ unsafe impl Send for PlayerItemMetadataOutput {}
 unsafe impl Send for MetadataOutputObserver {}
 
 impl PlayerItem {
-/// Calls the `AVPlayer` framework counterpart for `add_metadata_output`.
+    /// Calls the `AVPlayer` framework counterpart for `add_metadata_output`.
     pub fn add_metadata_output(
         &self,
         output: &PlayerItemMetadataOutput,
@@ -229,7 +229,7 @@ impl PlayerItem {
         Ok(())
     }
 
-/// Calls the `AVPlayer` framework counterpart for `remove_metadata_output`.
+    /// Calls the `AVPlayer` framework counterpart for `remove_metadata_output`.
     pub fn remove_metadata_output(&self, output: &PlayerItemMetadataOutput) {
         unsafe { ffi::av_player_item_remove_output(self.ptr, output.ptr) };
     }
