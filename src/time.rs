@@ -18,37 +18,37 @@ pub enum Time {
 }
 
 impl Time {
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn new(value: i64, timescale: i32) -> Self {
         Self::Numeric { value, timescale }
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn invalid() -> Self {
         Self::Invalid
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn indefinite() -> Self {
         Self::Indefinite
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn positive_infinity() -> Self {
         Self::PositiveInfinity
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn negative_infinity() -> Self {
         Self::NegativeInfinity
     }
 
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn as_numeric(self) -> Option<(i64, i32)> {
         match self {
@@ -98,9 +98,72 @@ pub struct TimeRange {
 }
 
 impl TimeRange {
-/// Mirrors the `AVPlayer` framework constant `fn`.
+    /// Mirrors the `AVPlayer` framework constant `fn`.
     #[must_use]
     pub const fn new(start: Time, duration: Time) -> Self {
         Self { start, duration }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn numeric_time_round_trips_through_raw_representation() {
+        let time = Time::new(1_234, 600);
+
+        assert_eq!(time.as_numeric(), Some((1_234, 600)));
+        assert_eq!(time.to_raw(), (1_234, 600, 0));
+        assert_eq!(Time::from_raw(1_234, 600, 0), time);
+    }
+
+    #[test]
+    fn tuple_conversion_creates_numeric_time() {
+        assert_eq!(Time::from((7, 3)), Time::new(7, 3));
+    }
+
+    #[test]
+    fn invalid_time_is_not_numeric() {
+        let time = Time::invalid();
+
+        assert_eq!(time.as_numeric(), None);
+        assert_eq!(time.to_raw(), (0, 0, 1));
+        assert_eq!(Time::from_raw(99, 1, 1), Time::Invalid);
+    }
+
+    #[test]
+    fn indefinite_time_is_not_numeric() {
+        let time = Time::indefinite();
+
+        assert_eq!(time.as_numeric(), None);
+        assert_eq!(time.to_raw(), (0, 0, 2));
+        assert_eq!(Time::from_raw(99, 1, 2), Time::Indefinite);
+    }
+
+    #[test]
+    fn positive_infinity_time_is_not_numeric() {
+        let time = Time::positive_infinity();
+
+        assert_eq!(time.as_numeric(), None);
+        assert_eq!(time.to_raw(), (0, 0, 3));
+        assert_eq!(Time::from_raw(99, 1, 3), Time::PositiveInfinity);
+    }
+
+    #[test]
+    fn negative_infinity_time_is_not_numeric() {
+        let time = Time::negative_infinity();
+
+        assert_eq!(time.as_numeric(), None);
+        assert_eq!(time.to_raw(), (0, 0, 4));
+        assert_eq!(Time::from_raw(99, 1, 4), Time::NegativeInfinity);
+    }
+
+    #[test]
+    fn time_range_new_preserves_start_and_duration() {
+        let range = TimeRange::new(Time::new(5, 1), Time::new(2, 1));
+
+        assert_eq!(range.start, Time::new(5, 1));
+        assert_eq!(range.duration, Time::new(2, 1));
     }
 }

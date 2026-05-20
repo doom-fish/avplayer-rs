@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6.1] - 2026-05-20
+
+- Added in-`src/` unit tests across `time`, `url_asset`, `player_interstitial_event`, and `player_media_selection_criteria` (Tier 2 quality polish), providing fast `cargo test --lib` fail-fast signal alongside the existing integration tests under `tests/`.
+
 ## [0.6.0] - 2026-05-19
 
 ### Added

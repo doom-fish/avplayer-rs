@@ -771,3 +771,147 @@ unsafe extern "C" fn player_rate_observer_drop(userdata: *mut c_void) {
 fn availability_error(symbol: &str, macos_version: &str) -> AVPlayerError {
     AVPlayerError::OperationFailed(format!("{symbol} requires macOS {macos_version}+"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn media_characteristic_round_trips_known_values() {
+        for (characteristic, raw) in [
+            (MediaCharacteristic::Audible, "audible"),
+            (MediaCharacteristic::Legible, "legible"),
+            (MediaCharacteristic::Visual, "visual"),
+            (MediaCharacteristic::IsOriginalContent, "is_original_content"),
+        ] {
+            assert_eq!(characteristic.as_raw(), raw);
+            assert_eq!(MediaCharacteristic::from_raw(raw), characteristic);
+        }
+    }
+
+    #[test]
+    fn media_characteristic_preserves_unknown_values() {
+        let characteristic = MediaCharacteristic::from_raw("custom_characteristic");
+
+        assert_eq!(
+            characteristic,
+            MediaCharacteristic::Unknown("custom_characteristic".into()),
+        );
+        assert_eq!(characteristic.as_raw(), "custom_characteristic");
+    }
+
+    #[test]
+    fn action_at_item_end_round_trips_known_values() {
+        for (action, raw) in [
+            (PlayerActionAtItemEnd::Advance, 0),
+            (PlayerActionAtItemEnd::Pause, 1),
+            (PlayerActionAtItemEnd::None, 2),
+        ] {
+            assert_eq!(action.as_raw(), raw);
+            assert_eq!(PlayerActionAtItemEnd::from_raw(raw), action);
+        }
+    }
+
+    #[test]
+    fn time_control_status_maps_unknown_values() {
+        assert_eq!(
+            PlayerTimeControlStatus::from_raw(99),
+            PlayerTimeControlStatus::Unknown(99),
+        );
+    }
+
+    #[test]
+    fn waiting_reason_maps_known_values() {
+        for (raw, expected) in [
+            (
+                "AVPlayerWaitingToMinimizeStallsReason",
+                PlayerWaitingReason::ToMinimizeStalls,
+            ),
+            (
+                "AVPlayerWaitingWhileEvaluatingBufferingRateReason",
+                PlayerWaitingReason::WhileEvaluatingBufferingRate,
+            ),
+            (
+                "AVPlayerWaitingWithNoItemToPlayReason",
+                PlayerWaitingReason::WithNoItemToPlay,
+            ),
+            (
+                "AVPlayerWaitingForCoordinatedPlaybackReason",
+                PlayerWaitingReason::ForCoordinatedPlayback,
+            ),
+        ] {
+            assert_eq!(PlayerWaitingReason::from_raw(raw), expected);
+        }
+    }
+
+    #[test]
+    fn waiting_reason_preserves_unknown_values() {
+        assert_eq!(
+            PlayerWaitingReason::from_raw("custom_reason"),
+            PlayerWaitingReason::Unknown("custom_reason".into()),
+        );
+    }
+
+    #[test]
+    fn background_playback_policy_round_trips_known_and_unknown_values() {
+        for (raw, policy) in [
+            (1, PlayerAudiovisualBackgroundPlaybackPolicy::Automatic),
+            (2, PlayerAudiovisualBackgroundPlaybackPolicy::Pauses),
+            (3, PlayerAudiovisualBackgroundPlaybackPolicy::ContinuesIfPossible),
+            (9, PlayerAudiovisualBackgroundPlaybackPolicy::Unknown(9)),
+        ] {
+            assert_eq!(PlayerAudiovisualBackgroundPlaybackPolicy::from_raw(raw), policy);
+            assert_eq!(policy.as_raw(), raw);
+        }
+    }
+
+    #[test]
+    fn network_resource_priority_round_trips_known_and_unknown_values() {
+        for (raw, priority) in [
+            (0, PlayerNetworkResourcePriority::Default),
+            (1, PlayerNetworkResourcePriority::Low),
+            (2, PlayerNetworkResourcePriority::High),
+            (8, PlayerNetworkResourcePriority::Unknown(8)),
+        ] {
+            assert_eq!(PlayerNetworkResourcePriority::from_raw(raw), priority);
+            assert_eq!(priority.as_raw(), raw);
+        }
+    }
+
+    #[test]
+    fn rate_change_reason_maps_known_and_unknown_values() {
+        for (raw, expected) in [
+            (
+                "AVPlayerRateDidChangeReasonSetRateCalled",
+                PlayerRateDidChangeReason::SetRateCalled,
+            ),
+            (
+                "AVPlayerRateDidChangeReasonSetRateFailed",
+                PlayerRateDidChangeReason::SetRateFailed,
+            ),
+            (
+                "AVPlayerRateDidChangeReasonAudioSessionInterrupted",
+                PlayerRateDidChangeReason::AudioSessionInterrupted,
+            ),
+            (
+                "AVPlayerRateDidChangeReasonAppBackgrounded",
+                PlayerRateDidChangeReason::AppBackgrounded,
+            ),
+        ] {
+            assert_eq!(PlayerRateDidChangeReason::from_raw(raw), expected);
+        }
+
+        assert_eq!(
+            PlayerRateDidChangeReason::from_raw("custom_reason"),
+            PlayerRateDidChangeReason::Unknown("custom_reason".into()),
+        );
+    }
+
+    #[test]
+    fn availability_error_formats_symbol_and_version() {
+        assert_eq!(
+            availability_error("AVPlayer.someSymbol", "13.0"),
+            AVPlayerError::OperationFailed("AVPlayer.someSymbol requires macOS 13.0+".into()),
+        );
+    }
+}

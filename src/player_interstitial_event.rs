@@ -767,3 +767,117 @@ unsafe extern "C" fn player_interstitial_event_monitor_observer_drop(userdata: *
         ));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn restrictions_support_bitwise_composition_and_contains() {
+        let restrictions = PlayerInterstitialEventRestrictions::CONSTRAINS_SEEKING_FORWARD_IN_PRIMARY_CONTENT
+            | PlayerInterstitialEventRestrictions::REQUIRES_PLAYBACK_AT_PREFERRED_RATE_FOR_ADVANCEMENT;
+
+        assert!(restrictions.contains(
+            PlayerInterstitialEventRestrictions::CONSTRAINS_SEEKING_FORWARD_IN_PRIMARY_CONTENT,
+        ));
+        assert!(restrictions.contains(
+            PlayerInterstitialEventRestrictions::REQUIRES_PLAYBACK_AT_PREFERRED_RATE_FOR_ADVANCEMENT,
+        ));
+        assert_eq!(restrictions.bits(), (1 << 0) | (1 << 2));
+    }
+
+    #[test]
+    fn cue_round_trips_known_values() {
+        for cue in [
+            PlayerInterstitialEventCue::NoCue,
+            PlayerInterstitialEventCue::JoinCue,
+            PlayerInterstitialEventCue::LeaveCue,
+        ] {
+            assert_eq!(PlayerInterstitialEventCue::from_raw(cue.as_raw()), cue);
+        }
+    }
+
+    #[test]
+    fn cue_preserves_unknown_values() {
+        let cue = PlayerInterstitialEventCue::from_raw("custom_cue");
+
+        assert_eq!(cue, PlayerInterstitialEventCue::Unknown("custom_cue".into()));
+        assert_eq!(cue.as_raw(), "custom_cue");
+    }
+
+    #[test]
+    fn timeline_occupancy_round_trips_known_and_unknown_values() {
+        for (raw, occupancy) in [
+            (0, PlayerInterstitialEventTimelineOccupancy::SinglePoint),
+            (1, PlayerInterstitialEventTimelineOccupancy::Fill),
+            (9, PlayerInterstitialEventTimelineOccupancy::Unknown(9)),
+        ] {
+            assert_eq!(PlayerInterstitialEventTimelineOccupancy::from_raw(raw), occupancy);
+            assert_eq!(occupancy.raw(), raw);
+        }
+    }
+
+    #[test]
+    fn parse_json_value_decodes_json_objects() {
+        let value = parse_json_value(Some(r#"{"kind":"midroll"}"#.into())).unwrap();
+
+        assert_eq!(value, Some(json!({"kind": "midroll"})));
+    }
+
+    #[test]
+    fn parse_json_value_rejects_invalid_json() {
+        let error = parse_json_value(Some("{".into())).unwrap_err();
+
+        assert!(matches!(
+            error,
+            AVPlayerError::OperationFailed(ref message)
+                if message.starts_with("failed to decode interstitial event JSON payload:")
+        ));
+    }
+
+    #[test]
+    fn payload_conversion_maps_json_and_enum_fields() {
+        let payload = PlayerInterstitialEventInfoPayload {
+            identifier: "midroll".into(),
+            time: Time::new(90, 1),
+            date: Some("2026-05-20T12:00:00Z".into()),
+            template_item_count: 2,
+            restrictions: PlayerInterstitialEventRestrictions::CONSTRAINS_SEEKING_FORWARD_IN_PRIMARY_CONTENT.bits(),
+            resumption_offset: Time::new(3, 1),
+            playout_limit: Time::new(30, 1),
+            aligns_start_with_primary_segment_boundary: true,
+            aligns_resumption_with_primary_segment_boundary: false,
+            cue: Some("join_cue".into()),
+            will_play_once: true,
+            user_defined_attributes_json: Some(r#"{"kind":"midroll"}"#.into()),
+            asset_list_response_json: Some(r#"{"status":"available"}"#.into()),
+            timeline_occupancy_raw: Some(1),
+            supplements_primary_content: Some(true),
+            content_may_vary: Some(false),
+            has_primary_item: true,
+        };
+
+        let info = PlayerInterstitialEventInfo::try_from(payload).unwrap();
+
+        assert_eq!(info.identifier, "midroll");
+        assert_eq!(info.time, Time::new(90, 1));
+        assert_eq!(
+            info.restrictions,
+            PlayerInterstitialEventRestrictions::CONSTRAINS_SEEKING_FORWARD_IN_PRIMARY_CONTENT,
+        );
+        assert_eq!(info.cue, Some(PlayerInterstitialEventCue::JoinCue));
+        assert_eq!(info.user_defined_attributes, Some(json!({"kind": "midroll"})));
+        assert_eq!(
+            info.asset_list_response,
+            Some(json!({"status": "available"})),
+        );
+        assert_eq!(
+            info.timeline_occupancy,
+            Some(PlayerInterstitialEventTimelineOccupancy::Fill),
+        );
+        assert_eq!(info.supplements_primary_content, Some(true));
+        assert_eq!(info.content_may_vary, Some(false));
+        assert!(info.has_primary_item);
+    }
+}
