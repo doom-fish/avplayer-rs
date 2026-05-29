@@ -15,6 +15,7 @@ use serde_json::Value;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::{Player, PlayerItem};
+use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::{parse_json_and_free, to_cstring};
 
@@ -377,14 +378,10 @@ pub struct PlayerInterstitialEvent {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerInterstitialEvent {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_interstitial_event_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerInterstitialEvent,
+    release = ffi::av_player_interstitial_event_release
+);
 
 impl PlayerInterstitialEvent {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -508,14 +505,10 @@ pub struct PlayerInterstitialEventMonitor {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerInterstitialEventMonitor {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_interstitial_event_monitor_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerInterstitialEventMonitor,
+    release = ffi::av_player_interstitial_event_monitor_release
+);
 
 impl PlayerInterstitialEventMonitor {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -577,14 +570,10 @@ pub struct PlayerInterstitialEventController {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerInterstitialEventController {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_interstitial_event_controller_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerInterstitialEventController,
+    release = ffi::av_player_interstitial_event_controller_release
+);
 
 impl PlayerInterstitialEventController {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -654,14 +643,11 @@ pub struct PlayerInterstitialEventMonitorObserver {
     token: *mut c_void,
 }
 
-impl Drop for PlayerInterstitialEventMonitorObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_player_interstitial_event_monitor_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerInterstitialEventMonitorObserver,
+    field = token,
+    release = ffi::av_player_interstitial_event_monitor_observer_release
+);
 
 // SAFETY: These AVFoundation interstitial-event handles are safe to transfer
 // across thread boundaries; method calls are internally dispatched safely.

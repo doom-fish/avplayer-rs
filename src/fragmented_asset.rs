@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::asset::{Asset, AssetTrack, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
+use crate::retained::retain_release_wrapper;
 use crate::util::parse_json_and_free;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -55,14 +56,10 @@ pub struct MediaExtensionProperties {
     ptr: *mut c_void,
 }
 
-impl Drop for MediaExtensionProperties {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    MediaExtensionProperties,
+    release = ffi::av_ns_object_release
+);
 
 impl MediaExtensionProperties {
     const fn from_ptr(ptr: *mut c_void) -> Self {
@@ -253,14 +250,7 @@ pub struct FragmentedAssetMinder {
     ptr: *mut c_void,
 }
 
-impl Drop for FragmentedAssetMinder {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(FragmentedAssetMinder, release = ffi::av_ns_object_release);
 
 impl FragmentedAssetMinder {
     pub fn new(asset: &FragmentedAsset, minding_interval: f64) -> Result<Self, AVPlayerError> {

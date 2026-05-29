@@ -9,6 +9,7 @@ use serde::Deserialize;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::Player;
+use crate::retained::retain_release_wrapper;
 use crate::util::{json_cstring, parse_json_and_free, to_cstring};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -332,14 +333,10 @@ pub struct PlayerMediaSelectionCriteria {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerMediaSelectionCriteria {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_media_selection_criteria_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerMediaSelectionCriteria,
+    release = ffi::av_player_media_selection_criteria_release
+);
 
 impl PlayerMediaSelectionCriteria {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -705,14 +702,11 @@ pub struct PlayerRateDidChangeObserver {
     token: *mut c_void,
 }
 
-impl Drop for PlayerRateDidChangeObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_player_rate_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerRateDidChangeObserver,
+    field = token,
+    release = ffi::av_player_rate_observer_release
+);
 
 // SAFETY: These media-selection handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

@@ -15,6 +15,7 @@ use crate::player::PlayerItem;
 use crate::player_interstitial_event::{
     PlayerInterstitialEventInfo, PlayerInterstitialEventInfoPayload,
 };
+use crate::retained::retain_release_wrapper;
 use crate::time::{Time, TimeRange};
 use crate::util::{parse_json_and_free, to_cstring};
 
@@ -230,14 +231,10 @@ pub struct PlayerItemIntegratedTimeline {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItemIntegratedTimeline {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_item_integrated_timeline_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemIntegratedTimeline,
+    release = ffi::av_player_item_integrated_timeline_release
+);
 
 impl PlayerItemIntegratedTimeline {
     /// Calls the `AVPlayer` framework counterpart for `info`.
@@ -425,14 +422,10 @@ pub struct PlayerItemIntegratedTimelineSnapshot {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItemIntegratedTimelineSnapshot {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_item_integrated_timeline_snapshot_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemIntegratedTimelineSnapshot,
+    release = ffi::av_player_item_integrated_timeline_snapshot_release
+);
 
 impl PlayerItemIntegratedTimelineSnapshot {
     /// Calls the `AVPlayer` framework counterpart for `info`.
@@ -508,14 +501,10 @@ pub struct PlayerItemIntegratedTimelineSegment {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItemIntegratedTimelineSegment {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_item_integrated_timeline_segment_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemIntegratedTimelineSegment,
+    release = ffi::av_player_item_integrated_timeline_segment_release
+);
 
 impl PlayerItemIntegratedTimelineSegment {
     /// Calls the `AVPlayer` framework counterpart for `info`.
@@ -539,14 +528,11 @@ pub struct PlayerItemIntegratedTimelineObserver {
     token: *mut c_void,
 }
 
-impl Drop for PlayerItemIntegratedTimelineObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_player_item_integrated_timeline_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemIntegratedTimelineObserver,
+    field = token,
+    release = ffi::av_player_item_integrated_timeline_observer_release
+);
 
 // SAFETY: These integrated-timeline wrapper handles are safe to transfer across
 // thread boundaries; method calls are internally dispatched safely.

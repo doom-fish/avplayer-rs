@@ -15,6 +15,7 @@ use serde::Deserialize;
 use crate::asset::UrlAsset;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
+use crate::retained::retain_release_wrapper;
 use crate::util::{catch_cb_panic, parse_json_and_free, to_cstring};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -69,84 +70,57 @@ pub struct AssetResourceLoader {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetResourceLoader {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetResourceLoader, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct AssetResourceLoadingRequest {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetResourceLoadingRequest {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetResourceLoadingRequest,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct AssetResourceRenewalRequest {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetResourceRenewalRequest {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetResourceRenewalRequest,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct AssetResourceLoadingContentInformationRequest {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetResourceLoadingContentInformationRequest {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetResourceLoadingContentInformationRequest,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct AssetResourceLoadingDataRequest {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetResourceLoadingDataRequest {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetResourceLoadingDataRequest,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct AssetResourceLoadingRequestor {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetResourceLoadingRequestor {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetResourceLoadingRequestor,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub enum AssetResourceLoaderEvent {
@@ -164,14 +138,11 @@ pub struct AssetResourceLoaderObserver {
     token: *mut c_void,
 }
 
-impl Drop for AssetResourceLoaderObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_asset_resource_loader_delegate_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetResourceLoaderObserver,
+    field = token,
+    release = ffi::av_asset_resource_loader_delegate_release
+);
 
 #[derive(Debug)]
 /// Async stream of delegate events sourced from `AVAssetResourceLoader`.

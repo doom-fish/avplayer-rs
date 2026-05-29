@@ -9,6 +9,7 @@ use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata::MetadataItem;
 use crate::player::PlayerItem;
+use crate::retained::retain_release_wrapper;
 use crate::util::{json_cstring, parse_json_and_free};
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemMediaDataCollectorKind`.
@@ -106,14 +107,10 @@ pub struct PlayerItemMetadataCollector {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItemMetadataCollector {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_item_metadata_collector_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemMetadataCollector,
+    release = ffi::av_player_item_metadata_collector_release
+);
 
 impl PlayerItemMetadataCollector {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -228,14 +225,11 @@ pub struct MetadataCollectorObserver {
     token: *mut c_void,
 }
 
-impl Drop for MetadataCollectorObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_player_item_metadata_collector_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    MetadataCollectorObserver,
+    field = token,
+    release = ffi::av_player_item_metadata_collector_observer_release
+);
 
 // SAFETY: These metadata-collector handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

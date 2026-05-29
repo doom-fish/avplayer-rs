@@ -13,6 +13,7 @@ use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::Player;
 use crate::reader::VideoOutputSettings;
+use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::{maybe_json_cstring, parse_json_and_free};
 
@@ -169,14 +170,10 @@ pub struct PlayerVideoOutputTagCollection {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerVideoOutputTagCollection {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_video_output_tag_collection_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerVideoOutputTagCollection,
+    release = ffi::av_player_video_output_tag_collection_release
+);
 
 impl PlayerVideoOutputTagCollection {
     /// Calls the `AVPlayer` framework counterpart for `from_preset`.
@@ -215,14 +212,10 @@ pub struct VideoOutputSpecification {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for VideoOutputSpecification {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_video_output_specification_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    VideoOutputSpecification,
+    release = ffi::av_video_output_specification_release
+);
 
 impl VideoOutputSpecification {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -319,14 +312,10 @@ pub struct PlayerVideoOutput {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerVideoOutput {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_video_output_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerVideoOutput,
+    release = ffi::av_player_video_output_release
+);
 
 // SAFETY: These player-video-output handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

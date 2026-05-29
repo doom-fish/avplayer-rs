@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata::MetadataItem;
+use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -139,14 +140,7 @@ pub struct Asset {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for Asset {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_asset_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(Asset, release = ffi::av_asset_release);
 
 impl Asset {
     fn info(&self) -> Result<AssetInfoPayload, AVPlayerError> {
@@ -356,14 +350,7 @@ pub struct AssetTrack {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for AssetTrack {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_asset_track_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetTrack, release = ffi::av_asset_track_release);
 
 // SAFETY: These AVFoundation asset handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

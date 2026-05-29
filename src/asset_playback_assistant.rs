@@ -6,6 +6,7 @@ use core::ptr;
 use crate::asset::{Asset, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
+use crate::retained::retain_release_wrapper;
 use crate::util::parse_json_and_free;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,14 +38,7 @@ pub struct AssetPlaybackAssistant {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetPlaybackAssistant {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetPlaybackAssistant, release = ffi::av_ns_object_release);
 
 impl Asset {
     pub fn playback_assistant(&self) -> Result<AssetPlaybackAssistant, AVPlayerError> {

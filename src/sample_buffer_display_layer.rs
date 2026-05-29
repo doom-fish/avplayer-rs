@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player_layer::VideoGravity;
+use crate::retained::retain_release_wrapper;
 use crate::util::parse_json_and_free;
 
 #[allow(clippy::struct_excessive_bools)]
@@ -51,14 +52,10 @@ pub struct SampleBufferDisplayLayer {
     ptr: *mut c_void,
 }
 
-impl Drop for SampleBufferDisplayLayer {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_sample_buffer_display_layer_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    SampleBufferDisplayLayer,
+    release = ffi::av_sample_buffer_display_layer_release
+);
 
 unsafe impl Send for SampleBufferDisplayLayer {}
 

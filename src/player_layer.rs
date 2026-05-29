@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::Player;
+use crate::retained::retain_release_wrapper;
 use crate::util::parse_json_and_free;
 
 /// Mirrors the `AVPlayer` framework counterpart for `Rect`.
@@ -74,14 +75,7 @@ pub struct PlayerLayer {
     ptr: *mut c_void,
 }
 
-impl Drop for PlayerLayer {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_layer_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(PlayerLayer, release = ffi::av_player_layer_release);
 
 // SAFETY: AVPlayerLayer ObjC handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

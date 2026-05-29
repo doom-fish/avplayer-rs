@@ -9,6 +9,7 @@ use crate::asset::Size;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
+use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::parse_json_and_free;
 
@@ -84,14 +85,10 @@ pub struct PlayerItemRenderedLegibleOutput {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItemRenderedLegibleOutput {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_item_output_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemRenderedLegibleOutput,
+    release = ffi::av_player_item_output_release
+);
 
 impl PlayerItemRenderedLegibleOutput {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -201,14 +198,11 @@ pub struct RenderedLegibleOutputObserver {
     token: *mut c_void,
 }
 
-impl Drop for RenderedLegibleOutputObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_player_item_rendered_legible_output_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    RenderedLegibleOutputObserver,
+    field = token,
+    release = ffi::av_player_item_rendered_legible_output_observer_release
+);
 
 // SAFETY: These rendered-legible-output handles are safe to transfer across
 // thread boundaries; method calls are internally dispatched safely.

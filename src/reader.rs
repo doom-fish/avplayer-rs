@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::asset::{Asset, AssetTrack, MediaType};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
+use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -150,14 +151,7 @@ pub struct AssetReader {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for AssetReader {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_reader_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetReader, release = ffi::av_reader_release);
 
 impl AssetReader {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -292,14 +286,10 @@ pub struct AssetReaderTrackOutput {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for AssetReaderTrackOutput {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_reader_output_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetReaderTrackOutput,
+    release = ffi::av_reader_output_release
+);
 
 impl AssetReaderTrackOutput {
     /// Calls the `AVPlayer` framework counterpart for `video`.
@@ -359,14 +349,10 @@ pub struct AssetReaderAudioMixOutput {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for AssetReaderAudioMixOutput {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_reader_output_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetReaderAudioMixOutput,
+    release = ffi::av_reader_output_release
+);
 
 impl AssetReaderAudioMixOutput {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -416,14 +402,10 @@ pub struct AssetReaderVideoCompositionOutput {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for AssetReaderVideoCompositionOutput {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_reader_output_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetReaderVideoCompositionOutput,
+    release = ffi::av_reader_output_release
+);
 
 // SAFETY: These AVAssetReader handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

@@ -9,6 +9,7 @@ use serde::Deserialize;
 use crate::asset::{Asset, Size, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
+use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::parse_json_and_free;
 
@@ -98,28 +99,14 @@ pub struct AssetImageGenerator {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetImageGenerator {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetImageGenerator, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct AssetImage {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetImage {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetImage, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct GeneratedAssetImage {

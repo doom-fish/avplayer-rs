@@ -9,6 +9,7 @@ use serde::Deserialize;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata::MetadataItem;
+use crate::retained::retain_release_wrapper;
 use crate::time::{Time, TimeRange};
 use crate::util::{json_cstring, parse_json_and_free, to_cstring};
 
@@ -99,14 +100,10 @@ pub struct TimedMetadataGroupHandle {
     ptr: *mut c_void,
 }
 
-impl Drop for TimedMetadataGroupHandle {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    TimedMetadataGroupHandle,
+    release = ffi::av_ns_object_release
+);
 
 impl TimedMetadataGroupHandle {
     pub(crate) const fn from_ptr(ptr: *mut c_void) -> Self {
@@ -172,14 +169,10 @@ pub struct MutableTimedMetadataGroup {
     ptr: *mut c_void,
 }
 
-impl Drop for MutableTimedMetadataGroup {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    MutableTimedMetadataGroup,
+    release = ffi::av_ns_object_release
+);
 
 impl MutableTimedMetadataGroup {
     pub fn new(items: &[MetadataItem], time_range: TimeRange) -> Result<Self, AVPlayerError> {
@@ -269,14 +262,10 @@ pub struct DateRangeMetadataGroupHandle {
     ptr: *mut c_void,
 }
 
-impl Drop for DateRangeMetadataGroupHandle {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    DateRangeMetadataGroupHandle,
+    release = ffi::av_ns_object_release
+);
 
 impl DateRangeMetadataGroupHandle {
     pub fn new(
@@ -346,14 +335,10 @@ pub struct MutableDateRangeMetadataGroup {
     ptr: *mut c_void,
 }
 
-impl Drop for MutableDateRangeMetadataGroup {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    MutableDateRangeMetadataGroup,
+    release = ffi::av_ns_object_release
+);
 
 impl MutableDateRangeMetadataGroup {
     pub fn new(
@@ -461,14 +446,7 @@ pub struct MutableMetadataItem {
     ptr: *mut c_void,
 }
 
-impl Drop for MutableMetadataItem {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(MutableMetadataItem, release = ffi::av_ns_object_release);
 
 impl MutableMetadataItem {
     pub fn new() -> Result<Self, AVPlayerError> {
@@ -690,14 +668,7 @@ pub struct MetadataItemFilter {
     ptr: *mut c_void,
 }
 
-impl Drop for MetadataItemFilter {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(MetadataItemFilter, release = ffi::av_ns_object_release);
 
 impl MetadataItemFilter {
     pub fn for_sharing() -> Result<Self, AVPlayerError> {

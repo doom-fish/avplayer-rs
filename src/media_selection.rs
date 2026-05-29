@@ -11,6 +11,7 @@ use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata::MetadataItem;
 use crate::player_media_selection_criteria::MediaCharacteristic;
+use crate::retained::retain_release_wrapper;
 use crate::util::{parse_json_and_free, to_cstring};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -32,14 +33,7 @@ pub struct MediaSelection {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for MediaSelection {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(MediaSelection, release = ffi::av_ns_object_release);
 
 impl MediaSelection {
     pub fn selected_media_option_in_group(
@@ -77,14 +71,7 @@ pub struct MutableMediaSelection {
     ptr: *mut c_void,
 }
 
-impl Drop for MutableMediaSelection {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(MutableMediaSelection, release = ffi::av_ns_object_release);
 
 impl MutableMediaSelection {
     pub fn selected_media_option_in_group(
@@ -127,14 +114,7 @@ pub struct MediaSelectionGroup {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for MediaSelectionGroup {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(MediaSelectionGroup, release = ffi::av_ns_object_release);
 
 impl MediaSelectionGroup {
     pub fn options(&self) -> Result<Vec<MediaSelectionOption>, AVPlayerError> {
@@ -196,14 +176,7 @@ pub struct MediaSelectionOption {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for MediaSelectionOption {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(MediaSelectionOption, release = ffi::av_ns_object_release);
 
 impl MediaSelectionOption {
     fn info(&self) -> Result<MediaSelectionOptionPayload, AVPlayerError> {
@@ -303,14 +276,10 @@ pub struct CustomMediaSelectionScheme {
     ptr: *mut c_void,
 }
 
-impl Drop for CustomMediaSelectionScheme {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    CustomMediaSelectionScheme,
+    release = ffi::av_ns_object_release
+);
 
 impl CustomMediaSelectionScheme {
     pub fn should_offer_language_selection(&self) -> Result<bool, AVPlayerError> {
@@ -367,14 +336,10 @@ pub struct MediaPresentationSelector {
     ptr: *mut c_void,
 }
 
-impl Drop for MediaPresentationSelector {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    MediaPresentationSelector,
+    release = ffi::av_ns_object_release
+);
 
 impl MediaPresentationSelector {
     pub fn identifier(&self) -> Result<String, AVPlayerError> {
@@ -421,14 +386,10 @@ pub struct MediaPresentationSetting {
     ptr: *mut c_void,
 }
 
-impl Drop for MediaPresentationSetting {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    MediaPresentationSetting,
+    release = ffi::av_ns_object_release
+);
 
 impl MediaPresentationSetting {
     pub fn media_characteristic(&self) -> Result<MediaCharacteristic, AVPlayerError> {

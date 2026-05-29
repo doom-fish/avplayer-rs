@@ -12,6 +12,7 @@ use crate::asset::{Asset, Size};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata::MetadataItem;
+use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -140,16 +141,7 @@ pub struct PlayerItem {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItem {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
-            // ffi create function and has not been released.
-            unsafe { ffi::av_player_item_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(PlayerItem, release = ffi::av_player_item_release);
 
 impl PlayerItem {
     /// Create a player item from a file path.
@@ -292,16 +284,11 @@ pub struct PlayerItemObserver {
     token: *mut c_void,
 }
 
-impl Drop for PlayerItemObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            // SAFETY: `self.token` is a valid observer token returned by the bridge
-            // and has not been released yet.
-            unsafe { ffi::av_player_item_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemObserver,
+    field = token,
+    release = ffi::av_player_item_observer_release
+);
 
 /// Safe wrapper around `AVPlayer`.
 #[derive(Debug)]
@@ -309,16 +296,7 @@ pub struct Player {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for Player {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            // SAFETY: `self.ptr` is a valid, non-null handle returned by the corresponding
-            // ffi create function and has not been released.
-            unsafe { ffi::av_player_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(Player, release = ffi::av_player_release);
 
 impl Player {
     /// Create a player from a file path.
@@ -569,16 +547,11 @@ pub struct PeriodicTimeObserver {
     token: *mut c_void,
 }
 
-impl Drop for PeriodicTimeObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            // SAFETY: `self.token` is a valid observer token returned by the bridge
-            // and has not been released yet.
-            unsafe { ffi::av_player_time_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PeriodicTimeObserver,
+    field = token,
+    release = ffi::av_player_time_observer_release
+);
 
 /// RAII token for `addBoundaryTimeObserver`.
 #[derive(Debug)]
@@ -586,16 +559,11 @@ pub struct BoundaryTimeObserver {
     token: *mut c_void,
 }
 
-impl Drop for BoundaryTimeObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            // SAFETY: `self.token` is a valid observer token returned by the bridge
-            // and has not been released yet.
-            unsafe { ffi::av_player_time_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    BoundaryTimeObserver,
+    field = token,
+    release = ffi::av_player_time_observer_release
+);
 
 // SAFETY: AVPlayer / AVPlayerItem ObjC handles and observer tokens are safe to
 // transfer across thread boundaries; method calls are internally dispatched

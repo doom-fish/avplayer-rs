@@ -9,6 +9,7 @@ use crate::asset::{Asset, Size, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::media_selection::MediaSelectionOption;
+use crate::retained::retain_release_wrapper;
 use crate::util::parse_json_and_free;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -56,14 +57,7 @@ pub struct AssetVariant {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetVariant {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetVariant, release = ffi::av_ns_object_release);
 
 impl AssetVariant {
     fn info(&self) -> Result<AssetVariantPayload, AVPlayerError> {
@@ -112,14 +106,10 @@ pub struct AssetVariantVideoAttributes {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetVariantVideoAttributes {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetVariantVideoAttributes,
+    release = ffi::av_ns_object_release
+);
 
 impl AssetVariantVideoAttributes {
     fn info(&self) -> Result<AssetVariantVideoAttributesPayload, AVPlayerError> {
@@ -180,14 +170,10 @@ pub struct AssetVariantVideoLayoutAttributes {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetVariantVideoLayoutAttributes {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetVariantVideoLayoutAttributes,
+    release = ffi::av_ns_object_release
+);
 
 impl AssetVariantVideoLayoutAttributes {
     fn info(&self) -> Result<AssetVariantVideoLayoutAttributesPayload, AVPlayerError> {
@@ -215,14 +201,10 @@ pub struct AssetVariantAudioAttributes {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetVariantAudioAttributes {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetVariantAudioAttributes,
+    release = ffi::av_ns_object_release
+);
 
 impl AssetVariantAudioAttributes {
     fn info(&self) -> Result<AssetVariantAudioAttributesPayload, AVPlayerError> {
@@ -263,14 +245,10 @@ pub struct AssetVariantAudioRenditionSpecificAttributes {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetVariantAudioRenditionSpecificAttributes {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetVariantAudioRenditionSpecificAttributes,
+    release = ffi::av_ns_object_release
+);
 
 impl AssetVariantAudioRenditionSpecificAttributes {
     fn info(&self) -> Result<AssetVariantAudioRenditionPayload, AVPlayerError> {
@@ -306,14 +284,7 @@ pub struct AssetVariantQualifier {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for AssetVariantQualifier {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetVariantQualifier, release = ffi::av_ns_object_release);
 
 impl AssetVariantQualifier {
     pub fn from_variant(variant: &AssetVariant) -> Result<Self, AVPlayerError> {

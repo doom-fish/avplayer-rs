@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::asset::UrlAsset;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
+use crate::retained::retain_release_wrapper;
 use crate::util::{json_cstring, maybe_json_cstring, parse_json_and_free, to_cstring};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,98 +273,56 @@ pub struct ContentKeySession {
     ptr: *mut c_void,
 }
 
-impl Drop for ContentKeySession {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(ContentKeySession, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct ContentKeyRequest {
     ptr: *mut c_void,
 }
 
-impl Drop for ContentKeyRequest {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(ContentKeyRequest, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct PersistableContentKeyRequest {
     ptr: *mut c_void,
 }
 
-impl Drop for PersistableContentKeyRequest {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PersistableContentKeyRequest,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct ContentKeyResponse {
     ptr: *mut c_void,
 }
 
-impl Drop for ContentKeyResponse {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(ContentKeyResponse, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct ContentKeySpecifier {
     ptr: *mut c_void,
 }
 
-impl Drop for ContentKeySpecifier {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(ContentKeySpecifier, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct ContentKey {
     ptr: *mut c_void,
 }
 
-impl Drop for ContentKey {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(ContentKey, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct ContentKeySessionObserver {
     token: *mut c_void,
 }
 
-impl Drop for ContentKeySessionObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_content_key_session_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    ContentKeySessionObserver,
+    field = token,
+    release = ffi::av_content_key_session_observer_release
+);
 
 #[derive(Debug)]
 pub struct ContentKeySessionEventStream {

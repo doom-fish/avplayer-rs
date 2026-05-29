@@ -8,6 +8,7 @@ use serde::Deserialize;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
+use crate::retained::retain_release_wrapper;
 use crate::util::parse_json_and_free;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -73,14 +74,10 @@ pub struct PlayerItemErrorLog {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItemErrorLog {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_item_error_log_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemErrorLog,
+    release = ffi::av_player_item_error_log_release
+);
 
 // SAFETY: AVPlayerItemErrorLog ObjC handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

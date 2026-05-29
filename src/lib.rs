@@ -42,6 +42,7 @@ mod queue_player;
 mod reader;
 mod reader_extras;
 mod resource_loader;
+mod retained;
 mod sample_buffer_display_layer;
 mod time;
 mod url_asset;

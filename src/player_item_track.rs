@@ -10,6 +10,7 @@ use crate::asset::AssetTrack;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
+use crate::retained::retain_release_wrapper;
 use crate::util::parse_json_and_free;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -53,14 +54,7 @@ pub struct PlayerItemTrack {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItemTrack {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_item_track_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(PlayerItemTrack, release = ffi::av_player_item_track_release);
 
 // SAFETY: AVPlayerItemTrack ObjC handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

@@ -9,6 +9,7 @@ use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::{PlayerItem, PlayerStatus};
 use crate::player_media_selection_criteria::PlayerActionAtItemEnd;
+use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::parse_json_and_free;
 
@@ -29,14 +30,7 @@ pub struct QueuePlayer {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for QueuePlayer {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_queue_player_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(QueuePlayer, release = ffi::av_queue_player_release);
 
 // SAFETY: AVQueuePlayer ObjC handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

@@ -11,6 +11,7 @@ use crate::ffi;
 use crate::player::PlayerItem;
 use crate::player_item_output::PlayerItemOutput;
 use crate::reader::VideoOutputSettings;
+use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::{maybe_json_cstring, parse_json_and_free, to_cstring};
 
@@ -49,14 +50,10 @@ pub struct PlayerItemVideoOutput {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for PlayerItemVideoOutput {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_item_output_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemVideoOutput,
+    release = ffi::av_player_item_output_release
+);
 
 impl PlayerItemVideoOutput {
     /// Calls the `AVPlayer` framework counterpart for `new`.
@@ -179,14 +176,11 @@ pub struct PlayerItemVideoOutputObserver {
     token: *mut c_void,
 }
 
-impl Drop for PlayerItemVideoOutputObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_player_item_video_output_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    PlayerItemVideoOutputObserver,
+    field = token,
+    release = ffi::av_player_item_video_output_observer_release
+);
 
 // SAFETY: These video-output handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.

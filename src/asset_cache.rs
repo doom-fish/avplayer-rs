@@ -9,6 +9,7 @@ use crate::asset::UrlAsset;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::media_selection::{MediaSelectionGroup, MediaSelectionOption};
+use crate::retained::retain_release_wrapper;
 use crate::util::parse_json_and_free;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -22,14 +23,7 @@ pub struct AssetCache {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetCache {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetCache, release = ffi::av_ns_object_release);
 
 impl UrlAsset {
     pub fn asset_cache(&self) -> Option<AssetCache> {

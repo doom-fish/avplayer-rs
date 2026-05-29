@@ -13,6 +13,7 @@ use crate::asset_variant::AssetVariantQualifier;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::media_selection::MediaSelection;
+use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
 use crate::util::{catch_cb_panic, parse_json_and_free, to_cstring};
 
@@ -68,56 +69,40 @@ pub struct AssetDownloadStorageManager {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetDownloadStorageManager {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetDownloadStorageManager,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct AssetDownloadStorageManagementPolicy {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetDownloadStorageManagementPolicy {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetDownloadStorageManagementPolicy,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct AssetDownloadConfiguration {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetDownloadConfiguration {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetDownloadConfiguration,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct AssetDownloadContentConfiguration {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetDownloadContentConfiguration {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetDownloadContentConfiguration,
+    release = ffi::av_ns_object_release
+);
 
 impl AssetDownloadStorageManager {
     pub fn shared() -> Self {
@@ -523,42 +508,27 @@ pub struct AssetDownloadTask {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetDownloadTask {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(AssetDownloadTask, release = ffi::av_ns_object_release);
 
 #[derive(Debug)]
 pub struct AggregateAssetDownloadTask {
     ptr: *mut c_void,
 }
 
-impl Drop for AggregateAssetDownloadTask {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AggregateAssetDownloadTask,
+    release = ffi::av_ns_object_release
+);
 
 #[derive(Debug)]
 pub struct AssetDownloadURLSession {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetDownloadURLSession {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_asset_download_url_session_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetDownloadURLSession,
+    release = ffi::av_asset_download_url_session_release
+);
 
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]

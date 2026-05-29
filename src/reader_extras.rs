@@ -15,6 +15,7 @@ use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata_groups::TimedMetadataGroupHandle;
 use crate::reader::{AssetReader, AssetReaderTrackOutput};
+use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
 use crate::util::{catch_cb_panic, json_cstring, parse_json_and_free};
 
@@ -119,14 +120,10 @@ pub struct AssetReaderSampleReferenceOutput {
     pub(crate) ptr: *mut c_void,
 }
 
-impl Drop for AssetReaderSampleReferenceOutput {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_reader_output_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetReaderSampleReferenceOutput,
+    release = ffi::av_reader_output_release
+);
 
 impl AssetReaderSampleReferenceOutput {
     pub fn new(track: &AssetTrack) -> Result<Self, AVPlayerError> {
@@ -154,14 +151,10 @@ pub struct AssetReaderOutputMetadataAdaptor {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetReaderOutputMetadataAdaptor {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetReaderOutputMetadataAdaptor,
+    release = ffi::av_ns_object_release
+);
 
 impl AssetReaderOutputMetadataAdaptor {
     pub fn new(track_output: &AssetReaderTrackOutput) -> Result<Self, AVPlayerError> {
@@ -204,14 +197,10 @@ pub struct AssetReaderOutputCaptionAdaptor {
     ptr: *mut c_void,
 }
 
-impl Drop for AssetReaderOutputCaptionAdaptor {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_ns_object_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    AssetReaderOutputCaptionAdaptor,
+    release = ffi::av_ns_object_release
+);
 
 impl AssetReaderOutputCaptionAdaptor {
     pub fn new(track_output: &AssetReaderTrackOutput) -> Result<Self, AVPlayerError> {
@@ -338,14 +327,11 @@ impl CaptionValidationEventStream {
     }
 }
 
-impl Drop for CaptionValidationObserver {
-    fn drop(&mut self) {
-        if !self.token.is_null() {
-            unsafe { ffi::av_reader_output_caption_validation_observer_release(self.token) };
-            self.token = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(
+    CaptionValidationObserver,
+    field = token,
+    release = ffi::av_reader_output_caption_validation_observer_release
+);
 
 unsafe impl Send for AssetReaderSampleReferenceOutput {}
 unsafe impl Send for AssetReaderOutputMetadataAdaptor {}

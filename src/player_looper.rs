@@ -9,6 +9,7 @@ use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
 use crate::queue_player::QueuePlayer;
+use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
 use crate::util::parse_json_and_free;
 
@@ -75,14 +76,7 @@ pub struct PlayerLooper {
     ptr: *mut c_void,
 }
 
-impl Drop for PlayerLooper {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe { ffi::av_player_looper_release(self.ptr) };
-            self.ptr = ptr::null_mut();
-        }
-    }
-}
+retain_release_wrapper!(PlayerLooper, release = ffi::av_player_looper_release);
 
 // SAFETY: AVPlayerLooper ObjC handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.
