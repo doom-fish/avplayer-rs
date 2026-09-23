@@ -1,5 +1,19 @@
 # avplayer-rs coverage audit (vs MacOSX26.2.sdk)
 
+> **What these numbers measure (corrected in 0.8.0):** the table counts 109
+> top-level symbols (classes, protocols, typedefs, constants) and marks a symbol
+> VERIFIED when a Rust wrapper type exists. It doesn't count members. Before
+> 0.8.0 several member-level gaps existed (tolerance seeks,
+> `setRate:time:atHostTime:`, `defaultRate`, `audioOutputDeviceUniqueID`,
+> forward/reverse playback end times, `stepByCount:`, the item's
+> `videoComposition`/`audioMix`, most `AVURLAsset` options, and status /
+> `timeControlStatus` observation), and `AVPlayerVideoOutput` and
+> `AVPlayerItemRenderedLegibleOutput` were listed as VERIFIED although they
+> dropped the pixel and sample buffers. 0.8.0 adds those members and delivers
+> the buffers. The composition and audio-mix object models, `AVPlayerView`
+> (AVKit) and the macOS 26 `AVAssetReader.Provider` API remain unwrapped; see
+> `COVERAGE.md`.
+
 SDK_PUBLIC_SYMBOLS: 109
 VERIFIED: 109
 GAPS: 0
