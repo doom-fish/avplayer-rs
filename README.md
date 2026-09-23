@@ -41,7 +41,7 @@ Enable the `async` Cargo feature for executor-agnostic `Future` wrappers around
 `AVFoundation`'s `async throws` and completion-handler APIs:
 
 ```toml
-avplayer = { version = "0.7", features = ["async"] }
+avplayer = { version = "0.8", features = ["async"] }
 ```
 
 ```rust,no_run

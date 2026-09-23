@@ -1,5 +1,60 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.8.0] - Unreleased
+
+### Security
+
+- Periodic and boundary time observers freed their callback while a block that was already running could still use it, so dropping an observer during a callback was a use-after-free. The Swift observer box now owns the `CallbackContext` reference. Dropping closes the callback gate, calls `removeTimeObserver`, waits with `dispatch_sync` on the observer's queue (the main queue when no label was given) while a callback is running, and releases the context only after the last callback has returned. It never waits on the queue it is running on, and never waits when no callback is running, so dropping an observer from its own callback, or in a process that doesn't service the main queue, doesn't deadlock.
+- The blocking helper behind `Asset::duration`, `metadata` and `url`, `AssetTrack` properties and `AssetImageGenerator::copy_image_at_time` kept its task running after the 30-second timeout, and a late failure wrote an error string into the caller's stack frame. Results now go into lock-protected heap state, only the caller writes the out-pointers, and a timeout cancels the task and returns an error.
+- Every delegate, notification and KVO box (player item, rate, time, legible, metadata, video and rendered-legible outputs, metadata collector, interstitial monitor, integrated timeline, caption validation, resource loader, content-key session and asset download) freed its callback context right after unregistering and guarded delivery with an unsynchronized `disposed` flag, so a callback racing a drop read freed memory. Contexts are now `doom_fish_utils::callback_context::CallbackContext`s. The Swift box holds a reference behind a lock-protected gate that no new callback can enter after teardown starts, and whichever finishes last, teardown or the last running callback, releases it. The Rust handle deactivates the context before unregistering.
+- `AssetDownloadURLSession` never invalidated its `URLSession`, so the session could call a delegate whose context had been freed, and the session, delegate and background identifier leaked. Dropping it now closes the delegate and calls `finishTasksAndInvalidate()`.
+- Content-key session events carried `+1` key-request and content-key pointers inside the event JSON, which leaked whenever the event wasn't delivered. The pointers are now borrowed for the callback and retained by Rust when it builds the event.
+
+### Fixed
+
+- Documented Objective-C exception preconditions return an `AVPlayerError` instead of aborting the process: `AsyncPlayer::preroll` before `ReadyToPlay`, seeks to invalid or indefinite times or with invalid or negative tolerances (sync, async and integrated-timeline seeks), `PlayerActionAtItemEnd::Advance` on a plain `Player`, an item that belongs to another player (`Player::from_item`, `QueuePlayer::with_items`, `QueuePlayer` insertion, `replace_current_item`), duplicate `QueuePlayer::with_items` items, a zero-length or negative `PlayerLooper` range, `start_reading` called twice, copying samples or metadata/caption groups before reading starts, invalid `reset_for_reading_time_ranges` input or state, reader output settings changed after reading starts, reader outputs and adaptors that AVFoundation rejects, `setRate(_:time:atHostTime:)` while `automaticallyWaitsToMinimizeStalling` is on, a video composition AVFoundation rejects, and CEA-608 native legible-output subtypes. State-dependent checks go through a new Objective-C `@try`/`@catch` target, `AVPlayerObjCBridge`.
+- `AVPlayerVideoOutput` samples and rendered caption images only reported tags and sizes and dropped the actual buffers; they now carry retained `CVPixelBuffer`/`CMSampleBuffer` values. Legible-output events also carry their native `CMSampleBuffer`s.
+- `AsyncAsset::load_tracks_with_media_type` turned a media type containing a NUL byte into an empty string; the future now resolves to `InvalidArgument`.
+- `Asset::tracks` used the deprecated synchronous `AVAsset.tracks`, which blocks on remote assets, and could index past a track list that changed between the count and the copy. It now loads `.tracks` asynchronously once.
+- `ContentKeySession::observe_events`, `AssetDownloadURLSession::background_with_events`, `AssetResourceLoader::observe_loading_request_events` and `AssetReaderOutputCaptionAdaptor::observe_validation_events` panicked for a capacity of 0; they return `InvalidArgument`.
+- A content-key event pointer that didn't fit in `usize` panicked inside the `extern "C"` trampoline.
+- Null entries in reader track or queue-player item pointer arrays no longer force-unwrap in Swift.
+- Resource-loader delegates registered without a queue label get a private serial queue instead of a nil delegate queue.
+- Periodic time observers require a positive interval and boundary observers at least one numeric time.
+- Tests that asserted nothing now check their results, and the URL-asset test no longer relies on `AVURLAssetPreferPreciseDurationAndTimingKey = false`, which makes AIFF duration loading fail on macOS 27.
+
+### Changed
+
+- **BREAKING:** observer, delegate and event-stream callbacks must be `Fn + Send + Sync` (they were `Fn + Send`), because nil-queue observers can be called from several threads at once. Periodic and boundary time observers still take `FnMut + Send`; their calls are serialized.
+- **BREAKING:** `copy_next_sample_buffer` and `copy_next_video_pixel_buffer` on the reader outputs return `Result<Option<_>, AVPlayerError>`, and `set_always_copies_sample_data` and `AssetReaderOutput::set_supports_random_access` return `Result<(), AVPlayerError>`.
+- **BREAKING:** `RenderedCaptionImage` has a `pixel_buffer` field, `PlayerVideoTaggedBuffer` a `buffer` field and `PlayerItemLegibleOutputEvent::AttributedStrings` a `native_sample_buffers` field.
+- **BREAKING:** `UrlAssetOptions` is no longer `Copy`, `UrlAsset::from_file_path_with_options` and `from_remote_url_with_options` take `&UrlAssetOptions`, and `prefers_precise_duration_and_timing` takes `&self`.
+- **BREAKING:** raw FFI: `av_player_replace_current_item`, `av_reader_output_copy_next_sample_buffer`, `av_reader_output_copy_next_video_pixel_buffer`, `av_reader_output_set_always_copies_sample_data`, `av_reader_output_set_supports_random_access` and `av_player_video_output_sample_json` take an extra out-parameter, and the legible and rendered-legible observer callbacks receive the buffer objects.
+- `AVPlayerError` has a `TimedOut` variant, used when loading an asset's tracks times out.
+- Async seek, preroll and track-loading futures resolve immediately with `InvalidArgument` or `OperationFailed` for rejected arguments.
+- `rust-version` is 1.82 (was 1.76). Requires `apple-cf` `>=0.11, <0.12` (now by path as well) and `doom-fish-utils` `>=0.4.1, <0.5`.
+- The retain/release `Drop` boilerplate of the wrapper types moved into a `retain_release_wrapper!` macro, with no behavior change.
+
+### Added
+
+- `Player::seek_to_with_tolerance`, `AsyncPlayer::seek_with_tolerance` and `AsyncPlayerItem::seek_with_tolerance`.
+- `Player::set_rate_at_host_time`, `default_rate`, `set_default_rate`, `audio_output_device_unique_id`, `set_audio_output_device_unique_id` and `replace_current_item`.
+- `Player::observe_status`, which reports `status` and `timeControlStatus` changes as `PlayerStatusEvent`s through a `PlayerStatusObserver`.
+- `PlayerItem::forward_playback_end_time`, `set_forward_playback_end_time`, `reverse_playback_end_time`, `set_reverse_playback_end_time`, `can_step_forward`, `can_step_backward` and `step_by_count`.
+- `PlayerItem::has_video_composition`, `set_video_composition_from_asset`, `clear_video_composition`, `has_audio_mix`, `set_audio_mix_volumes` (with `AudioMixTrackVolume`) and `clear_audio_mix`.
+- `PlayerLayer::as_ptr` and `SampleBufferDisplayLayer::as_ptr`, the underlying `CALayer` for attaching to a layer tree. `AVPlayerView` (AVKit) remains out of scope.
+- `PlayerVideoTaggedBufferData`.
+- `UrlAssetOptions` builders for the MIME-type override, reference restrictions, HTTP cookies (`UrlAssetHttpCookie`), cellular, expensive and constrained network access, alias data references, request attribution (`UrlRequestAttribution`), HTTP user agent, primary session identifier and spherical-tag parsing.
+
+### Removed
+
+- Raw FFI `av_asset_track_count` and `av_asset_copy_track_at_index`, replaced by `av_asset_load_tracks`.
+
 ## [0.7.0] - 2026-05-20
 
 ### Added
