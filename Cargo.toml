@@ -59,6 +59,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 [badges]
 maintenance = { status = "actively-developed" }
 
+[[test]]
+name = "avplayer_time_observer_lifecycle"
+harness = false
+
 [[example]]
 name = "01_smoke_surface"
 

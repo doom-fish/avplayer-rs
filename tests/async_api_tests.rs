@@ -56,8 +56,7 @@ mod async_tests {
         let asset = UrlAsset::from_remote_url("https://127.0.0.1:0/no-such-asset.mp4")
             .expect("UrlAsset construction does not validate URL");
         let result = pollster::block_on(AsyncAsset::new(asset.as_asset()).load_properties());
-        // Either an error or a result is acceptable — we just want no panic / hang.
-        drop(result);
+        assert!(result.is_err());
     }
 
     // ── AsyncAsset::load_tracks ───────────────────────────────────────────────
@@ -181,9 +180,21 @@ mod async_tests {
         }
         let item = PlayerItem::from_file_path(&path).expect("PlayerItem::from_file_path");
         let player = Player::from_item(&item).expect("Player::from_item");
-        let finished =
-            pollster::block_on(AsyncPlayer::new(&player).preroll(1.0)).expect("Player preroll");
-        // preroll may return false if item is not ready; both outcomes are valid.
-        let _ = finished;
+        let ready = (0..100).any(|_| {
+            if player.status().ok() == Some(avplayer::PlayerStatus::ReadyToPlay) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            false
+        });
+        let result = pollster::block_on(AsyncPlayer::new(&player).preroll(1.0));
+        if ready {
+            assert!(result.is_ok(), "{result:?}");
+        } else {
+            assert!(matches!(
+                result,
+                Err(avplayer::AVPlayerError::OperationFailed(_))
+            ));
+        }
     }
 }

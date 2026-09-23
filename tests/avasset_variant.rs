@@ -6,6 +6,7 @@ use avplayer::prelude::*;
 fn avasset_variant_enumeration_is_queryable() -> support::TestResult {
     let asset = support::loaded_audio_asset("test-avasset-variant")?;
     let variants = asset.variants()?;
+    assert!(variants.is_empty());
 
     for variant in &variants {
         let _ = variant.peak_bit_rate()?;
