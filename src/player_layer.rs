@@ -146,6 +146,6 @@ impl PlayerLayer {
     /// Calls the `AVPlayer` framework counterpart for `copy_displayed_pixel_buffer`.
     pub fn copy_displayed_pixel_buffer(&self) -> Option<CVPixelBuffer> {
         let ptr = unsafe { ffi::av_player_layer_copy_displayed_pixel_buffer(self.ptr) };
-        CVPixelBuffer::from_raw(ptr)
+        unsafe { CVPixelBuffer::from_raw(ptr) }
     }
 }

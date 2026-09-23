@@ -333,13 +333,13 @@ impl AssetReaderTrackOutput {
     /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
     pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
-        CMSampleBuffer::from_raw(ptr)
+        unsafe { CMSampleBuffer::from_raw(ptr) }
     }
 
     /// Calls the `AVPlayer` framework counterpart for `copy_next_video_pixel_buffer`.
     pub fn copy_next_video_pixel_buffer(&self) -> Option<CVPixelBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(self.ptr) };
-        CVPixelBuffer::from_raw(ptr)
+        unsafe { CVPixelBuffer::from_raw(ptr) }
     }
 }
 
@@ -392,7 +392,7 @@ impl AssetReaderAudioMixOutput {
     /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
     pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
-        CMSampleBuffer::from_raw(ptr)
+        unsafe { CMSampleBuffer::from_raw(ptr) }
     }
 }
 
@@ -452,13 +452,13 @@ impl AssetReaderVideoCompositionOutput {
     /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
     pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
-        CMSampleBuffer::from_raw(ptr)
+        unsafe { CMSampleBuffer::from_raw(ptr) }
     }
 
     /// Calls the `AVPlayer` framework counterpart for `copy_next_video_pixel_buffer`.
     pub fn copy_next_video_pixel_buffer(&self) -> Option<CVPixelBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(self.ptr) };
-        CVPixelBuffer::from_raw(ptr)
+        unsafe { CVPixelBuffer::from_raw(ptr) }
     }
 }
 

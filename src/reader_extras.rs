@@ -105,12 +105,12 @@ impl AssetReaderOutput<'_> {
 
     pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
-        CMSampleBuffer::from_raw(ptr)
+        unsafe { CMSampleBuffer::from_raw(ptr) }
     }
 
     pub fn copy_next_video_pixel_buffer(&self) -> Option<CVPixelBuffer> {
         let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(self.ptr) };
-        CVPixelBuffer::from_raw(ptr)
+        unsafe { CVPixelBuffer::from_raw(ptr) }
     }
 }
 

@@ -2,7 +2,7 @@ mod support;
 
 use avplayer::prelude::*;
 
-const fn assert_next_item<T>(_: doom_fish_utils::stream::NextItem<'_, T>) {}
+fn assert_next_item<T>(_: doom_fish_utils::stream::NextItem<'_, T>) {}
 
 fn assert_caption_validation_stream_api(
     adaptor: &AssetReaderOutputCaptionAdaptor,

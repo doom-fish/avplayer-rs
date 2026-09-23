@@ -166,7 +166,7 @@ impl PlayerItemVideoOutput {
                 self.ptr, value, timescale, kind,
             )
         };
-        CVPixelBuffer::from_raw(ptr)
+        unsafe { CVPixelBuffer::from_raw(ptr) }
     }
 }
 
