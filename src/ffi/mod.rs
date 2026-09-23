@@ -21,6 +21,12 @@ pub type BoolObjectCallback = unsafe extern "C" fn(
     event_name: *const c_char,
     object: *mut c_void,
 ) -> bool;
+pub type JsonObjectsCallback = unsafe extern "C" fn(
+    userdata: *mut c_void,
+    payload_json: *const c_char,
+    objects: *const *mut c_void,
+    count: usize,
+);
 
 extern "C" {
     /// Calls the `AVPlayer` framework counterpart for `avp_string_free`.
@@ -60,10 +66,20 @@ extern "C" {
         key: *const c_char,
         out_error_message: *mut *mut c_char,
     ) -> i32;
-    /// Calls the `AVPlayer` framework counterpart for `av_asset_track_count`.
-    pub fn av_asset_track_count(asset: *mut c_void) -> i32;
-    /// Calls the `AVPlayer` framework counterpart for `av_asset_copy_track_at_index`.
-    pub fn av_asset_copy_track_at_index(asset: *mut c_void, index: i32) -> *mut c_void;
+    pub fn av_asset_load_tracks(
+        asset: *mut c_void,
+        out_status: *mut i32,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn avp_object_array_count(array: *mut c_void) -> usize;
+    pub fn avp_object_array_copy_at(array: *mut c_void, index: usize) -> *mut c_void;
+    pub fn avp_object_array_release(array: *mut c_void);
+    pub fn av_url_asset_create_with_options_json(
+        url: *const c_char,
+        is_file_url: bool,
+        options_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
     /// Calls the `AVPlayer` framework counterpart for `av_asset_track_release`.
     pub fn av_asset_track_release(track: *mut c_void);
     /// Calls the `AVPlayer` framework counterpart for `av_asset_track_info_json`.
@@ -689,7 +705,73 @@ extern "C" {
     /// Calls the `AVPlayer` framework counterpart for `av_player_copy_current_item`.
     pub fn av_player_copy_current_item(player: *mut c_void) -> *mut c_void;
     /// Calls the `AVPlayer` framework counterpart for `av_player_replace_current_item`.
-    pub fn av_player_replace_current_item(player: *mut c_void, item: *mut c_void);
+    pub fn av_player_replace_current_item(
+        player: *mut c_void,
+        item: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_seek_with_tolerance(
+        player: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        before_value: i64,
+        before_timescale: i32,
+        before_kind: i32,
+        after_value: i64,
+        after_timescale: i32,
+        after_kind: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_set_rate_at_host_time(
+        player: *mut c_void,
+        rate: f32,
+        item_value: i64,
+        item_timescale: i32,
+        item_kind: i32,
+        host_value: i64,
+        host_timescale: i32,
+        host_kind: i32,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_set_default_rate(player: *mut c_void, rate: f32);
+    pub fn av_player_set_audio_output_device_unique_id(
+        player: *mut c_void,
+        unique_id: *const c_char,
+    );
+    pub fn av_player_add_status_observer(
+        player: *mut c_void,
+        callback: Option<JsonCallback>,
+        userdata: *mut c_void,
+        drop_userdata: Option<DropCallback>,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn av_player_status_observer_release(observer: *mut c_void);
+    pub fn av_player_item_set_forward_playback_end_time(
+        item: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    );
+    pub fn av_player_item_set_reverse_playback_end_time(
+        item: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+    );
+    pub fn av_player_item_step_by_count(item: *mut c_void, count: isize);
+    pub fn av_player_item_set_video_composition_from_asset(
+        item: *mut c_void,
+        asset: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_item_clear_video_composition(item: *mut c_void);
+    pub fn av_player_item_set_audio_mix_volumes_json(
+        item: *mut c_void,
+        volumes_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
+    pub fn av_player_item_clear_audio_mix(item: *mut c_void);
     /// Calls the `AVPlayer` framework counterpart for `av_player_set_action_at_item_end`.
     pub fn av_player_set_action_at_item_end(
         player: *mut c_void,
@@ -1060,7 +1142,7 @@ extern "C" {
     pub fn av_player_item_legible_output_add_observer(
         output: *mut c_void,
         queue_label: *const c_char,
-        callback: Option<JsonCallback>,
+        callback: Option<JsonObjectsCallback>,
         userdata: *mut c_void,
         drop_userdata: Option<DropCallback>,
         out_error_message: *mut *mut c_char,
@@ -1101,7 +1183,7 @@ extern "C" {
     pub fn av_player_item_rendered_legible_output_add_observer(
         output: *mut c_void,
         queue_label: *const c_char,
-        callback: Option<JsonCallback>,
+        callback: Option<JsonObjectsCallback>,
         userdata: *mut c_void,
         drop_userdata: Option<DropCallback>,
         out_error_message: *mut *mut c_char,
@@ -1160,6 +1242,7 @@ extern "C" {
         host_time_value: i64,
         host_time_timescale: i32,
         host_time_kind: i32,
+        out_buffers: *mut *mut c_void,
         out_error_message: *mut *mut c_char,
     ) -> *mut c_char;
     /// Calls the `AVPlayer` framework counterpart for `av_player_set_video_output`.
@@ -1490,20 +1573,31 @@ extern "C" {
     /// Calls the `AVPlayer` framework counterpart for `av_reader_output_release`.
     pub fn av_reader_output_release(output: *mut c_void);
     /// Calls the `AVPlayer` framework counterpart for `av_reader_output_set_always_copies_sample_data`.
-    pub fn av_reader_output_set_always_copies_sample_data(output: *mut c_void, always_copies: bool);
+    pub fn av_reader_output_set_always_copies_sample_data(
+        output: *mut c_void,
+        always_copies: bool,
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
     /// Calls the `AVPlayer` framework counterpart for `av_reader_output_media_type`.
     pub fn av_reader_output_media_type(output: *mut c_void) -> *mut c_char;
     /// Calls the `AVPlayer` framework counterpart for `av_reader_output_copy_next_sample_buffer`.
-    pub fn av_reader_output_copy_next_sample_buffer(output: *mut c_void) -> *mut c_void;
+    pub fn av_reader_output_copy_next_sample_buffer(
+        output: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
     /// Calls the `AVPlayer` framework counterpart for `av_reader_output_copy_next_video_pixel_buffer`.
-    pub fn av_reader_output_copy_next_video_pixel_buffer(output: *mut c_void) -> *mut c_void;
+    pub fn av_reader_output_copy_next_video_pixel_buffer(
+        output: *mut c_void,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
     /// Calls the `AVPlayer` framework counterpart for `av_reader_output_supports_random_access`.
     pub fn av_reader_output_supports_random_access(output: *mut c_void) -> bool;
     /// Calls the `AVPlayer` framework counterpart for `av_reader_output_set_supports_random_access`.
     pub fn av_reader_output_set_supports_random_access(
         output: *mut c_void,
         supports_random_access: bool,
-    );
+        out_error_message: *mut *mut c_char,
+    ) -> i32;
     /// Calls the `AVPlayer` framework counterpart for `av_reader_output_reset_for_time_ranges_json`.
     pub fn av_reader_output_reset_for_time_ranges_json(
         output: *mut c_void,
@@ -1557,6 +1651,7 @@ extern "C" {
 
     /// Calls the `AVPlayer` framework counterpart for `av_ns_object_release`.
     pub fn av_ns_object_release(object: *mut c_void);
+    pub fn av_ns_object_retain(object: *mut c_void) -> *mut c_void;
     /// Calls the `AVPlayer` framework counterpart for `av_fragmented_asset_create`.
     pub fn av_fragmented_asset_create(
         url: *const c_char,
@@ -1935,6 +2030,7 @@ pub mod status {
     pub const OBSERVER_FAILED: i32 = -6;
     /// Mirrors the `AVPlayer` framework constant `LOAD_FAILED`.
     pub const LOAD_FAILED: i32 = -7;
+    pub const TIMED_OUT: i32 = -8;
 }
 
 // ── Async (feature = "async") ────────────────────────────────────────────────
@@ -1998,6 +2094,36 @@ extern "C" {
         value: i64,
         timescale: i32,
         kind: i32,
+        cb: AsyncCallback,
+        ctx: *mut c_void,
+    );
+
+    pub fn avp_player_seek_with_tolerance_async(
+        player: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        before_value: i64,
+        before_timescale: i32,
+        before_kind: i32,
+        after_value: i64,
+        after_timescale: i32,
+        after_kind: i32,
+        cb: AsyncCallback,
+        ctx: *mut c_void,
+    );
+
+    pub fn avp_player_item_seek_with_tolerance_async(
+        item: *mut c_void,
+        value: i64,
+        timescale: i32,
+        kind: i32,
+        before_value: i64,
+        before_timescale: i32,
+        before_kind: i32,
+        after_value: i64,
+        after_timescale: i32,
+        after_kind: i32,
         cb: AsyncCallback,
         ctx: *mut c_void,
     );

@@ -55,21 +55,17 @@ final class AVPPlayerItemMetadataCollectorBox: AVPPlayerItemMediaDataCollectorBo
 final class MetadataCollectorObserverBox: NSObject, AVPlayerItemMetadataCollectorPushDelegate {
     private weak var collector: AVPlayerItemMetadataCollector?
     private let callback: AVPJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
 
     init(
         collector: AVPlayerItemMetadataCollector,
         queue: DispatchQueue?,
         callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
         self.collector = collector
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         collector.setDelegate(self, queue: queue)
     }
@@ -79,12 +75,9 @@ final class MetadataCollectorObserverBox: NSObject, AVPlayerItemMetadataCollecto
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         collector?.setDelegate(nil, queue: nil)
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     func metadataCollector(
@@ -104,12 +97,7 @@ final class MetadataCollectorObserverBox: NSObject, AVPlayerItemMetadataCollecto
     }
 
     private func send(_ payload: MetadataCollectorEventPayload) {
-        guard !disposed else { return }
-        guard let json = try? avpEncodeJSON(payload) else {
-            callback(userData, nil)
-            return
-        }
-        json.withCString { callback(userData, $0) }
+        gate.deliverJSON(payload, to: callback)
     }
 }
 
@@ -182,6 +170,7 @@ public func av_player_item_metadata_collector_add_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing metadata collector observer callback")
         return nil
@@ -191,8 +180,7 @@ public func av_player_item_metadata_collector_add_observer(
         collector: collector,
         queue: avpDispatchQueue(from: queueLabel),
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -200,7 +188,9 @@ public func av_player_item_metadata_collector_add_observer(
 @_cdecl("av_player_item_metadata_collector_observer_release")
 public func av_player_item_metadata_collector_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<MetadataCollectorObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<MetadataCollectorObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_player_item_add_media_data_collector")

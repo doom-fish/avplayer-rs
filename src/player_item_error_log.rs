@@ -86,7 +86,7 @@ unsafe impl Send for PlayerItemErrorLog {}
 impl PlayerItemErrorLog {
     fn info(&self) -> Result<ErrorLogPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_error_log_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_player_item_error_log_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

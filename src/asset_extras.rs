@@ -61,7 +61,7 @@ struct AssetTrackExtraInfoPayload {
 impl Asset {
     fn extra_info(&self) -> Result<AssetExtraInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_extra_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_asset_extra_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -210,7 +210,7 @@ impl UrlAsset {
 impl AssetTrack {
     fn extra_info(&self) -> Result<AssetTrackExtraInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_track_extra_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_asset_track_extra_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

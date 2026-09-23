@@ -61,13 +61,10 @@ class AVPPlayerItemIntegratedTimelineSegmentBox: NSObject {
 
 @available(macOS 15.0, *)
 class AVPPlayerItemIntegratedTimelineObserverBox: NSObject {
-    fileprivate let dropUserData: AVPDropCallback?
-    fileprivate let userData: UnsafeMutableRawPointer?
-    fileprivate var disposed = false
+    fileprivate let gate: AVPCallbackGate
 
-    init(userData: UnsafeMutableRawPointer?, dropUserData: AVPDropCallback?) {
-        self.userData = userData
-        self.dropUserData = dropUserData
+    init(gate: AVPCallbackGate) {
+        self.gate = gate
     }
 
     deinit {
@@ -75,12 +72,12 @@ class AVPPlayerItemIntegratedTimelineObserverBox: NSObject {
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        guard gate.close() else { return }
+        teardown()
+        gate.finish()
     }
+
+    fileprivate func teardown() {}
 }
 
 @available(macOS 15.0, *)
@@ -88,32 +85,20 @@ final class AVPPlayerItemIntegratedTimelineTimeObserverBox: AVPPlayerItemIntegra
     private var task: Task<Void, Never>?
     private let callback: AVPPeriodicTimeCallback
 
-    init(
-        callback: @escaping AVPPeriodicTimeCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
-    ) {
+    init(callback: @escaping AVPPeriodicTimeCallback, gate: AVPCallbackGate) {
         self.callback = callback
-        super.init(userData: userData, dropUserData: dropUserData)
+        super.init(gate: gate)
     }
 
-    override func dispose() {
+    override fileprivate func teardown() {
         task?.cancel()
         task = nil
-        super.dispose()
     }
 
     func startPeriodic(timeline: AVPlayerItemIntegratedTimeline, interval: CMTime) {
-        task = Task { [weak self] in
+        task = Task { [gate, callback] in
             for await time in timeline.periodicTimes(forInterval: interval) {
-                guard let self, !self.disposed else { break }
-                let encoded = encodeTime(time)
-                self.callback(
-                    self.userData,
-                    encoded.value ?? 0,
-                    encoded.timescale ?? 0,
-                    avpIntegratedTimelineKind(from: encoded)
-                )
+                guard avpDeliverIntegratedTimelineTime(time, gate: gate, callback: callback) else { break }
             }
         }
     }
@@ -123,56 +108,56 @@ final class AVPPlayerItemIntegratedTimelineTimeObserverBox: AVPPlayerItemIntegra
         segment: AVPlayerItemSegment,
         offsetsIntoSegment: [CMTime]
     ) {
-        task = Task { [weak self] in
+        task = Task { [gate, callback] in
             for await time in timeline.boundaryTimes(for: segment, offsetsIntoSegment: offsetsIntoSegment) {
-                guard let self, !self.disposed else { break }
-                let encoded = encodeTime(time)
-                self.callback(
-                    self.userData,
-                    encoded.value ?? 0,
-                    encoded.timescale ?? 0,
-                    avpIntegratedTimelineKind(from: encoded)
-                )
+                guard avpDeliverIntegratedTimelineTime(time, gate: gate, callback: callback) else { break }
             }
         }
+    }
+}
+
+private func avpDeliverIntegratedTimelineTime(
+    _ time: CMTime,
+    gate: AVPCallbackGate,
+    callback: AVPPeriodicTimeCallback
+) -> Bool {
+    gate.run(false) { context in
+        let encoded = encodeTime(time)
+        callback(
+            context,
+            encoded.value ?? 0,
+            encoded.timescale ?? 0,
+            avpIntegratedTimelineKind(from: encoded)
+        )
+        return true
     }
 }
 
 @available(macOS 15.0, *)
 final class AVPPlayerItemIntegratedTimelineNotificationObserverBox: AVPPlayerItemIntegratedTimelineObserverBox {
     private var token: NSObjectProtocol?
-    private let callback: AVPJsonCallback
 
     init(
         timeline: AVPlayerItemIntegratedTimeline,
         callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
-        self.callback = callback
-        super.init(userData: userData, dropUserData: dropUserData)
+        super.init(gate: gate)
         token = NotificationCenter.default.addObserver(
             forName: AVPlayerItemIntegratedTimeline.snapshotsOutOfSyncNotification,
             object: timeline,
             queue: nil
-        ) { [weak self] notification in
-            guard let self, !self.disposed else { return }
+        ) { [gate] notification in
             let reason = notification.userInfo?[AVPlayerItemIntegratedTimeline.snapshotsOutOfSyncReasonKey] as? String
-            let payload = PlayerIntegratedTimelineOutOfSyncPayload(reason: reason ?? "")
-            guard let json = try? avpEncodeJSON(payload) else {
-                callback(userData, nil)
-                return
-            }
-            json.withCString { callback(userData, $0) }
+            gate.deliverJSON(PlayerIntegratedTimelineOutOfSyncPayload(reason: reason ?? ""), to: callback)
         }
     }
 
-    override func dispose() {
+    override fileprivate func teardown() {
         if let token {
             NotificationCenter.default.removeObserver(token)
             self.token = nil
         }
-        super.dispose()
     }
 }
 
@@ -283,13 +268,18 @@ public func av_player_item_integrated_timeline_seek_to_time(
         return AVP_OPERATION_FAILED
     }
     let timeline = Unmanaged<AVPPlayerItemIntegratedTimelineBox>.fromOpaque(timelinePtr).takeUnretainedValue().timeline
+    let time = cmTime(value: timeValue, timescale: timeTimescale, kind: timeKind)
+    let before = cmTime(value: beforeValue, timescale: beforeTimescale, kind: beforeKind)
+    let after = cmTime(value: afterValue, timescale: afterTimescale, kind: afterKind)
+    if let message = avpSeekTimeError(time, what: "seek time")
+        ?? avpToleranceError(before, what: "tolerance before")
+        ?? avpToleranceError(after, what: "tolerance after") {
+        outErrorMessage?.pointee = ffiString(message)
+        return AVP_INVALID_ARGUMENT
+    }
     let semaphore = DispatchSemaphore(value: 0)
     var success = false
-    timeline.seek(
-        to: cmTime(value: timeValue, timescale: timeTimescale, kind: timeKind),
-        toleranceBefore: cmTime(value: beforeValue, timescale: beforeTimescale, kind: beforeKind),
-        toleranceAfter: cmTime(value: afterValue, timescale: afterTimescale, kind: afterKind)
-    ) { didSeek in
+    timeline.seek(to: time, toleranceBefore: before, toleranceAfter: after) { didSeek in
         success = didSeek
         semaphore.signal()
     }
@@ -342,6 +332,7 @@ public func av_player_item_integrated_timeline_add_periodic_time_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
@@ -350,13 +341,14 @@ public func av_player_item_integrated_timeline_add_periodic_time_observer(
         outErrorMessage?.pointee = ffiString("missing integrated timeline periodic observer callback")
         return nil
     }
+    let interval = cmTime(value: value, timescale: timescale, kind: kind)
+    guard interval.isNumeric, interval > .zero else {
+        outErrorMessage?.pointee = ffiString("time-observer interval must be a positive numeric time")
+        return nil
+    }
     let timeline = Unmanaged<AVPPlayerItemIntegratedTimelineBox>.fromOpaque(timelinePtr).takeUnretainedValue().timeline
-    let observer = AVPPlayerItemIntegratedTimelineTimeObserverBox(
-        callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
-    )
-    observer.startPeriodic(timeline: timeline, interval: cmTime(value: value, timescale: timescale, kind: kind))
+    let observer = AVPPlayerItemIntegratedTimelineTimeObserverBox(callback: callback, gate: gate)
+    observer.startPeriodic(timeline: timeline, interval: interval)
     return Unmanaged.passRetained(observer).toOpaque()
 }
 
@@ -370,6 +362,7 @@ public func av_player_item_integrated_timeline_add_boundary_time_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
@@ -388,11 +381,7 @@ public func av_player_item_integrated_timeline_add_boundary_time_observer(
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
     }
-    let observer = AVPPlayerItemIntegratedTimelineTimeObserverBox(
-        callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
-    )
+    let observer = AVPPlayerItemIntegratedTimelineTimeObserverBox(callback: callback, gate: gate)
     observer.startBoundary(
         timeline: timeline,
         segment: segment,
@@ -409,6 +398,7 @@ public func av_player_item_integrated_timeline_add_out_of_sync_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
@@ -421,8 +411,7 @@ public func av_player_item_integrated_timeline_add_out_of_sync_observer(
     let observer = AVPPlayerItemIntegratedTimelineNotificationObserverBox(
         timeline: timeline,
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -431,7 +420,9 @@ public func av_player_item_integrated_timeline_add_out_of_sync_observer(
 public func av_player_item_integrated_timeline_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard #available(macOS 15.0, *) else { return }
     guard let observerPtr else { return }
-    Unmanaged<AVPPlayerItemIntegratedTimelineObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<AVPPlayerItemIntegratedTimelineObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_player_item_integrated_timeline_snapshot_release")

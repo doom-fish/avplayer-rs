@@ -1,4 +1,5 @@
 import AVFoundation
+import AVPlayerObjCBridge
 import Foundation
 
 private func encodePlayerItemVideoCompositor(
@@ -36,9 +37,7 @@ private func encodePlayerItemVideoCompositor(
 private final class PlayerItemObserverBox: NSObject {
     private let item: AVPlayerItem
     private let callback: AVPJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
     private var statusObservation: NSKeyValueObservation?
     private var presentationSizeObservation: NSKeyValueObservation?
     private var timeJumpedObserver: NSObjectProtocol?
@@ -53,13 +52,11 @@ private final class PlayerItemObserverBox: NSObject {
     init(
         item: AVPlayerItem,
         callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
         self.item = item
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         registerObservers()
     }
@@ -69,8 +66,7 @@ private final class PlayerItemObserverBox: NSObject {
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         statusObservation?.invalidate()
         presentationSizeObservation?.invalidate()
         statusObservation = nil
@@ -95,9 +91,7 @@ private final class PlayerItemObserverBox: NSObject {
         errorLogObserver = nil
         recommendedTimeOffsetFromLiveObserver = nil
         mediaSelectionObserver = nil
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     private func registerObservers() {
@@ -272,12 +266,7 @@ private final class PlayerItemObserverBox: NSObject {
     }
 
     private func send(_ payload: PlayerItemEventPayload) {
-        guard !disposed else { return }
-        guard let json = try? avpEncodeJSON(payload) else {
-            callback(userData, nil)
-            return
-        }
-        json.withCString { callback(userData, $0) }
+        gate.deliverJSON(payload, to: callback)
     }
 }
 
@@ -363,7 +352,13 @@ public func av_player_item_info_json(
         applicationAuthorizedForPlayback: item.isApplicationAuthorizedForPlayback,
         contentAuthorizedForPlayback: item.isContentAuthorizedForPlayback,
         contentAuthorizationRequestStatus: Int32(item.contentAuthorizationRequestStatus.rawValue),
-        customVideoCompositor: item.customVideoCompositor.map(encodePlayerItemVideoCompositor)
+        customVideoCompositor: item.customVideoCompositor.map(encodePlayerItemVideoCompositor),
+        forwardPlaybackEndTime: encodeTime(item.forwardPlaybackEndTime),
+        reversePlaybackEndTime: encodeTime(item.reversePlaybackEndTime),
+        canStepForward: item.canStepForward,
+        canStepBackward: item.canStepBackward,
+        hasVideoComposition: item.videoComposition != nil,
+        hasAudioMix: item.audioMix != nil
     )
     do {
         return ffiString(try avpEncodeJSON(payload))
@@ -381,6 +376,7 @@ public func av_player_item_add_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing player-item observer callback")
         return nil
@@ -389,8 +385,7 @@ public func av_player_item_add_observer(
     let box = PlayerItemObserverBox(
         item: item,
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(box).toOpaque()
 }
@@ -398,7 +393,9 @@ public func av_player_item_add_observer(
 @_cdecl("av_player_item_observer_release")
 public func av_player_item_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<PlayerItemObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<PlayerItemObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_player_item_set_can_use_network_resources_for_live_streaming_while_paused")
@@ -531,4 +528,98 @@ public func av_player_item_remove_output(
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let outputBox = Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
     item.remove(outputBox.output)
+}
+
+@_cdecl("av_player_item_set_forward_playback_end_time")
+public func av_player_item_set_forward_playback_end_time(
+    _ itemPtr: UnsafeMutableRawPointer,
+    _ value: Int64,
+    _ timescale: Int32,
+    _ kind: Int32
+) {
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    item.forwardPlaybackEndTime = cmTime(value: value, timescale: timescale, kind: kind)
+}
+
+@_cdecl("av_player_item_set_reverse_playback_end_time")
+public func av_player_item_set_reverse_playback_end_time(
+    _ itemPtr: UnsafeMutableRawPointer,
+    _ value: Int64,
+    _ timescale: Int32,
+    _ kind: Int32
+) {
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    item.reversePlaybackEndTime = cmTime(value: value, timescale: timescale, kind: kind)
+}
+
+@_cdecl("av_player_item_step_by_count")
+public func av_player_item_step_by_count(_ itemPtr: UnsafeMutableRawPointer, _ count: Int) {
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    item.step(byCount: count)
+}
+
+@_cdecl("av_player_item_set_video_composition_from_asset")
+public func av_player_item_set_video_composition_from_asset(
+    _ itemPtr: UnsafeMutableRawPointer,
+    _ assetPtr: UnsafeMutableRawPointer,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
+    let result = avpAwait(label: "AVVideoComposition from asset properties") {
+        try await AVVideoComposition.videoComposition(withPropertiesOf: asset)
+    }
+    switch result {
+    case .success(let composition):
+        var reason: NSString?
+        guard AVPTrySetVideoComposition(item, composition, &reason) else {
+            outErrorMessage?.pointee = ffiString((reason as String?) ?? "AVPlayerItem rejected the video composition")
+            return AVP_INVALID_ARGUMENT
+        }
+        return AVP_OK
+    case .failure(let error):
+        avpWriteError(error, outErrorMessage)
+        return error.status
+    }
+}
+
+@_cdecl("av_player_item_clear_video_composition")
+public func av_player_item_clear_video_composition(_ itemPtr: UnsafeMutableRawPointer) {
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    item.videoComposition = nil
+}
+
+private struct AudioMixTrackVolumePayload: Codable {
+    let trackId: Int32
+    let volume: Float
+}
+
+@_cdecl("av_player_item_set_audio_mix_volumes_json")
+public func av_player_item_set_audio_mix_volumes_json(
+    _ itemPtr: UnsafeMutableRawPointer,
+    _ volumesJson: UnsafePointer<CChar>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    do {
+        let volumes = try avpDecodeJSON(volumesJson, as: [AudioMixTrackVolumePayload].self)
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = volumes.map { entry in
+            let parameters = AVMutableAudioMixInputParameters()
+            parameters.trackID = CMPersistentTrackID(entry.trackId)
+            parameters.setVolume(entry.volume, at: .zero)
+            return parameters
+        }
+        item.audioMix = mix
+        return AVP_OK
+    } catch {
+        outErrorMessage?.pointee = ffiString(error.localizedDescription)
+        return AVP_INVALID_ARGUMENT
+    }
+}
+
+@_cdecl("av_player_item_clear_audio_mix")
+public func av_player_item_clear_audio_mix(_ itemPtr: UnsafeMutableRawPointer) {
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    item.audioMix = nil
 }

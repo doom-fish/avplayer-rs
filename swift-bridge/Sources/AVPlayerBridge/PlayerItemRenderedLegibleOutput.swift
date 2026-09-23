@@ -37,22 +37,18 @@ final class AVPPlayerItemRenderedLegibleOutputBox: AVPPlayerItemOutputBox {
 @available(macOS 15.0, *)
 final class RenderedLegibleOutputObserverBox: NSObject, AVPlayerItemRenderedLegibleOutputPushDelegate {
     private weak var output: AVPlayerItemRenderedLegibleOutput?
-    private let callback: AVPJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let callback: AVPJsonObjectsCallback
+    private let gate: AVPCallbackGate
 
     init(
         output: AVPlayerItemRenderedLegibleOutput,
         queue: DispatchQueue?,
-        callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        callback: @escaping AVPJsonObjectsCallback,
+        gate: AVPCallbackGate
     ) {
         self.output = output
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         output.setDelegate(self, queue: queue)
     }
@@ -62,16 +58,17 @@ final class RenderedLegibleOutputObserverBox: NSObject, AVPlayerItemRenderedLegi
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         output?.setDelegate(nil, queue: nil)
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     func outputSequenceWasFlushed(_ output: AVPlayerItemOutput) {
-        send(RenderedLegibleOutputEventPayload(event: "sequence_was_flushed", itemTime: nil, captionImages: nil))
+        gate.deliverJSON(
+            RenderedLegibleOutputEventPayload(event: "sequence_was_flushed", itemTime: nil, captionImages: nil),
+            objects: [],
+            to: callback
+        )
     }
 
     func renderedLegibleOutput(
@@ -84,16 +81,7 @@ final class RenderedLegibleOutputObserverBox: NSObject, AVPlayerItemRenderedLegi
             itemTime: encodeTime(itemTime),
             captionImages: captionImages.map(encodeRenderedCaptionImage)
         )
-        send(payload)
-    }
-
-    private func send(_ payload: RenderedLegibleOutputEventPayload) {
-        guard !disposed else { return }
-        guard let json = try? avpEncodeJSON(payload) else {
-            callback(userData, nil)
-            return
-        }
-        json.withCString { callback(userData, $0) }
+        gate.deliverJSON(payload, objects: captionImages.map { $0.pixelBuffer }, to: callback)
     }
 }
 
@@ -165,11 +153,12 @@ public func av_player_item_rendered_legible_output_set_video_display_size(
 public func av_player_item_rendered_legible_output_add_observer(
     _ outputPtr: UnsafeMutableRawPointer,
     _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPJsonCallback?,
+    _ callback: AVPJsonObjectsCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 15.0, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerItemRenderedLegibleOutput requires macOS 15.0+")
         return nil
@@ -183,8 +172,7 @@ public func av_player_item_rendered_legible_output_add_observer(
         output: output,
         queue: avpDispatchQueue(from: queueLabel),
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -193,7 +181,9 @@ public func av_player_item_rendered_legible_output_add_observer(
 public func av_player_item_rendered_legible_output_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
     if #available(macOS 15.0, *) {
-        Unmanaged<RenderedLegibleOutputObserverBox>.fromOpaque(observerPtr).release()
+        let observer = Unmanaged<RenderedLegibleOutputObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
     }
 }
 

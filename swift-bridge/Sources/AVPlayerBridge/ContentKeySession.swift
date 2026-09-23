@@ -230,28 +230,24 @@ private func avpContentKeyRequestRetryReasonString(
     }
 }
 
-private func avpRetainedPointerValue(_ object: AnyObject) -> UInt64 {
-    UInt64(UInt(bitPattern: Unmanaged.passRetained(object).toOpaque()))
+private func avpBorrowedPointerValue(_ object: AnyObject) -> UInt64 {
+    UInt64(UInt(bitPattern: Unmanaged.passUnretained(object).toOpaque()))
 }
 
 private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionDelegate {
     private weak var session: AVContentKeySession?
     private let callback: AVPBoolJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
 
     init(
         session: AVContentKeySession,
         queue: DispatchQueue?,
         callback: @escaping AVPBoolJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
         self.session = session
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         session.setDelegate(self, queue: queue ?? DispatchQueue(label: "avplayer.content-key-session"))
     }
@@ -261,27 +257,25 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         session?.setDelegate(nil, queue: nil)
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     private func send(_ payload: ContentKeySessionEventPayload) -> Bool {
-        guard !disposed else { return false }
-        guard let json = try? avpEncodeJSON(payload) else {
-            return false
+        gate.run(false) { context in
+            guard let json = try? avpEncodeJSON(payload) else {
+                return false
+            }
+            return json.withCString { callback(context, $0) }
         }
-        return json.withCString { callback(userData, $0) }
     }
 
     func contentKeySession(_ session: AVContentKeySession, didProvide keyRequest: AVContentKeyRequest) {
         _ = send(
             ContentKeySessionEventPayload(
                 event: "requested",
-                requestPtr: avpRetainedPointerValue(keyRequest),
+                requestPtr: avpBorrowedPointerValue(keyRequest),
                 keyRequestPtrs: nil,
                 contentKeyPtr: nil,
                 initializationData: nil,
@@ -300,7 +294,7 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
         _ = send(
             ContentKeySessionEventPayload(
                 event: "renewing",
-                requestPtr: avpRetainedPointerValue(keyRequest),
+                requestPtr: avpBorrowedPointerValue(keyRequest),
                 keyRequestPtrs: nil,
                 contentKeyPtr: nil,
                 initializationData: nil,
@@ -319,7 +313,7 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
         _ = send(
             ContentKeySessionEventPayload(
                 event: "persistable",
-                requestPtr: avpRetainedPointerValue(keyRequest),
+                requestPtr: avpBorrowedPointerValue(keyRequest),
                 keyRequestPtrs: nil,
                 contentKeyPtr: nil,
                 initializationData: nil,
@@ -359,7 +353,7 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
         _ = send(
             ContentKeySessionEventPayload(
                 event: "failed",
-                requestPtr: avpRetainedPointerValue(keyRequest),
+                requestPtr: avpBorrowedPointerValue(keyRequest),
                 keyRequestPtrs: nil,
                 contentKeyPtr: nil,
                 initializationData: nil,
@@ -379,7 +373,7 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
         send(
             ContentKeySessionEventPayload(
                 event: "retry_requested",
-                requestPtr: avpRetainedPointerValue(keyRequest),
+                requestPtr: avpBorrowedPointerValue(keyRequest),
                 keyRequestPtrs: nil,
                 contentKeyPtr: nil,
                 initializationData: nil,
@@ -398,7 +392,7 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
         _ = send(
             ContentKeySessionEventPayload(
                 event: "succeeded",
-                requestPtr: avpRetainedPointerValue(keyRequest),
+                requestPtr: avpBorrowedPointerValue(keyRequest),
                 keyRequestPtrs: nil,
                 contentKeyPtr: nil,
                 initializationData: nil,
@@ -454,7 +448,7 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
                 event: "external_protection_status_did_change",
                 requestPtr: nil,
                 keyRequestPtrs: nil,
-                contentKeyPtr: avpRetainedPointerValue(contentKey),
+                contentKeyPtr: avpBorrowedPointerValue(contentKey),
                 initializationData: nil,
                 persistableContentKey: nil,
                 keyIdentifier: nil,
@@ -474,7 +468,7 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
             ContentKeySessionEventPayload(
                 event: "requested_collection",
                 requestPtr: nil,
-                keyRequestPtrs: keyRequests.map(avpRetainedPointerValue),
+                keyRequestPtrs: keyRequests.map(avpBorrowedPointerValue),
                 contentKeyPtr: nil,
                 initializationData: initializationData.map([UInt8].init),
                 persistableContentKey: nil,
@@ -558,6 +552,7 @@ public func av_content_key_session_add_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing content-key-session callback")
         return nil
@@ -567,8 +562,7 @@ public func av_content_key_session_add_observer(
         session: session,
         queue: avpDispatchQueue(from: queueLabel),
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -576,7 +570,9 @@ public func av_content_key_session_add_observer(
 @_cdecl("av_content_key_session_observer_release")
 public func av_content_key_session_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<ContentKeySessionObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<ContentKeySessionObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_content_key_session_process_content_key_request")

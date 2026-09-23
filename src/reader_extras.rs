@@ -14,10 +14,16 @@ use crate::asset::{AssetTrack, MediaType};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata_groups::TimedMetadataGroupHandle;
-use crate::reader::{AssetReader, AssetReaderTrackOutput};
+use crate::reader::{
+    output_copy_next_sample_buffer, output_copy_next_video_pixel_buffer,
+    output_set_always_copies_sample_data, AssetReader, AssetReaderTrackOutput,
+};
 use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
-use crate::util::{catch_cb_panic, json_cstring, parse_json_and_free};
+use crate::util::{
+    deliver, json_cstring, json_payload, parse_json_and_free, validate_capacity, Handler,
+    Registration,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,10 +37,6 @@ pub struct CaptionGroupInfo {
 pub struct CaptionValidationEvent {
     pub caption_text: String,
     pub syntax_elements: Vec<String>,
-}
-
-struct CaptionValidationObserverState {
-    callback: Box<dyn Fn(CaptionValidationEvent) + Send + 'static>,
 }
 
 /// Borrowed `AVAssetReaderOutput` view.
@@ -66,18 +68,30 @@ impl AssetReaderOutput<'_> {
         Ok(MediaType::from_raw(&media_type))
     }
 
-    pub fn set_always_copies_sample_data(&self, always_copies: bool) {
-        unsafe { ffi::av_reader_output_set_always_copies_sample_data(self.ptr, always_copies) };
+    pub fn set_always_copies_sample_data(&self, always_copies: bool) -> Result<(), AVPlayerError> {
+        output_set_always_copies_sample_data(self.ptr, always_copies)
     }
 
     pub fn supports_random_access(&self) -> bool {
         unsafe { ffi::av_reader_output_supports_random_access(self.ptr) }
     }
 
-    pub fn set_supports_random_access(&self, supports_random_access: bool) {
-        unsafe {
-            ffi::av_reader_output_set_supports_random_access(self.ptr, supports_random_access);
+    pub fn set_supports_random_access(
+        &self,
+        supports_random_access: bool,
+    ) -> Result<(), AVPlayerError> {
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_reader_output_set_supports_random_access(
+                self.ptr,
+                supports_random_access,
+                &raw mut err,
+            )
         };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
     }
 
     pub fn reset_for_reading_time_ranges(
@@ -90,7 +104,7 @@ impl AssetReaderOutput<'_> {
             ffi::av_reader_output_reset_for_time_ranges_json(
                 self.ptr,
                 time_ranges.as_ptr(),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -103,14 +117,12 @@ impl AssetReaderOutput<'_> {
         unsafe { ffi::av_reader_output_mark_configuration_as_final(self.ptr) };
     }
 
-    pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
-        let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
-        unsafe { CMSampleBuffer::from_raw(ptr) }
+    pub fn copy_next_sample_buffer(&self) -> Result<Option<CMSampleBuffer>, AVPlayerError> {
+        output_copy_next_sample_buffer(self.ptr)
     }
 
-    pub fn copy_next_video_pixel_buffer(&self) -> Option<CVPixelBuffer> {
-        let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(self.ptr) };
-        unsafe { CVPixelBuffer::from_raw(ptr) }
+    pub fn copy_next_video_pixel_buffer(&self) -> Result<Option<CVPixelBuffer>, AVPlayerError> {
+        output_copy_next_video_pixel_buffer(self.ptr)
     }
 }
 
@@ -128,7 +140,7 @@ retain_release_wrapper!(
 impl AssetReaderSampleReferenceOutput {
     pub fn new(track: &AssetTrack) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_reader_sample_reference_output_create(track.ptr, &mut err) };
+        let ptr = unsafe { ffi::av_reader_sample_reference_output_create(track.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -159,8 +171,9 @@ retain_release_wrapper!(
 impl AssetReaderOutputMetadataAdaptor {
     pub fn new(track_output: &AssetReaderTrackOutput) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr =
-            unsafe { ffi::av_reader_output_metadata_adaptor_create(track_output.ptr, &mut err) };
+        let ptr = unsafe {
+            ffi::av_reader_output_metadata_adaptor_create(track_output.ptr, &raw mut err)
+        };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -178,7 +191,8 @@ impl AssetReaderOutputMetadataAdaptor {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_reader_output_metadata_adaptor_copy_next_timed_metadata_group(
-                self.ptr, &mut err,
+                self.ptr,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -206,7 +220,7 @@ impl AssetReaderOutputCaptionAdaptor {
     pub fn new(track_output: &AssetReaderTrackOutput) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr =
-            unsafe { ffi::av_reader_output_caption_adaptor_create(track_output.ptr, &mut err) };
+            unsafe { ffi::av_reader_output_caption_adaptor_create(track_output.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -221,7 +235,7 @@ impl AssetReaderOutputCaptionAdaptor {
     pub fn next_caption_group(&self) -> Result<Option<CaptionGroupInfo>, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe {
-            ffi::av_reader_output_caption_adaptor_next_caption_group_json(self.ptr, &mut err)
+            ffi::av_reader_output_caption_adaptor_next_caption_group_json(self.ptr, &raw mut err)
         };
         if json_ptr.is_null() {
             if err.is_null() {
@@ -237,27 +251,23 @@ impl AssetReaderOutputCaptionAdaptor {
         callback: F,
     ) -> Result<CaptionValidationObserver, AVPlayerError>
     where
-        F: Fn(CaptionValidationEvent) + Send + 'static,
+        F: Fn(CaptionValidationEvent) + Send + Sync + 'static,
     {
-        let state = Box::new(CaptionValidationObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
-        let mut err: *mut c_char = ptr::null_mut();
-        let token = unsafe {
-            ffi::av_reader_output_caption_adaptor_add_validation_observer(
-                self.ptr,
-                Some(caption_validation_event_trampoline),
-                userdata,
-                Some(caption_validation_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            unsafe { caption_validation_observer_drop(userdata) };
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(CaptionValidationObserver { token })
+        let handler: Handler<CaptionValidationEvent> = Box::new(callback);
+        let inner = Registration::new(
+            handler,
+            ffi::av_reader_output_caption_validation_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_reader_output_caption_adaptor_add_validation_observer(
+                    self.ptr,
+                    Some(caption_validation_event_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(CaptionValidationObserver { _inner: inner })
     }
 
     /// Returns an async stream of caption-validation callbacks.
@@ -265,6 +275,7 @@ impl AssetReaderOutputCaptionAdaptor {
         &self,
         capacity: usize,
     ) -> Result<CaptionValidationEventStream, AVPlayerError> {
+        validate_capacity(capacity)?;
         let (inner, sender) = BoundedAsyncStream::new(capacity);
         let observer = self.observe_validation(move |event| {
             sender.push(event);
@@ -286,7 +297,7 @@ impl AssetReaderOutputCaptionAdaptor {
 
 #[derive(Debug)]
 pub struct CaptionValidationObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
 
 #[derive(Debug)]
@@ -327,12 +338,6 @@ impl CaptionValidationEventStream {
     }
 }
 
-retain_release_wrapper!(
-    CaptionValidationObserver,
-    field = token,
-    release = ffi::av_reader_output_caption_validation_observer_release
-);
-
 unsafe impl Send for AssetReaderSampleReferenceOutput {}
 unsafe impl Send for AssetReaderOutputMetadataAdaptor {}
 unsafe impl Send for AssetReaderOutputCaptionAdaptor {}
@@ -351,7 +356,7 @@ impl AssetReader {
         output: &AssetReaderSampleReferenceOutput,
     ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let status = unsafe { ffi::av_reader_add_output(self.ptr, output.ptr, &mut err) };
+        let status = unsafe { ffi::av_reader_add_output(self.ptr, output.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
         }
@@ -369,29 +374,8 @@ unsafe extern "C" fn caption_validation_event_trampoline(
     userdata: *mut c_void,
     payload_json: *const c_char,
 ) {
-    if userdata.is_null() || payload_json.is_null() {
-        return;
-    }
-
-    let callback = unsafe { &*userdata.cast::<CaptionValidationObserverState>() };
-    let Ok(payload) = unsafe { CStr::from_ptr(payload_json) }.to_str() else {
+    let Some(event) = (unsafe { json_payload::<CaptionValidationEvent>(payload_json) }) else {
         return;
     };
-    let Ok(payload) = serde_json::from_str::<CaptionValidationEvent>(payload) else {
-        return;
-    };
-
-    catch_cb_panic("caption_validation_event_trampoline", || {
-        (callback.callback)(payload);
-    });
-}
-
-unsafe extern "C" fn caption_validation_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        unsafe {
-            drop(Box::from_raw(
-                userdata.cast::<CaptionValidationObserverState>(),
-            ));
-        };
-    }
+    unsafe { deliver(userdata, "caption_validation_event_trampoline", event) };
 }

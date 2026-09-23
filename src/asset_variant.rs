@@ -62,7 +62,7 @@ retain_release_wrapper!(AssetVariant, release = ffi::av_ns_object_release);
 impl AssetVariant {
     fn info(&self) -> Result<AssetVariantPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_variant_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_asset_variant_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -115,7 +115,7 @@ impl AssetVariantVideoAttributes {
     fn info(&self) -> Result<AssetVariantVideoAttributesPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
-            unsafe { ffi::av_asset_variant_video_attributes_info_json(self.ptr, &mut err) };
+            unsafe { ffi::av_asset_variant_video_attributes_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -178,8 +178,9 @@ retain_release_wrapper!(
 impl AssetVariantVideoLayoutAttributes {
     fn info(&self) -> Result<AssetVariantVideoLayoutAttributesPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_asset_variant_video_layout_attributes_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe {
+            ffi::av_asset_variant_video_layout_attributes_info_json(self.ptr, &raw mut err)
+        };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -210,7 +211,7 @@ impl AssetVariantAudioAttributes {
     fn info(&self) -> Result<AssetVariantAudioAttributesPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
-            unsafe { ffi::av_asset_variant_audio_attributes_info_json(self.ptr, &mut err) };
+            unsafe { ffi::av_asset_variant_audio_attributes_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -254,7 +255,7 @@ impl AssetVariantAudioRenditionSpecificAttributes {
     fn info(&self) -> Result<AssetVariantAudioRenditionPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
-            unsafe { ffi::av_asset_variant_audio_rendition_info_json(self.ptr, &mut err) };
+            unsafe { ffi::av_asset_variant_audio_rendition_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -289,8 +290,9 @@ retain_release_wrapper!(AssetVariantQualifier, release = ffi::av_ns_object_relea
 impl AssetVariantQualifier {
     pub fn from_variant(variant: &AssetVariant) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr =
-            unsafe { ffi::av_asset_variant_qualifier_create_with_variant(variant.ptr, &mut err) };
+        let ptr = unsafe {
+            ffi::av_asset_variant_qualifier_create_with_variant(variant.ptr, &raw mut err)
+        };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

@@ -46,7 +46,7 @@ impl PlayerItemOutput<'_> {
             ffi::av_player_item_output_item_time_for_host_time_json(
                 self.ptr,
                 host_time_seconds,
-                &mut err,
+                &raw mut err,
             )
         };
         if json_ptr.is_null() {
@@ -65,7 +65,7 @@ impl PlayerItemOutput<'_> {
             ffi::av_player_item_output_item_time_for_mach_absolute_time_json(
                 self.ptr,
                 mach_absolute_time,
-                &mut err,
+                &raw mut err,
             )
         };
         if json_ptr.is_null() {

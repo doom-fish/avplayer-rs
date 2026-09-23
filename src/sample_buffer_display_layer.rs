@@ -60,6 +60,10 @@ retain_release_wrapper!(
 unsafe impl Send for SampleBufferDisplayLayer {}
 
 impl SampleBufferDisplayLayer {
+    pub const fn as_ptr(&self) -> *mut c_void {
+        self.ptr
+    }
+
     pub fn new() -> Result<Self, AVPlayerError> {
         let ptr = unsafe { ffi::av_sample_buffer_display_layer_create() };
         if ptr.is_null() {
@@ -72,7 +76,8 @@ impl SampleBufferDisplayLayer {
 
     fn info(&self) -> Result<SampleBufferDisplayLayerPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_sample_buffer_display_layer_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_sample_buffer_display_layer_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

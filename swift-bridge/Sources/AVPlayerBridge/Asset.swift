@@ -13,20 +13,17 @@ public func av_asset_info_json(
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
-    var payloadString: String?
-    let status = avpBlockOnAsync(
-        work: { try await makeAssetInfo(asset: asset) },
-        onSuccess: { payload in
-            payloadString = try? avpEncodeJSON(payload)
-        },
-        outErrorMessage: outErrorMessage
-    )
-    guard status == AVP_OK else { return nil }
-    guard let payloadString else {
-        outErrorMessage?.pointee = ffiString("failed to encode asset info payload")
+    switch avpAwait(label: "AVAsset duration and metadata", work: { try await makeAssetInfo(asset: asset) }) {
+    case .success(let payload):
+        guard let json = try? avpEncodeJSON(payload) else {
+            outErrorMessage?.pointee = ffiString("failed to encode asset info payload")
+            return nil
+        }
+        return ffiString(json)
+    case .failure(let error):
+        avpWriteError(error, outErrorMessage)
         return nil
     }
-    return ffiString(payloadString)
 }
 
 @_cdecl("av_asset_load_values_json")
@@ -81,20 +78,22 @@ public func av_asset_status_of_value(
     return Int32(status.rawValue)
 }
 
-@_cdecl("av_asset_track_count")
-public func av_asset_track_count(_ assetPtr: UnsafeMutableRawPointer) -> Int32 {
-    let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
-    return Int32(asset.tracks.count)
-}
-
-@_cdecl("av_asset_copy_track_at_index")
-public func av_asset_copy_track_at_index(
+@_cdecl("av_asset_load_tracks")
+public func av_asset_load_tracks(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ index: Int32
+    _ outStatus: UnsafeMutablePointer<Int32>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
-    guard index >= 0, Int(index) < asset.tracks.count else { return nil }
-    return Unmanaged.passRetained(asset.tracks[Int(index)]).toOpaque()
+    switch avpAwait(label: "AVAsset tracks", work: { try await asset.load(.tracks) }) {
+    case .success(let tracks):
+        outStatus?.pointee = AVP_OK
+        return Unmanaged.passRetained(AVPObjectArrayBox(objects: tracks)).toOpaque()
+    case .failure(let error):
+        outStatus?.pointee = error.status
+        avpWriteError(error, outErrorMessage)
+        return nil
+    }
 }
 
 @_cdecl("av_asset_track_release")
@@ -109,20 +108,17 @@ public func av_asset_track_info_json(
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
     let track = Unmanaged<AVAssetTrack>.fromOpaque(trackPtr).takeUnretainedValue()
-    var payloadString: String?
-    let status = avpBlockOnAsync(
-        work: { try await makeTrackInfo(track: track) },
-        onSuccess: { payload in
-            payloadString = try? avpEncodeJSON(payload)
-        },
-        outErrorMessage: outErrorMessage
-    )
-    guard status == AVP_OK else { return nil }
-    guard let payloadString else {
-        outErrorMessage?.pointee = ffiString("failed to encode track info payload")
+    switch avpAwait(label: "AVAssetTrack properties", work: { try await makeTrackInfo(track: track) }) {
+    case .success(let payload):
+        guard let json = try? avpEncodeJSON(payload) else {
+            outErrorMessage?.pointee = ffiString("failed to encode track info payload")
+            return nil
+        }
+        return ffiString(json)
+    case .failure(let error):
+        avpWriteError(error, outErrorMessage)
         return nil
     }
-    return ffiString(payloadString)
 }
 
 private func makeAssetInfo(asset: AVAsset) async throws -> AssetInfoPayload {

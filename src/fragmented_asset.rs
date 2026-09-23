@@ -68,7 +68,8 @@ impl MediaExtensionProperties {
 
     pub fn info(&self) -> Result<MediaExtensionPropertiesInfo, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_media_extension_properties_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_media_extension_properties_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -121,7 +122,8 @@ impl FragmentedAsset {
             AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
         })?;
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_fragmented_asset_create(url.as_ptr(), is_file_url, &mut err) };
+        let ptr =
+            unsafe { ffi::av_fragmented_asset_create(url.as_ptr(), is_file_url, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::ASSET_CREATE_FAILED, err) });
         }
@@ -256,7 +258,7 @@ impl FragmentedAssetMinder {
     pub fn new(asset: &FragmentedAsset, minding_interval: f64) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
-            ffi::av_fragmented_asset_minder_create(asset.asset.ptr, minding_interval, &mut err)
+            ffi::av_fragmented_asset_minder_create(asset.asset.ptr, minding_interval, &raw mut err)
         };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -266,7 +268,7 @@ impl FragmentedAssetMinder {
 
     fn info(&self) -> Result<FragmentedAssetMinderPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_fragmented_asset_minder_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_fragmented_asset_minder_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

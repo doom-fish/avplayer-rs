@@ -16,7 +16,9 @@ use crate::asset::UrlAsset;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::retained::retain_release_wrapper;
-use crate::util::{catch_cb_panic, parse_json_and_free, to_cstring};
+use crate::util::{
+    deliver_bool, parse_json_and_free, to_cstring, validate_capacity, BoolHandler, Registration,
+};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -129,20 +131,10 @@ pub enum AssetResourceLoaderEvent {
     LoadingCancelled(AssetResourceLoadingRequest),
 }
 
-struct AssetResourceLoaderObserverState {
-    callback: Box<dyn Fn(AssetResourceLoaderEvent) -> bool + Send + 'static>,
-}
-
 #[derive(Debug)]
 pub struct AssetResourceLoaderObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
-
-retain_release_wrapper!(
-    AssetResourceLoaderObserver,
-    field = token,
-    release = ffi::av_asset_resource_loader_delegate_release
-);
 
 #[derive(Debug)]
 /// Async stream of delegate events sourced from `AVAssetResourceLoader`.
@@ -192,7 +184,7 @@ impl UrlAsset {
 impl AssetResourceLoader {
     fn info(&self) -> Result<AssetResourceLoaderInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_resource_loader_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_asset_resource_loader_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -226,7 +218,9 @@ impl AssetResourceLoader {
         let mut err: *mut c_char = ptr::null_mut();
         let status = unsafe {
             ffi::av_asset_resource_loader_set_sends_common_media_client_data_as_http_headers(
-                self.ptr, enabled, &mut err,
+                self.ptr,
+                enabled,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -241,33 +235,29 @@ impl AssetResourceLoader {
         callback: F,
     ) -> Result<AssetResourceLoaderObserver, AVPlayerError>
     where
-        F: Fn(AssetResourceLoaderEvent) -> bool + Send + 'static,
+        F: Fn(AssetResourceLoaderEvent) -> bool + Send + Sync + 'static,
     {
         let queue_label = queue_label
             .map(|label| to_cstring(label, "resource-loader queue label"))
             .transpose()?;
-        let state = Box::new(AssetResourceLoaderObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
-        let mut err: *mut c_char = ptr::null_mut();
-        let token = unsafe {
-            ffi::av_asset_resource_loader_add_delegate(
-                self.ptr,
-                queue_label
-                    .as_ref()
-                    .map_or(ptr::null(), |label| label.as_ptr()),
-                Some(asset_resource_loader_event_trampoline),
-                userdata,
-                Some(asset_resource_loader_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            unsafe { asset_resource_loader_observer_drop(userdata) };
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(AssetResourceLoaderObserver { token })
+        let handler: BoolHandler<AssetResourceLoaderEvent> = Box::new(callback);
+        let inner = Registration::new(
+            handler,
+            ffi::av_asset_resource_loader_delegate_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_asset_resource_loader_add_delegate(
+                    self.ptr,
+                    queue_label
+                        .as_ref()
+                        .map_or(ptr::null(), |label| label.as_ptr()),
+                    Some(asset_resource_loader_event_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(AssetResourceLoaderObserver { _inner: inner })
     }
 
     /// Returns an async stream of loading-request delegate callbacks.
@@ -279,6 +269,7 @@ impl AssetResourceLoader {
         queue_label: Option<&str>,
         capacity: usize,
     ) -> Result<AssetResourceLoaderEventStream, AVPlayerError> {
+        validate_capacity(capacity)?;
         let (inner, sender) = BoundedAsyncStream::new(capacity);
         let observer = self.observe_loading_requests(queue_label, move |event| {
             let should_wait = matches!(
@@ -438,7 +429,10 @@ impl AssetResourceLoadingContentInformationRequest {
     fn info(&self) -> Result<AssetResourceLoadingContentInformationRequestPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe {
-            ffi::av_asset_resource_loading_content_information_request_info_json(self.ptr, &mut err)
+            ffi::av_asset_resource_loading_content_information_request_info_json(
+                self.ptr,
+                &raw mut err,
+            )
         };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -524,7 +518,7 @@ impl AssetResourceLoadingContentInformationRequest {
             ffi::av_asset_resource_loading_content_information_request_set_entire_length_available_on_demand(
                 self.ptr,
                 available,
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -537,8 +531,9 @@ impl AssetResourceLoadingContentInformationRequest {
 impl AssetResourceLoadingDataRequest {
     fn info(&self) -> Result<AssetResourceLoadingDataRequestPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_asset_resource_loading_data_request_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe {
+            ffi::av_asset_resource_loading_data_request_info_json(self.ptr, &raw mut err)
+        };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -576,7 +571,7 @@ impl AssetResourceLoadingRequestor {
     fn info(&self) -> Result<AssetResourceLoadingRequestorPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
-            unsafe { ffi::av_asset_resource_loading_requestor_info_json(self.ptr, &mut err) };
+            unsafe { ffi::av_asset_resource_loading_requestor_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -592,7 +587,7 @@ fn resource_loading_request_info(
     ptr: *mut c_void,
 ) -> Result<AssetResourceLoadingRequestPayload, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
-    let json_ptr = unsafe { ffi::av_asset_resource_loading_request_info_json(ptr, &mut err) };
+    let json_ptr = unsafe { ffi::av_asset_resource_loading_request_info_json(ptr, &raw mut err) };
     if json_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
@@ -634,54 +629,36 @@ unsafe extern "C" fn asset_resource_loader_event_trampoline(
     event_name: *const c_char,
     object_ptr: *mut c_void,
 ) -> bool {
-    if userdata.is_null() || event_name.is_null() || object_ptr.is_null() {
-        if !object_ptr.is_null() {
-            ffi::av_ns_object_release(object_ptr);
-        }
+    if object_ptr.is_null() {
         return false;
     }
-
-    let state = &*userdata.cast::<AssetResourceLoaderObserverState>();
-    let Ok(event_name) = CStr::from_ptr(event_name).to_str() else {
-        ffi::av_ns_object_release(object_ptr);
-        return false;
+    let event_name = if event_name.is_null() {
+        None
+    } else {
+        unsafe { CStr::from_ptr(event_name) }.to_str().ok()
     };
-
     let event = match event_name {
-        "loading_requested" => {
+        Some("loading_requested") => {
             AssetResourceLoaderEvent::LoadingRequested(AssetResourceLoadingRequest {
                 ptr: object_ptr,
             })
         }
-        "renewal_requested" => {
+        Some("renewal_requested") => {
             AssetResourceLoaderEvent::RenewalRequested(AssetResourceRenewalRequest {
                 ptr: object_ptr,
             })
         }
-        "loading_cancelled" => {
+        Some("loading_cancelled") => {
             AssetResourceLoaderEvent::LoadingCancelled(AssetResourceLoadingRequest {
                 ptr: object_ptr,
             })
         }
         _ => {
-            ffi::av_ns_object_release(object_ptr);
+            unsafe { ffi::av_ns_object_release(object_ptr) };
             return false;
         }
     };
-
-    let mut result = false;
-    catch_cb_panic("asset_resource_loader_event_trampoline", || {
-        result = (state.callback)(event);
-    });
-    result
-}
-
-unsafe extern "C" fn asset_resource_loader_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        drop(Box::from_raw(
-            userdata.cast::<AssetResourceLoaderObserverState>(),
-        ));
-    }
+    unsafe { deliver_bool(userdata, "asset_resource_loader_event_trampoline", event) }
 }
 
 // SAFETY: AVFoundation resource-loader wrappers and observer tokens are opaque

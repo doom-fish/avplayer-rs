@@ -5,8 +5,10 @@ use avplayer::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = support::audio_path("example-avurlasset")?;
-    let options = UrlAssetOptions::new().prefer_precise_duration_and_timing(false);
-    let asset = UrlAsset::from_file_path_with_options(&path, options)?;
+    let options = UrlAssetOptions::new()
+        .prefer_precise_duration_and_timing(true)
+        .http_user_agent("avplayer-example");
+    let asset = UrlAsset::from_file_path_with_options(&path, &options)?;
     let statuses = asset.load_values_asynchronously(["duration", "tracks"])?;
 
     println!("url asset url: {}", asset.url()?);

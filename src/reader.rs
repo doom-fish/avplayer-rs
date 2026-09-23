@@ -157,7 +157,7 @@ impl AssetReader {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(asset: &Asset) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_reader_create(asset.ptr, &mut err) };
+        let ptr = unsafe { ffi::av_reader_create(asset.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::READER_CREATE_FAILED, err) });
         }
@@ -166,7 +166,7 @@ impl AssetReader {
 
     fn info(&self) -> Result<ReaderInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_reader_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_reader_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -207,7 +207,7 @@ impl AssetReader {
                 duration_value,
                 duration_timescale,
                 duration_kind,
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -219,7 +219,7 @@ impl AssetReader {
     /// Calls the `AVPlayer` framework counterpart for `start_reading`.
     pub fn start_reading(&self) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let status = unsafe { ffi::av_reader_start(self.ptr, &mut err) };
+        let status = unsafe { ffi::av_reader_start(self.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
         }
@@ -272,7 +272,7 @@ impl AssetReader {
 
     fn add_output_ptr(&self, output_ptr: *mut c_void) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let status = unsafe { ffi::av_reader_add_output(self.ptr, output_ptr, &mut err) };
+        let status = unsafe { ffi::av_reader_add_output(self.ptr, output_ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
         }
@@ -313,7 +313,8 @@ impl AssetReaderTrackOutput {
     /// Calls the `AVPlayer` framework counterpart for `passthrough`.
     pub fn passthrough(track: &AssetTrack) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_reader_track_output_create_passthrough(track.ptr, &mut err) };
+        let ptr =
+            unsafe { ffi::av_reader_track_output_create_passthrough(track.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -321,8 +322,8 @@ impl AssetReaderTrackOutput {
     }
 
     /// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
-    pub fn set_always_copies_sample_data(&self, always_copies: bool) {
-        unsafe { ffi::av_reader_output_set_always_copies_sample_data(self.ptr, always_copies) };
+    pub fn set_always_copies_sample_data(&self, always_copies: bool) -> Result<(), AVPlayerError> {
+        output_set_always_copies_sample_data(self.ptr, always_copies)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `media_type`.
@@ -331,15 +332,13 @@ impl AssetReaderTrackOutput {
     }
 
     /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
-    pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
-        let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
-        unsafe { CMSampleBuffer::from_raw(ptr) }
+    pub fn copy_next_sample_buffer(&self) -> Result<Option<CMSampleBuffer>, AVPlayerError> {
+        output_copy_next_sample_buffer(self.ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `copy_next_video_pixel_buffer`.
-    pub fn copy_next_video_pixel_buffer(&self) -> Option<CVPixelBuffer> {
-        let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(self.ptr) };
-        unsafe { CVPixelBuffer::from_raw(ptr) }
+    pub fn copy_next_video_pixel_buffer(&self) -> Result<Option<CVPixelBuffer>, AVPlayerError> {
+        output_copy_next_video_pixel_buffer(self.ptr)
     }
 }
 
@@ -370,7 +369,7 @@ impl AssetReaderAudioMixOutput {
                 settings
                     .as_ref()
                     .map_or(ptr::null(), |settings| settings.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -380,8 +379,8 @@ impl AssetReaderAudioMixOutput {
     }
 
     /// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
-    pub fn set_always_copies_sample_data(&self, always_copies: bool) {
-        unsafe { ffi::av_reader_output_set_always_copies_sample_data(self.ptr, always_copies) };
+    pub fn set_always_copies_sample_data(&self, always_copies: bool) -> Result<(), AVPlayerError> {
+        output_set_always_copies_sample_data(self.ptr, always_copies)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `media_type`.
@@ -390,9 +389,8 @@ impl AssetReaderAudioMixOutput {
     }
 
     /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
-    pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
-        let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
-        unsafe { CMSampleBuffer::from_raw(ptr) }
+    pub fn copy_next_sample_buffer(&self) -> Result<Option<CMSampleBuffer>, AVPlayerError> {
+        output_copy_next_sample_buffer(self.ptr)
     }
 }
 
@@ -430,7 +428,7 @@ impl AssetReaderVideoCompositionOutput {
                 settings
                     .as_ref()
                     .map_or(ptr::null(), |settings| settings.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -440,8 +438,8 @@ impl AssetReaderVideoCompositionOutput {
     }
 
     /// Calls the `AVPlayer` framework counterpart for `set_always_copies_sample_data`.
-    pub fn set_always_copies_sample_data(&self, always_copies: bool) {
-        unsafe { ffi::av_reader_output_set_always_copies_sample_data(self.ptr, always_copies) };
+    pub fn set_always_copies_sample_data(&self, always_copies: bool) -> Result<(), AVPlayerError> {
+        output_set_always_copies_sample_data(self.ptr, always_copies)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `media_type`.
@@ -450,15 +448,13 @@ impl AssetReaderVideoCompositionOutput {
     }
 
     /// Calls the `AVPlayer` framework counterpart for `copy_next_sample_buffer`.
-    pub fn copy_next_sample_buffer(&self) -> Option<CMSampleBuffer> {
-        let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(self.ptr) };
-        unsafe { CMSampleBuffer::from_raw(ptr) }
+    pub fn copy_next_sample_buffer(&self) -> Result<Option<CMSampleBuffer>, AVPlayerError> {
+        output_copy_next_sample_buffer(self.ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `copy_next_video_pixel_buffer`.
-    pub fn copy_next_video_pixel_buffer(&self) -> Option<CVPixelBuffer> {
-        let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(self.ptr) };
-        unsafe { CVPixelBuffer::from_raw(ptr) }
+    pub fn copy_next_video_pixel_buffer(&self) -> Result<Option<CVPixelBuffer>, AVPlayerError> {
+        output_copy_next_video_pixel_buffer(self.ptr)
     }
 }
 
@@ -479,7 +475,7 @@ fn create_track_output<T: Serialize>(
             settings
                 .as_ref()
                 .map_or(ptr::null(), |settings| settings.as_ptr()),
-            &mut err,
+            &raw mut err,
         )
     };
     if ptr.is_null() {
@@ -505,7 +501,43 @@ fn settings_json<T: Serialize>(settings: Option<&T>) -> Result<Option<CString>, 
         .transpose()
 }
 
-fn output_media_type(output: *mut c_void) -> Result<MediaType, AVPlayerError> {
+pub fn output_copy_next_sample_buffer(
+    output: *mut c_void,
+) -> Result<Option<CMSampleBuffer>, AVPlayerError> {
+    let mut err: *mut c_char = ptr::null_mut();
+    let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(output, &raw mut err) };
+    if !err.is_null() {
+        return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
+    }
+    Ok(unsafe { CMSampleBuffer::from_raw(ptr) })
+}
+
+pub fn output_copy_next_video_pixel_buffer(
+    output: *mut c_void,
+) -> Result<Option<CVPixelBuffer>, AVPlayerError> {
+    let mut err: *mut c_char = ptr::null_mut();
+    let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(output, &raw mut err) };
+    if !err.is_null() {
+        return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
+    }
+    Ok(unsafe { CVPixelBuffer::from_raw(ptr) })
+}
+
+pub fn output_set_always_copies_sample_data(
+    output: *mut c_void,
+    always_copies: bool,
+) -> Result<(), AVPlayerError> {
+    let mut err: *mut c_char = ptr::null_mut();
+    let status = unsafe {
+        ffi::av_reader_output_set_always_copies_sample_data(output, always_copies, &raw mut err)
+    };
+    if status != ffi::status::OK {
+        return Err(unsafe { from_swift(status, err) });
+    }
+    Ok(())
+}
+
+pub fn output_media_type(output: *mut c_void) -> Result<MediaType, AVPlayerError> {
     let raw = unsafe { ffi::av_reader_output_media_type(output) };
     if raw.is_null() {
         return Err(AVPlayerError::OperationFailed(

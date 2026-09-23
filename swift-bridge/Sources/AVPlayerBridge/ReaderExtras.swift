@@ -1,4 +1,5 @@
 import AVFoundation
+import AVPlayerObjCBridge
 import CoreMedia
 import Foundation
 
@@ -15,20 +16,16 @@ private struct AVPCaptionValidationEventPayload: Codable {
 final class CaptionValidationObserverBox: NSObject, AVAssetReaderCaptionValidationHandling {
     private weak var adaptor: AVAssetReaderOutputCaptionAdaptor?
     private let callback: AVPJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
 
     init(
         adaptor: AVAssetReaderOutputCaptionAdaptor,
         callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
         self.adaptor = adaptor
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         adaptor.validationDelegate = self
     }
@@ -38,12 +35,9 @@ final class CaptionValidationObserverBox: NSObject, AVAssetReaderCaptionValidati
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         adaptor?.validationDelegate = nil
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     func captionAdaptor(
@@ -51,16 +45,13 @@ final class CaptionValidationObserverBox: NSObject, AVAssetReaderCaptionValidati
         didVendCaption caption: AVCaption,
         skippingUnsupportedSourceSyntaxElements syntaxElements: [String]
     ) {
-        guard !disposed else { return }
-        let payload = AVPCaptionValidationEventPayload(
-            captionText: caption.text,
-            syntaxElements: syntaxElements
+        gate.deliverJSON(
+            AVPCaptionValidationEventPayload(
+                captionText: caption.text,
+                syntaxElements: syntaxElements
+            ),
+            to: callback
         )
-        guard let json = try? avpEncodeJSON(payload) else {
-            callback(userData, nil)
-            return
-        }
-        json.withCString { callback(userData, $0) }
     }
 }
 
@@ -76,12 +67,40 @@ public func av_reader_output_supports_random_access(_ outputPtr: UnsafeMutableRa
 @_cdecl("av_reader_output_set_supports_random_access")
 public func av_reader_output_set_supports_random_access(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ supportsRandomAccess: Bool
-) {
+    _ supportsRandomAccess: Bool,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
     let output = Unmanaged<AVAssetReaderOutput>.fromOpaque(outputPtr).takeUnretainedValue()
-    if #available(macOS 10.10, *) {
-        output.supportsRandomAccess = supportsRandomAccess
+    var reason: NSString?
+    guard AVPTrySetSupportsRandomAccess(output, supportsRandomAccess, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "supportsRandomAccess cannot be changed")
+        return AVP_OPERATION_FAILED
     }
+    return AVP_OK
+}
+
+func avpReadingTimeRangesError(_ ranges: [CMTimeRange]) -> String? {
+    var previousStart: CMTime?
+    var previousEnd: CMTime?
+    for (index, range) in ranges.enumerated() {
+        guard range.start.isNumeric else {
+            return "time range \(index) must have a numeric start"
+        }
+        let duration = range.duration
+        let durationIsValid = (duration.isNumeric && duration >= .zero) || duration.isPositiveInfinity
+        guard durationIsValid else {
+            return "time range \(index) must have a non-negative numeric or positive-infinity duration"
+        }
+        if let previousStart, range.start <= previousStart {
+            return "time range starts must be strictly increasing"
+        }
+        if let previousEnd, range.start < previousEnd {
+            return "time ranges must not overlap"
+        }
+        previousStart = range.start
+        previousEnd = duration.isPositiveInfinity ? .positiveInfinity : CMTimeAdd(range.start, duration)
+    }
+    return nil
 }
 
 @_cdecl("av_reader_output_reset_for_time_ranges_json")
@@ -97,7 +116,22 @@ public func av_reader_output_reset_for_time_ranges_json(
     let output = Unmanaged<AVAssetReaderOutput>.fromOpaque(outputPtr).takeUnretainedValue()
     do {
         let payloads = try avpDecodeJSON(timeRangesJson, as: [TimeRangePayload].self)
-        output.reset(forReadingTimeRanges: payloads.map { NSValue(timeRange: cmTimeRange(from: $0)) })
+        let ranges = payloads.map(cmTimeRange(from:))
+        if let message = avpReadingTimeRangesError(ranges) {
+            outErrorMessage?.pointee = ffiString(message)
+            return AVP_INVALID_ARGUMENT
+        }
+        guard output.supportsRandomAccess else {
+            outErrorMessage?.pointee = ffiString("resetForReadingTimeRanges requires supportsRandomAccess")
+            return AVP_INVALID_ARGUMENT
+        }
+        var reason: NSString?
+        guard AVPTryResetForReadingTimeRanges(output, ranges.map { NSValue(timeRange: $0) }, &reason) else {
+            outErrorMessage?.pointee = ffiString(
+                (reason as String?) ?? "resetForReadingTimeRanges is not allowed in the current reader state"
+            )
+            return AVP_OPERATION_FAILED
+        }
         return AVP_OK
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
@@ -145,7 +179,12 @@ public func av_reader_output_metadata_adaptor_create(
         return nil
     }
     let trackOutput = Unmanaged<AVAssetReaderTrackOutput>.fromOpaque(trackOutputPtr).takeUnretainedValue()
-    return avpRetained(AVAssetReaderOutputMetadataAdaptor(assetReaderTrackOutput: trackOutput))
+    var reason: NSString?
+    guard let adaptor = AVPTryCreateMetadataAdaptor(trackOutput, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "AVAssetReaderOutputMetadataAdaptor could not be created")
+        return nil
+    }
+    return avpRetained(adaptor)
 }
 
 @_cdecl("av_reader_output_metadata_adaptor_copy_track_output")
@@ -167,7 +206,13 @@ public func av_reader_output_metadata_adaptor_copy_next_timed_metadata_group(
         return nil
     }
     let adaptor = Unmanaged<AVAssetReaderOutputMetadataAdaptor>.fromOpaque(adaptorPtr).takeUnretainedValue()
-    guard let group = adaptor.nextTimedMetadataGroup() else { return nil }
+    var reason: NSString?
+    guard let group = AVPTryNextTimedMetadataGroup(adaptor, &reason) else {
+        if let reason {
+            outErrorMessage?.pointee = ffiString(reason as String)
+        }
+        return nil
+    }
     return avpRetained(group)
 }
 
@@ -181,7 +226,12 @@ public func av_reader_output_caption_adaptor_create(
         return nil
     }
     let trackOutput = Unmanaged<AVAssetReaderTrackOutput>.fromOpaque(trackOutputPtr).takeUnretainedValue()
-    return avpRetained(AVAssetReaderOutputCaptionAdaptor(assetReaderTrackOutput: trackOutput))
+    var reason: NSString?
+    guard let adaptor = AVPTryCreateCaptionAdaptor(trackOutput, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "AVAssetReaderOutputCaptionAdaptor could not be created")
+        return nil
+    }
+    return avpRetained(adaptor)
 }
 
 @_cdecl("av_reader_output_caption_adaptor_copy_track_output")
@@ -203,7 +253,13 @@ public func av_reader_output_caption_adaptor_next_caption_group_json(
         return nil
     }
     let adaptor = Unmanaged<AVAssetReaderOutputCaptionAdaptor>.fromOpaque(adaptorPtr).takeUnretainedValue()
-    guard let group = adaptor.nextCaptionGroup() else { return nil }
+    var reason: NSString?
+    guard let group = AVPTryNextCaptionGroup(adaptor, &reason) else {
+        if let reason {
+            outErrorMessage?.pointee = ffiString(reason as String)
+        }
+        return nil
+    }
     let payload = AVPCaptionGroupPayload(
         timeRange: encodeTimeRange(group.timeRange),
         captions: group.captions.map(\.text)
@@ -224,6 +280,7 @@ public func av_reader_output_caption_adaptor_add_validation_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("caption validation requires macOS 12.0")
         return nil
@@ -237,8 +294,7 @@ public func av_reader_output_caption_adaptor_add_validation_observer(
         CaptionValidationObserverBox(
             adaptor: adaptor,
             callback: callback,
-            userData: userData,
-            dropUserData: dropUserData
+            gate: gate
         )
     )
 }
@@ -248,5 +304,7 @@ public func av_reader_output_caption_validation_observer_release(
     _ observerPtr: UnsafeMutableRawPointer?
 ) {
     guard let observerPtr else { return }
-    Unmanaged<CaptionValidationObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<CaptionValidationObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }

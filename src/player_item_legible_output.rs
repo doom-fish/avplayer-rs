@@ -3,6 +3,7 @@
 use core::ffi::{c_char, c_void};
 use core::ptr;
 
+use apple_cf::cm::CMSampleBuffer;
 use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
@@ -11,7 +12,10 @@ use crate::player::PlayerItem;
 use crate::player_item_output::PlayerItemOutput;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
-use crate::util::{json_cstring, parse_json_and_free, to_cstring};
+use crate::util::{
+    borrowed_objects, deliver, json_cstring, json_payload, parse_json_and_free, to_cstring,
+    Handler, Registration,
+};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,11 +76,8 @@ pub enum PlayerItemLegibleOutputEvent {
         item_time: Time,
         strings: Vec<String>,
         native_sample_buffer_count: usize,
+        native_sample_buffers: Vec<CMSampleBuffer>,
     },
-}
-
-struct LegibleOutputObserverState {
-    callback: Box<dyn Fn(PlayerItemLegibleOutputEvent) + Send + 'static>,
 }
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemLegibleOutput`.
@@ -102,7 +103,7 @@ impl PlayerItemLegibleOutput {
                 native_representation_subtypes
                     .as_ref()
                     .map_or(ptr::null(), |subtypes| subtypes.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -113,7 +114,8 @@ impl PlayerItemLegibleOutput {
 
     fn info(&self) -> Result<LegibleOutputInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_legible_output_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_item_legible_output_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -147,33 +149,29 @@ impl PlayerItemLegibleOutput {
         callback: F,
     ) -> Result<PlayerItemLegibleOutputObserver, AVPlayerError>
     where
-        F: Fn(PlayerItemLegibleOutputEvent) + Send + 'static,
+        F: Fn(PlayerItemLegibleOutputEvent) + Send + Sync + 'static,
     {
         let queue_label = queue_label
             .map(|label| to_cstring(label, "legible output queue label"))
             .transpose()?;
-        let state = Box::new(LegibleOutputObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
-        let mut err: *mut c_char = ptr::null_mut();
-        let token = unsafe {
-            ffi::av_player_item_legible_output_add_observer(
-                self.ptr,
-                queue_label
-                    .as_ref()
-                    .map_or(ptr::null(), |label| label.as_ptr()),
-                Some(legible_output_event_trampoline),
-                userdata,
-                Some(legible_output_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            unsafe { legible_output_observer_drop(userdata) };
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(PlayerItemLegibleOutputObserver { token })
+        let handler: Handler<PlayerItemLegibleOutputEvent> = Box::new(callback);
+        let inner = Registration::new(
+            handler,
+            ffi::av_player_item_legible_output_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_player_item_legible_output_add_observer(
+                    self.ptr,
+                    queue_label
+                        .as_ref()
+                        .map_or(ptr::null(), |label| label.as_ptr()),
+                    Some(legible_output_event_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(PlayerItemLegibleOutputObserver { _inner: inner })
     }
 
     /// Calls the `AVPlayer` framework counterpart for `advance_interval_for_delegate_invocation`.
@@ -214,7 +212,7 @@ impl PlayerItemLegibleOutput {
             ffi::av_player_item_legible_output_set_text_styling_resolution(
                 self.ptr,
                 resolution.as_ptr(),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -227,14 +225,8 @@ impl PlayerItemLegibleOutput {
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemLegibleOutputObserver`.
 #[derive(Debug)]
 pub struct PlayerItemLegibleOutputObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
-
-retain_release_wrapper!(
-    PlayerItemLegibleOutputObserver,
-    field = token,
-    release = ffi::av_player_item_legible_output_observer_release
-);
 
 // SAFETY: These legible-output handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.
@@ -248,7 +240,7 @@ impl PlayerItem {
         output: &PlayerItemLegibleOutput,
     ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &mut err) };
+        let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
         }
@@ -264,16 +256,10 @@ impl PlayerItem {
 unsafe extern "C" fn legible_output_event_trampoline(
     userdata: *mut c_void,
     payload_json: *const c_char,
+    objects: *const *mut c_void,
+    count: usize,
 ) {
-    if userdata.is_null() || payload_json.is_null() {
-        return;
-    }
-
-    let callback = &*userdata.cast::<LegibleOutputObserverState>();
-    let Ok(payload) = core::ffi::CStr::from_ptr(payload_json).to_str() else {
-        return;
-    };
-    let Ok(payload) = serde_json::from_str::<LegibleOutputEventPayload>(payload) else {
+    let Some(payload) = (unsafe { json_payload::<LegibleOutputEventPayload>(payload_json) }) else {
         return;
     };
 
@@ -286,17 +272,14 @@ unsafe extern "C" fn legible_output_event_trampoline(
             },
             strings: payload.strings,
             native_sample_buffer_count: payload.native_sample_buffer_count,
+            native_sample_buffers: unsafe {
+                borrowed_objects(objects, count, |object| {
+                    CMSampleBuffer::from_raw_borrowed(object)
+                })
+            },
         },
         _ => return,
     };
 
-    crate::util::catch_cb_panic("legible_output_event_trampoline", || {
-        (callback.callback)(event);
-    });
-}
-
-unsafe extern "C" fn legible_output_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<LegibleOutputObserverState>()));
-    }
+    unsafe { deliver(userdata, "legible_output_event_trampoline", event) };
 }

@@ -101,7 +101,7 @@ pub use metadata_groups::{
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use player::{
     BoundaryTimeObserver, PeriodicTimeObserver, Player, PlayerItem, PlayerItemEvent,
-    PlayerItemObserver, PlayerItemStatus, PlayerStatus,
+    PlayerItemObserver, PlayerItemStatus, PlayerStatus, PlayerStatusEvent, PlayerStatusObserver,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_interstitial_event::{
@@ -114,8 +114,8 @@ pub use player_interstitial_event::{
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item::{
-    AudioTimePitchAlgorithm, ContentAuthorizationStatus, PlayerItemVideoCompositorInfo,
-    VariantPreferences,
+    AudioMixTrackVolume, AudioTimePitchAlgorithm, ContentAuthorizationStatus,
+    PlayerItemVideoCompositorInfo, VariantPreferences,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_access_log::{PlayerItemAccessLog, PlayerItemAccessLogEvent};
@@ -185,8 +185,8 @@ pub use player_media_selection_criteria::{
 pub use player_video_output::{
     AffineTransform, PlayerVideoOutput, PlayerVideoOutputConfiguration, PlayerVideoOutputSample,
     PlayerVideoOutputSettings, PlayerVideoOutputTagCollection,
-    PlayerVideoOutputTagCollectionPreset, PlayerVideoTaggedBuffer, PlayerVideoTaggedBufferKind,
-    VideoOutputSpecification,
+    PlayerVideoOutputTagCollectionPreset, PlayerVideoTaggedBuffer, PlayerVideoTaggedBufferData,
+    PlayerVideoTaggedBufferKind, VideoOutputSpecification,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use queue_player::QueuePlayer;
@@ -215,7 +215,7 @@ pub use sample_buffer_display_layer::{
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use time::{Time, TimeRange};
 /// Re-exports the `AVPlayer` framework surface for this item.
-pub use url_asset::UrlAssetOptions;
+pub use url_asset::{UrlAssetHttpCookie, UrlAssetOptions, UrlRequestAttribution};
 
 /// Common imports.
 pub mod prelude {
@@ -277,7 +277,8 @@ pub mod prelude {
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player::{
         BoundaryTimeObserver, PeriodicTimeObserver, Player, PlayerItem, PlayerItemEvent,
-        PlayerItemObserver, PlayerItemStatus, PlayerStatus,
+        PlayerItemObserver, PlayerItemStatus, PlayerStatus, PlayerStatusEvent,
+        PlayerStatusObserver,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_interstitial_event::{
@@ -290,8 +291,8 @@ pub mod prelude {
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item::{
-        AudioTimePitchAlgorithm, ContentAuthorizationStatus, PlayerItemVideoCompositorInfo,
-        VariantPreferences,
+        AudioMixTrackVolume, AudioTimePitchAlgorithm, ContentAuthorizationStatus,
+        PlayerItemVideoCompositorInfo, VariantPreferences,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::player_item_access_log::{PlayerItemAccessLog, PlayerItemAccessLogEvent};
@@ -362,8 +363,8 @@ pub mod prelude {
     pub use crate::player_video_output::{
         AffineTransform, PlayerVideoOutput, PlayerVideoOutputConfiguration,
         PlayerVideoOutputSample, PlayerVideoOutputSettings, PlayerVideoOutputTagCollection,
-        PlayerVideoOutputTagCollectionPreset, PlayerVideoTaggedBuffer, PlayerVideoTaggedBufferKind,
-        VideoOutputSpecification,
+        PlayerVideoOutputTagCollectionPreset, PlayerVideoTaggedBuffer, PlayerVideoTaggedBufferData,
+        PlayerVideoTaggedBufferKind, VideoOutputSpecification,
     };
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::queue_player::QueuePlayer;
@@ -392,5 +393,5 @@ pub mod prelude {
     /// Re-exports the `AVPlayer` framework surface for this item.
     pub use crate::time::{Time, TimeRange};
     /// Re-exports the `AVPlayer` framework surface for this item.
-    pub use crate::url_asset::UrlAssetOptions;
+    pub use crate::url_asset::{UrlAssetHttpCookie, UrlAssetOptions, UrlRequestAttribution};
 }

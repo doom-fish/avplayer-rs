@@ -4,6 +4,9 @@ use core::ffi::{c_char, c_void};
 use core::ptr;
 use std::ffi::{CStr, CString};
 use std::path::Path;
+use std::sync::{Mutex, PoisonError};
+
+use doom_fish_utils::callback_context::CallbackContext;
 
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -12,8 +15,12 @@ use crate::asset::{Asset, Size};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata::MetadataItem;
+use crate::player_media_selection_criteria::PlayerTimeControlStatus;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
+use crate::util::{
+    deliver, json_payload, validate_seek_time, validate_tolerance, Handler, Registration,
+};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,16 +130,48 @@ pub enum PlayerItemEvent {
     MediaSelectionChanged,
 }
 
-struct PlayerItemObserverState {
-    callback: Box<dyn Fn(PlayerItemEvent) + Send + 'static>,
+type PeriodicTimeHandler = Mutex<Box<dyn FnMut(Time) + Send + 'static>>;
+type BoundaryTimeHandler = Mutex<Box<dyn FnMut() + Send + 'static>>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlayerStatusEventPayload {
+    event: String,
+    status: Option<i32>,
+    error_message: Option<String>,
+    time_control_status: Option<i32>,
+    reason_for_waiting_to_play: Option<String>,
 }
 
-struct PeriodicTimeObserverState {
-    callback: Box<dyn FnMut(Time) + Send + 'static>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PlayerStatusEvent {
+    StatusChanged {
+        status: PlayerStatus,
+        error_message: Option<String>,
+    },
+    TimeControlStatusChanged {
+        time_control_status: PlayerTimeControlStatus,
+        reason_for_waiting_to_play: Option<String>,
+    },
 }
 
-struct BoundaryTimeObserverState {
-    callback: Box<dyn FnMut() + Send + 'static>,
+impl PlayerStatusEvent {
+    fn from_payload(payload: PlayerStatusEventPayload) -> Option<Self> {
+        match payload.event.as_str() {
+            "status_changed" => Some(Self::StatusChanged {
+                status: PlayerStatus::from_raw(payload.status?),
+                error_message: payload.error_message,
+            }),
+            "time_control_status_changed" => Some(Self::TimeControlStatusChanged {
+                time_control_status: PlayerTimeControlStatus::from_raw(
+                    payload.time_control_status?,
+                ),
+                reason_for_waiting_to_play: payload.reason_for_waiting_to_play,
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// Safe wrapper around `AVPlayerItem`.
@@ -168,7 +207,7 @@ impl PlayerItem {
         // SAFETY: `asset.ptr` is a valid borrowed AVAsset handle, `keys_json` is a
         // NUL-terminated string, and `err` points to writable storage for the bridge.
         let ptr = unsafe {
-            ffi::av_player_item_create_with_asset(asset.ptr, keys_json.as_ptr(), &mut err)
+            ffi::av_player_item_create_with_asset(asset.ptr, keys_json.as_ptr(), &raw mut err)
         };
         if ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
@@ -194,7 +233,7 @@ impl PlayerItem {
                 url.as_ptr(),
                 is_file_url,
                 keys_json.as_ptr(),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -209,7 +248,7 @@ impl PlayerItem {
         let mut err: *mut c_char = ptr::null_mut();
         // SAFETY: `self.ptr` is a valid AVPlayerItem handle and `err` points to
         // writable storage for the bridge.
-        let json_ptr = unsafe { ffi::av_player_item_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_player_item_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
             // payload that `from_swift` consumes.
@@ -247,48 +286,31 @@ impl PlayerItem {
     /// Calls the `AVPlayer` framework counterpart for `observe`.
     pub fn observe<F>(&self, callback: F) -> Result<PlayerItemObserver, AVPlayerError>
     where
-        F: Fn(PlayerItemEvent) + Send + 'static,
+        F: Fn(PlayerItemEvent) + Send + Sync + 'static,
     {
-        let state = Box::new(PlayerItemObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
-        let mut err: *mut c_char = ptr::null_mut();
-        // SAFETY: `self.ptr` is a valid AVPlayerItem handle, `userdata` is a Box
-        // allocation that remains alive until the drop callback runs, and `err`
-        // points to writable storage for the bridge.
-        let token = unsafe {
-            ffi::av_player_item_add_observer(
-                self.ptr,
-                Some(player_item_event_trampoline),
-                userdata,
-                Some(player_item_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            // SAFETY: Observer creation failed before ownership of `userdata` was
-            // transferred to the bridge, so we must reclaim it locally.
-            unsafe { player_item_observer_drop(userdata) };
-            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
-            // payload that `from_swift` consumes.
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(PlayerItemObserver { token })
+        let handler: Handler<PlayerItemEvent> = Box::new(callback);
+        let inner = Registration::new(
+            handler,
+            ffi::av_player_item_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_player_item_add_observer(
+                    self.ptr,
+                    Some(player_item_event_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(PlayerItemObserver { _inner: inner })
     }
 }
 
 /// KVO + notification observer for `AVPlayerItem`.
 #[derive(Debug)]
 pub struct PlayerItemObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
-
-retain_release_wrapper!(
-    PlayerItemObserver,
-    field = token,
-    release = ffi::av_player_item_observer_release
-);
 
 /// Safe wrapper around `AVPlayer`.
 #[derive(Debug)]
@@ -318,7 +340,7 @@ impl Player {
         let mut err: *mut c_char = ptr::null_mut();
         // SAFETY: `asset.ptr` is a valid borrowed AVAsset handle and `err` points
         // to writable storage for the bridge.
-        let ptr = unsafe { ffi::av_player_create_with_asset(asset.ptr, &mut err) };
+        let ptr = unsafe { ffi::av_player_create_with_asset(asset.ptr, &raw mut err) };
         if ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
             // payload that `from_swift` consumes.
@@ -332,7 +354,7 @@ impl Player {
         let mut err: *mut c_char = ptr::null_mut();
         // SAFETY: `item.ptr` is a valid borrowed AVPlayerItem handle and `err`
         // points to writable storage for the bridge.
-        let ptr = unsafe { ffi::av_player_create_with_item(item.ptr, &mut err) };
+        let ptr = unsafe { ffi::av_player_create_with_item(item.ptr, &raw mut err) };
         if ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
             // payload that `from_swift` consumes.
@@ -348,7 +370,8 @@ impl Player {
         let mut err: *mut c_char = ptr::null_mut();
         // SAFETY: `url` is a NUL-terminated string owned by this frame and `err`
         // points to writable storage for the bridge.
-        let ptr = unsafe { ffi::av_player_create_with_url(url.as_ptr(), is_file_url, &mut err) };
+        let ptr =
+            unsafe { ffi::av_player_create_with_url(url.as_ptr(), is_file_url, &raw mut err) };
         if ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
             // payload that `from_swift` consumes.
@@ -361,7 +384,7 @@ impl Player {
         let mut err: *mut c_char = ptr::null_mut();
         // SAFETY: `self.ptr` is a valid AVPlayer handle and `err` points to
         // writable storage for the bridge.
-        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
             // payload that `from_swift` consumes.
@@ -434,13 +457,96 @@ impl Player {
         let (value, timescale, kind) = time.to_raw();
         // SAFETY: `self.ptr` is a valid AVPlayer handle and `err` points to
         // writable storage for the bridge.
-        let status = unsafe { ffi::av_player_seek(self.ptr, value, timescale, kind, &mut err) };
+        let status = unsafe { ffi::av_player_seek(self.ptr, value, timescale, kind, &raw mut err) };
         if status != ffi::status::OK {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
             // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(status, err) });
         }
         Ok(())
+    }
+
+    pub fn seek_to_with_tolerance(
+        &self,
+        time: Time,
+        tolerance_before: Time,
+        tolerance_after: Time,
+    ) -> Result<(), AVPlayerError> {
+        validate_seek_time(time, "seek time")?;
+        validate_tolerance(tolerance_before, "tolerance before")?;
+        validate_tolerance(tolerance_after, "tolerance after")?;
+        let (value, timescale, kind) = time.to_raw();
+        let (before_value, before_timescale, before_kind) = tolerance_before.to_raw();
+        let (after_value, after_timescale, after_kind) = tolerance_after.to_raw();
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_player_seek_with_tolerance(
+                self.ptr,
+                value,
+                timescale,
+                kind,
+                before_value,
+                before_timescale,
+                before_kind,
+                after_value,
+                after_timescale,
+                after_kind,
+                &raw mut err,
+            )
+        };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
+    }
+
+    pub fn set_rate_at_host_time(
+        &self,
+        rate: f32,
+        item_time: Time,
+        host_time: Time,
+    ) -> Result<(), AVPlayerError> {
+        let (item_value, item_timescale, item_kind) = item_time.to_raw();
+        let (host_value, host_timescale, host_kind) = host_time.to_raw();
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_player_set_rate_at_host_time(
+                self.ptr,
+                rate,
+                item_value,
+                item_timescale,
+                item_kind,
+                host_value,
+                host_timescale,
+                host_kind,
+                &raw mut err,
+            )
+        };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
+    }
+
+    pub fn observe_status<F>(&self, callback: F) -> Result<PlayerStatusObserver, AVPlayerError>
+    where
+        F: Fn(PlayerStatusEvent) + Send + Sync + 'static,
+    {
+        let handler: Handler<PlayerStatusEvent> = Box::new(callback);
+        let inner = Registration::new(
+            handler,
+            ffi::av_player_status_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_player_add_status_observer(
+                    self.ptr,
+                    Some(player_status_event_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(PlayerStatusObserver { _inner: inner })
     }
 
     /// Calls the `AVPlayer` framework counterpart for `add_periodic_time_observer`.
@@ -454,39 +560,28 @@ impl Player {
         F: FnMut(Time) + Send + 'static,
     {
         let queue_label = queue_label_cstring(queue_label)?;
-        let state = Box::new(PeriodicTimeObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
         let (value, timescale, kind) = interval.to_raw();
-        let mut err: *mut c_char = ptr::null_mut();
-        // SAFETY: `self.ptr` is a valid AVPlayer handle, `userdata` is a Box
-        // allocation that remains alive until the drop callback runs, and `err`
-        // points to writable storage for the bridge.
-        let token = unsafe {
-            ffi::av_player_add_periodic_time_observer(
-                self.ptr,
-                value,
-                timescale,
-                kind,
-                queue_label
-                    .as_ref()
-                    .map_or(ptr::null(), |label| label.as_ptr()),
-                Some(periodic_time_observer_trampoline),
-                userdata,
-                Some(periodic_time_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            // SAFETY: Observer creation failed before ownership of `userdata` was
-            // transferred to the bridge, so we must reclaim it locally.
-            unsafe { periodic_time_observer_drop(userdata) };
-            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
-            // payload that `from_swift` consumes.
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(PeriodicTimeObserver { token })
+        let handler: PeriodicTimeHandler = Mutex::new(Box::new(callback));
+        let inner = Registration::new(
+            handler,
+            ffi::av_player_time_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_player_add_periodic_time_observer(
+                    self.ptr,
+                    value,
+                    timescale,
+                    kind,
+                    queue_label
+                        .as_ref()
+                        .map_or(ptr::null(), |label| label.as_ptr()),
+                    Some(periodic_time_observer_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(PeriodicTimeObserver { _inner: inner })
     }
 
     /// Calls the `AVPlayer` framework counterpart for `add_boundary_time_observer`.
@@ -508,62 +603,44 @@ impl Player {
                 "boundary times JSON contains NUL byte: {error}"
             ))
         })?;
-        let state = Box::new(BoundaryTimeObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
-        let mut err: *mut c_char = ptr::null_mut();
-        // SAFETY: `self.ptr` is a valid AVPlayer handle, `times_json` is a
-        // NUL-terminated string owned by this frame, `userdata` is kept alive
-        // until the drop callback runs, and `err` points to writable storage.
-        let token = unsafe {
-            ffi::av_player_add_boundary_time_observer(
-                self.ptr,
-                times_json.as_ptr(),
-                queue_label
-                    .as_ref()
-                    .map_or(ptr::null(), |label| label.as_ptr()),
-                Some(boundary_time_observer_trampoline),
-                userdata,
-                Some(boundary_time_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            // SAFETY: Observer creation failed before ownership of `userdata` was
-            // transferred to the bridge, so we must reclaim it locally.
-            unsafe { boundary_time_observer_drop(userdata) };
-            // SAFETY: On failure the bridge initializes `err` to an owned Swift error
-            // payload that `from_swift` consumes.
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(BoundaryTimeObserver { token })
+        let handler: BoundaryTimeHandler = Mutex::new(Box::new(callback));
+        let inner = Registration::new(
+            handler,
+            ffi::av_player_time_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_player_add_boundary_time_observer(
+                    self.ptr,
+                    times_json.as_ptr(),
+                    queue_label
+                        .as_ref()
+                        .map_or(ptr::null(), |label| label.as_ptr()),
+                    Some(boundary_time_observer_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(BoundaryTimeObserver { _inner: inner })
     }
 }
 
 /// RAII token for `addPeriodicTimeObserver`.
 #[derive(Debug)]
 pub struct PeriodicTimeObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
-
-retain_release_wrapper!(
-    PeriodicTimeObserver,
-    field = token,
-    release = ffi::av_player_time_observer_release
-);
 
 /// RAII token for `addBoundaryTimeObserver`.
 #[derive(Debug)]
 pub struct BoundaryTimeObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
 
-retain_release_wrapper!(
-    BoundaryTimeObserver,
-    field = token,
-    release = ffi::av_player_time_observer_release
-);
+#[derive(Debug)]
+pub struct PlayerStatusObserver {
+    _inner: Registration,
+}
 
 // SAFETY: AVPlayer / AVPlayerItem ObjC handles and observer tokens are safe to
 // transfer across thread boundaries; method calls are internally dispatched
@@ -573,24 +650,13 @@ unsafe impl Send for PlayerItemObserver {}
 unsafe impl Send for Player {}
 unsafe impl Send for PeriodicTimeObserver {}
 unsafe impl Send for BoundaryTimeObserver {}
+unsafe impl Send for PlayerStatusObserver {}
 
 unsafe extern "C" fn player_item_event_trampoline(
     userdata: *mut c_void,
     payload_json: *const c_char,
 ) {
-    if userdata.is_null() || payload_json.is_null() {
-        return;
-    }
-
-    // SAFETY: `userdata` is a valid `*mut PlayerItemObserverState` allocated in
-    // `observe()` and kept alive for the lifetime of the token; null is checked above.
-    let callback = unsafe { &*userdata.cast::<PlayerItemObserverState>() };
-    // SAFETY: `payload_json` is a non-null, NUL-terminated string owned by the
-    // bridge for the duration of this callback.
-    let Ok(payload) = unsafe { CStr::from_ptr(payload_json) }.to_str() else {
-        return;
-    };
-    let Ok(payload) = serde_json::from_str::<PlayerItemEventPayload>(payload) else {
+    let Some(payload) = (unsafe { json_payload::<PlayerItemEventPayload>(payload_json) }) else {
         return;
     };
 
@@ -623,17 +689,19 @@ unsafe extern "C" fn player_item_event_trampoline(
         _ => return,
     };
 
-    crate::util::catch_cb_panic("player_item_event_trampoline", || {
-        (callback.callback)(event);
-    });
+    unsafe { deliver(userdata, "player_item_event_trampoline", event) };
 }
 
-unsafe extern "C" fn player_item_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        // SAFETY: `userdata` is the unique Box pointer created in `observe()`; the
-        // Swift bridge calls this drop callback exactly once.
-        drop(unsafe { Box::from_raw(userdata.cast::<PlayerItemObserverState>()) });
-    }
+unsafe extern "C" fn player_status_event_trampoline(
+    userdata: *mut c_void,
+    payload_json: *const c_char,
+) {
+    let Some(event) = (unsafe { json_payload::<PlayerStatusEventPayload>(payload_json) })
+        .and_then(PlayerStatusEvent::from_payload)
+    else {
+        return;
+    };
+    unsafe { deliver(userdata, "player_status_event_trampoline", event) };
 }
 
 unsafe extern "C" fn periodic_time_observer_trampoline(
@@ -642,47 +710,30 @@ unsafe extern "C" fn periodic_time_observer_trampoline(
     timescale: i32,
     kind: i32,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    // SAFETY: `userdata` is a valid `*mut PeriodicTimeObserverState` allocated in
-    // `add_periodic_time_observer()` and kept alive for the lifetime of the token;
-    // null is checked above.
-    let state = unsafe { &mut *userdata.cast::<PeriodicTimeObserverState>() };
-    crate::util::catch_cb_panic("periodic_time_observer_trampoline", || {
-        (state.callback)(Time::from_raw(value, timescale, kind));
-    });
-}
-
-unsafe extern "C" fn periodic_time_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        // SAFETY: `userdata` is the unique Box pointer created in
-        // `add_periodic_time_observer()`; the Swift bridge calls this drop callback
-        // exactly once.
-        drop(unsafe { Box::from_raw(userdata.cast::<PeriodicTimeObserverState>()) });
-    }
+    let time = Time::from_raw(value, timescale, kind);
+    let _ = unsafe {
+        CallbackContext::<PeriodicTimeHandler>::with(
+            userdata,
+            "periodic_time_observer_trampoline",
+            |handler| {
+                let mut callback = handler.lock().unwrap_or_else(PoisonError::into_inner);
+                callback(time);
+            },
+        )
+    };
 }
 
 unsafe extern "C" fn boundary_time_observer_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    // SAFETY: `userdata` is a valid `*mut BoundaryTimeObserverState` allocated in
-    // `add_boundary_time_observer()` and kept alive for the lifetime of the token;
-    // null is checked above.
-    let state = unsafe { &mut *userdata.cast::<BoundaryTimeObserverState>() };
-    crate::util::catch_cb_panic("boundary_time_observer_trampoline", || {
-        (state.callback)();
-    });
-}
-
-unsafe extern "C" fn boundary_time_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        // SAFETY: `userdata` is the unique Box pointer created in
-        // `add_boundary_time_observer()`; the Swift bridge calls this drop callback
-        // exactly once.
-        drop(unsafe { Box::from_raw(userdata.cast::<BoundaryTimeObserverState>()) });
-    }
+    let _ = unsafe {
+        CallbackContext::<BoundaryTimeHandler>::with(
+            userdata,
+            "boundary_time_observer_trampoline",
+            |handler| {
+                let mut callback = handler.lock().unwrap_or_else(PoisonError::into_inner);
+                callback();
+            },
+        )
+    };
 }
 
 fn queue_label_cstring(queue_label: Option<&str>) -> Result<Option<CString>, AVPlayerError> {

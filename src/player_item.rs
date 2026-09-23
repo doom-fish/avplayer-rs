@@ -9,14 +9,14 @@ use core::ops::{BitOr, BitOrAssign};
 use core::ptr;
 use std::ffi::CString;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::asset::Size;
+use crate::asset::{Asset, Size};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
-use crate::time::TimeRange;
-use crate::util::parse_json_and_free;
+use crate::time::{Time, TimeRange};
+use crate::util::{json_cstring, parse_json_and_free};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +39,26 @@ struct ExtendedPlayerItemInfoPayload {
     content_authorized_for_playback: bool,
     content_authorization_request_status: i32,
     custom_video_compositor: Option<PlayerItemVideoCompositorPayload>,
+    forward_playback_end_time: Time,
+    reverse_playback_end_time: Time,
+    can_step_forward: bool,
+    can_step_backward: bool,
+    has_video_composition: bool,
+    has_audio_mix: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioMixTrackVolume {
+    pub track_id: i32,
+    pub volume: f32,
+}
+
+impl AudioMixTrackVolume {
+    #[must_use]
+    pub const fn new(track_id: i32, volume: f32) -> Self {
+        Self { track_id, volume }
+    }
 }
 
 /// Mirrors the `AVPlayer` framework counterpart for `AudioTimePitchAlgorithm`.
@@ -201,7 +221,7 @@ impl From<PlayerItemVideoCompositorPayload> for PlayerItemVideoCompositorInfo {
 impl PlayerItem {
     fn extended_info(&self) -> Result<ExtendedPlayerItemInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_player_item_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -358,7 +378,7 @@ impl PlayerItem {
     ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let status = unsafe {
-            ffi::av_player_item_set_variant_preferences(self.ptr, preferences.bits(), &mut err)
+            ffi::av_player_item_set_variant_preferences(self.ptr, preferences.bits(), &raw mut err)
         };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -398,6 +418,91 @@ impl PlayerItem {
             .extended_info()?
             .custom_video_compositor
             .map(PlayerItemVideoCompositorInfo::from))
+    }
+
+    pub fn forward_playback_end_time(&self) -> Result<Time, AVPlayerError> {
+        Ok(self.extended_info()?.forward_playback_end_time)
+    }
+
+    pub fn set_forward_playback_end_time(&self, time: Time) {
+        let (value, timescale, kind) = time.to_raw();
+        unsafe {
+            ffi::av_player_item_set_forward_playback_end_time(self.ptr, value, timescale, kind);
+        }
+    }
+
+    pub fn reverse_playback_end_time(&self) -> Result<Time, AVPlayerError> {
+        Ok(self.extended_info()?.reverse_playback_end_time)
+    }
+
+    pub fn set_reverse_playback_end_time(&self, time: Time) {
+        let (value, timescale, kind) = time.to_raw();
+        unsafe {
+            ffi::av_player_item_set_reverse_playback_end_time(self.ptr, value, timescale, kind);
+        }
+    }
+
+    pub fn can_step_forward(&self) -> Result<bool, AVPlayerError> {
+        Ok(self.extended_info()?.can_step_forward)
+    }
+
+    pub fn can_step_backward(&self) -> Result<bool, AVPlayerError> {
+        Ok(self.extended_info()?.can_step_backward)
+    }
+
+    pub fn step_by_count(&self, step_count: isize) {
+        unsafe { ffi::av_player_item_step_by_count(self.ptr, step_count) };
+    }
+
+    pub fn has_video_composition(&self) -> Result<bool, AVPlayerError> {
+        Ok(self.extended_info()?.has_video_composition)
+    }
+
+    pub fn set_video_composition_from_asset(&self, asset: &Asset) -> Result<(), AVPlayerError> {
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_player_item_set_video_composition_from_asset(self.ptr, asset.ptr, &raw mut err)
+        };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
+    }
+
+    pub fn clear_video_composition(&self) {
+        unsafe { ffi::av_player_item_clear_video_composition(self.ptr) };
+    }
+
+    pub fn has_audio_mix(&self) -> Result<bool, AVPlayerError> {
+        Ok(self.extended_info()?.has_audio_mix)
+    }
+
+    pub fn set_audio_mix_volumes(
+        &self,
+        volumes: &[AudioMixTrackVolume],
+    ) -> Result<(), AVPlayerError> {
+        if let Some(volume) = volumes
+            .iter()
+            .find(|volume| !volume.volume.is_finite() || volume.volume < 0.0)
+        {
+            return Err(AVPlayerError::InvalidArgument(format!(
+                "audio mix volume for track {} must be a finite, non-negative number",
+                volume.track_id
+            )));
+        }
+        let volumes = json_cstring(volumes, "audio mix volumes")?;
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_player_item_set_audio_mix_volumes_json(self.ptr, volumes.as_ptr(), &raw mut err)
+        };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
+    }
+
+    pub fn clear_audio_mix(&self) {
+        unsafe { ffi::av_player_item_clear_audio_mix(self.ptr) };
     }
 }
 

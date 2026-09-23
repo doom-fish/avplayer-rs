@@ -40,7 +40,7 @@ impl QueuePlayer {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new() -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_queue_player_create(&mut err) };
+        let ptr = unsafe { ffi::av_queue_player_create(&raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::PLAYER_CREATE_FAILED, err) });
         }
@@ -52,7 +52,7 @@ impl QueuePlayer {
         let items = items.iter().map(|item| item.ptr).collect::<Vec<_>>();
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
-            ffi::av_queue_player_create_with_items(items.as_ptr(), items.len(), &mut err)
+            ffi::av_queue_player_create_with_items(items.as_ptr(), items.len(), &raw mut err)
         };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::PLAYER_CREATE_FAILED, err) });
@@ -62,7 +62,7 @@ impl QueuePlayer {
 
     fn info(&self) -> Result<QueuePlayerInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -107,8 +107,9 @@ impl QueuePlayer {
         action: PlayerActionAtItemEnd,
     ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let status =
-            unsafe { ffi::av_player_set_action_at_item_end(self.ptr, action.as_raw(), &mut err) };
+        let status = unsafe {
+            ffi::av_player_set_action_at_item_end(self.ptr, action.as_raw(), &raw mut err)
+        };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
         }
@@ -208,7 +209,7 @@ impl QueuePlayer {
                 self.ptr,
                 item.ptr,
                 after_item.map_or(ptr::null_mut(), |item| item.ptr),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {

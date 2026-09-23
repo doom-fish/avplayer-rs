@@ -1,4 +1,5 @@
 import AVFoundation
+import AVPlayerObjCBridge
 import Foundation
 
 @_cdecl("av_queue_player_create")
@@ -16,7 +17,17 @@ public func av_queue_player_create_with_items(
 ) -> UnsafeMutableRawPointer? {
     do {
         let items = try playerItemsFromPointers(itemPtrs, count: count)
-        return Unmanaged.passRetained(AVQueuePlayer(items: items)).toOpaque()
+        let identities = Set(items.map(ObjectIdentifier.init))
+        guard identities.count == items.count else {
+            outErrorMessage?.pointee = ffiString("AVQueuePlayer items must not contain the same item twice")
+            return nil
+        }
+        var reason: NSString?
+        guard let player = AVPTryCreateQueuePlayerWithItems(items, &reason) else {
+            outErrorMessage?.pointee = ffiString((reason as String?) ?? "AVQueuePlayer(items:) failed")
+            return nil
+        }
+        return Unmanaged.passRetained(player).toOpaque()
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -32,7 +43,7 @@ public func av_queue_player_release(_ playerPtr: UnsafeMutableRawPointer?) {
 @_cdecl("av_queue_player_item_count")
 public func av_queue_player_item_count(_ playerPtr: UnsafeMutableRawPointer) -> Int32 {
     let player = Unmanaged<AVQueuePlayer>.fromOpaque(playerPtr).takeUnretainedValue()
-    return Int32(player.items().count)
+    return Int32(clamping: player.items().count)
 }
 
 @_cdecl("av_queue_player_copy_item_at_index")
@@ -78,7 +89,11 @@ public func av_queue_player_insert_item_after_item(
         outErrorMessage?.pointee = ffiString("queue player cannot insert item at requested position")
         return AVP_OPERATION_FAILED
     }
-    player.insert(item, after: afterItem)
+    var reason: NSString?
+    guard AVPTryInsertItem(player, item, afterItem, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "insert(_:after:) failed")
+        return AVP_OPERATION_FAILED
+    }
     return AVP_OK
 }
 
@@ -102,10 +117,17 @@ private func playerItemsFromPointers(
     _ itemPtrs: UnsafePointer<UnsafeMutableRawPointer?>?,
     count: Int
 ) throws -> [AVPlayerItem] {
+    guard count >= 0 else {
+        throw BridgeError.message("invalid AVPlayerItem count")
+    }
+    guard count > 0 else { return [] }
     guard let itemPtrs else {
         throw BridgeError.message("missing AVPlayerItem pointer array")
     }
-    return (0..<count).map { index in
-        Unmanaged<AVPlayerItem>.fromOpaque(itemPtrs[index]!).takeUnretainedValue()
+    return try (0..<count).map { index in
+        guard let itemPtr = itemPtrs[index] else {
+            throw BridgeError.message("AVPlayerItem pointer array contains null at index \(index)")
+        }
+        return Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     }
 }

@@ -13,6 +13,7 @@ use crate::ffi;
 use crate::metadata::MetadataItem;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
+use crate::util::take_object_array;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,7 +146,7 @@ retain_release_wrapper!(Asset, release = ffi::av_asset_release);
 impl Asset {
     fn info(&self) -> Result<AssetInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_asset_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -173,7 +174,7 @@ impl Asset {
             AVPlayerError::InvalidArgument(format!("key contains NUL byte: {error}"))
         })?;
         let mut err: *mut c_char = ptr::null_mut();
-        let raw = unsafe { ffi::av_asset_status_of_value(self.ptr, key.as_ptr(), &mut err) };
+        let raw = unsafe { ffi::av_asset_status_of_value(self.ptr, key.as_ptr(), &raw mut err) };
         if raw < 0 {
             return Err(unsafe { from_swift(raw, err) });
         }
@@ -201,7 +202,7 @@ impl Asset {
         })?;
         let mut err: *mut c_char = ptr::null_mut();
         let statuses_ptr =
-            unsafe { ffi::av_asset_load_values_json(self.ptr, json.as_ptr(), 30, &mut err) };
+            unsafe { ffi::av_asset_load_values_json(self.ptr, json.as_ptr(), 30, &raw mut err) };
         if statuses_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::LOAD_FAILED, err) });
         }
@@ -218,27 +219,22 @@ impl Asset {
 
     /// Enumerate all tracks owned by the asset.
     pub fn tracks(&self) -> Result<Vec<AssetTrack>, AVPlayerError> {
-        let count = unsafe { ffi::av_asset_track_count(self.ptr) };
-        if count < 0 {
-            return Err(AVPlayerError::OperationFailed(format!(
-                "track count unexpectedly negative: {count}"
-            )));
+        let mut status = ffi::status::OK;
+        let mut err: *mut c_char = ptr::null_mut();
+        let array = unsafe { ffi::av_asset_load_tracks(self.ptr, &raw mut status, &raw mut err) };
+        if array.is_null() {
+            let status = if status == ffi::status::OK {
+                ffi::status::LOAD_FAILED
+            } else {
+                status
+            };
+            return Err(unsafe { from_swift(status, err) });
         }
-
-        let capacity = usize::try_from(count).map_err(|error| {
-            AVPlayerError::OperationFailed(format!("invalid track count: {error}"))
-        })?;
-        let mut tracks = Vec::with_capacity(capacity);
-        for index in 0..count {
-            let ptr = unsafe { ffi::av_asset_copy_track_at_index(self.ptr, index) };
-            if ptr.is_null() {
-                return Err(AVPlayerError::OperationFailed(format!(
-                    "bridge returned null track at index {index}"
-                )));
-            }
-            tracks.push(AssetTrack { ptr });
-        }
-        Ok(tracks)
+        Ok(unsafe { take_object_array(array) }
+            .into_iter()
+            .filter(|ptr| !ptr.is_null())
+            .map(|ptr| AssetTrack { ptr })
+            .collect())
     }
 }
 
@@ -277,7 +273,7 @@ impl UrlAsset {
                 url.as_ptr(),
                 is_file_url,
                 prefer_precise_duration_and_timing,
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -361,7 +357,7 @@ unsafe impl Send for AssetTrack {}
 impl AssetTrack {
     fn info(&self) -> Result<TrackInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_track_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_asset_track_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

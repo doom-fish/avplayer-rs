@@ -1,6 +1,12 @@
 import AVFoundation
 import Foundation
 
+@_cdecl("av_ns_object_retain")
+public func av_ns_object_retain(_ objectPtr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
+    guard let objectPtr else { return nil }
+    return Unmanaged<AnyObject>.fromOpaque(objectPtr).retain().toOpaque()
+}
+
 @_cdecl("av_ns_object_release")
 public func av_ns_object_release(_ objectPtr: UnsafeMutableRawPointer?) {
     guard let objectPtr else { return }

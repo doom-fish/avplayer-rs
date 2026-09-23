@@ -27,7 +27,7 @@ impl PlayerItemMediaDataCollector<'_> {
 
     pub fn kind(&self) -> Result<PlayerItemMediaDataCollectorKind, AVPlayerError> {
         let mut err: *mut c_char = core::ptr::null_mut();
-        let raw = unsafe { ffi::av_player_item_media_data_collector_kind(self.ptr, &mut err) };
+        let raw = unsafe { ffi::av_player_item_media_data_collector_kind(self.ptr, &raw mut err) };
         if raw.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

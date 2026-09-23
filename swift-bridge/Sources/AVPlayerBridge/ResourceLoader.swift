@@ -41,23 +41,19 @@ private struct AssetResourceLoadingRequestorPayload: Codable {
 private final class AssetResourceLoaderDelegateBox: NSObject, AVAssetResourceLoaderDelegate {
     private weak var loader: AVAssetResourceLoader?
     private let callback: AVPBoolObjectCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
 
     init(
         loader: AVAssetResourceLoader,
         queue: DispatchQueue?,
         callback: @escaping AVPBoolObjectCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
         self.loader = loader
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
-        loader.setDelegate(self, queue: queue)
+        loader.setDelegate(self, queue: queue ?? DispatchQueue(label: "avplayer.resource-loader"))
     }
 
     deinit {
@@ -65,18 +61,16 @@ private final class AssetResourceLoaderDelegateBox: NSObject, AVAssetResourceLoa
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         loader?.setDelegate(nil, queue: nil)
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     private func send(event: String, object: AnyObject) -> Bool {
-        guard !disposed else { return false }
-        let objectPtr = Unmanaged.passRetained(object).toOpaque()
-        return event.withCString { callback(userData, $0, objectPtr) }
+        gate.run(false) { context in
+            let objectPtr = Unmanaged.passRetained(object).toOpaque()
+            return event.withCString { callback(context, $0, objectPtr) }
+        }
     }
 
     func resourceLoader(
@@ -167,6 +161,7 @@ public func av_asset_resource_loader_add_delegate(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing resource-loader callback")
         return nil
@@ -176,8 +171,7 @@ public func av_asset_resource_loader_add_delegate(
         loader: loader,
         queue: avpDispatchQueue(from: queueLabel),
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -185,7 +179,9 @@ public func av_asset_resource_loader_add_delegate(
 @_cdecl("av_asset_resource_loader_delegate_release")
 public func av_asset_resource_loader_delegate_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<AssetResourceLoaderDelegateBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<AssetResourceLoaderDelegateBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_asset_resource_loading_request_info_json")

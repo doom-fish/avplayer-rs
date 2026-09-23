@@ -17,7 +17,7 @@ use crate::ffi;
 use crate::player::{Player, PlayerItem};
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
-use crate::util::{parse_json_and_free, to_cstring};
+use crate::util::{deliver, json_payload, parse_json_and_free, to_cstring, Handler, Registration};
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventRestrictions`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -368,10 +368,6 @@ pub enum PlayerInterstitialEventMonitorEvent {
     },
 }
 
-struct PlayerInterstitialEventMonitorObserverState {
-    callback: Box<dyn Fn(PlayerInterstitialEventMonitorEvent) + Send + 'static>,
-}
-
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEvent`.
 #[derive(Debug)]
 pub struct PlayerInterstitialEvent {
@@ -394,7 +390,7 @@ impl PlayerInterstitialEvent {
                 value,
                 timescale,
                 kind,
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -406,7 +402,8 @@ impl PlayerInterstitialEvent {
     /// Calls the `AVPlayer` framework counterpart for `info`.
     pub fn info(&self) -> Result<PlayerInterstitialEventInfo, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_interstitial_event_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_interstitial_event_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -514,7 +511,8 @@ impl PlayerInterstitialEventMonitor {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(player: &Player) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_player_interstitial_event_monitor_create(player.ptr, &mut err) };
+        let ptr =
+            unsafe { ffi::av_player_interstitial_event_monitor_create(player.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -525,7 +523,7 @@ impl PlayerInterstitialEventMonitor {
     pub fn state(&self) -> Result<PlayerInterstitialEventMonitorState, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
-            unsafe { ffi::av_player_interstitial_event_monitor_info_json(self.ptr, &mut err) };
+            unsafe { ffi::av_player_interstitial_event_monitor_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -540,27 +538,23 @@ impl PlayerInterstitialEventMonitor {
         callback: F,
     ) -> Result<PlayerInterstitialEventMonitorObserver, AVPlayerError>
     where
-        F: Fn(PlayerInterstitialEventMonitorEvent) + Send + 'static,
+        F: Fn(PlayerInterstitialEventMonitorEvent) + Send + Sync + 'static,
     {
-        let state = Box::new(PlayerInterstitialEventMonitorObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
-        let mut err: *mut c_char = ptr::null_mut();
-        let token = unsafe {
-            ffi::av_player_interstitial_event_monitor_add_observer(
-                self.ptr,
-                Some(player_interstitial_event_monitor_event_trampoline),
-                userdata,
-                Some(player_interstitial_event_monitor_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            unsafe { player_interstitial_event_monitor_observer_drop(userdata) };
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(PlayerInterstitialEventMonitorObserver { token })
+        let handler: Handler<PlayerInterstitialEventMonitorEvent> = Box::new(callback);
+        let inner = Registration::new(
+            handler,
+            ffi::av_player_interstitial_event_monitor_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_player_interstitial_event_monitor_add_observer(
+                    self.ptr,
+                    Some(player_interstitial_event_monitor_event_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(PlayerInterstitialEventMonitorObserver { _inner: inner })
     }
 }
 
@@ -579,8 +573,9 @@ impl PlayerInterstitialEventController {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(player: &Player) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr =
-            unsafe { ffi::av_player_interstitial_event_controller_create(player.ptr, &mut err) };
+        let ptr = unsafe {
+            ffi::av_player_interstitial_event_controller_create(player.ptr, &raw mut err)
+        };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -590,8 +585,9 @@ impl PlayerInterstitialEventController {
     /// Calls the `AVPlayer` framework counterpart for `state`.
     pub fn state(&self) -> Result<PlayerInterstitialEventMonitorState, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_interstitial_event_controller_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe {
+            ffi::av_player_interstitial_event_controller_info_json(self.ptr, &raw mut err)
+        };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -609,7 +605,7 @@ impl PlayerInterstitialEventController {
                 self.ptr,
                 event_ptrs.as_ptr(),
                 event_ptrs.len(),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -640,14 +636,8 @@ impl PlayerInterstitialEventController {
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventMonitorObserver`.
 #[derive(Debug)]
 pub struct PlayerInterstitialEventMonitorObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
-
-retain_release_wrapper!(
-    PlayerInterstitialEventMonitorObserver,
-    field = token,
-    release = ffi::av_player_interstitial_event_monitor_observer_release
-);
 
 // SAFETY: These AVFoundation interstitial-event handles are safe to transfer
 // across thread boundaries; method calls are internally dispatched safely.
@@ -659,7 +649,8 @@ unsafe impl Send for PlayerInterstitialEventMonitorObserver {}
 /// Calls the `AVPlayer` framework counterpart for `player_waiting_during_interstitial_event_reason`.
 pub fn player_waiting_during_interstitial_event_reason() -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
-    let string_ptr = unsafe { ffi::av_player_waiting_during_interstitial_event_reason(&mut err) };
+    let string_ptr =
+        unsafe { ffi::av_player_waiting_during_interstitial_event_reason(&raw mut err) };
     if string_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
@@ -682,15 +673,9 @@ unsafe extern "C" fn player_interstitial_event_monitor_event_trampoline(
     userdata: *mut c_void,
     payload_json: *const c_char,
 ) {
-    if userdata.is_null() || payload_json.is_null() {
-        return;
-    }
-
-    let callback = &*userdata.cast::<PlayerInterstitialEventMonitorObserverState>();
-    let Ok(payload) = core::ffi::CStr::from_ptr(payload_json).to_str() else {
-        return;
-    };
-    let Ok(payload) = serde_json::from_str::<PlayerInterstitialMonitorEventPayload>(payload) else {
+    let Some(payload) =
+        (unsafe { json_payload::<PlayerInterstitialMonitorEventPayload>(payload_json) })
+    else {
         return;
     };
 
@@ -741,16 +726,12 @@ unsafe extern "C" fn player_interstitial_event_monitor_event_trampoline(
         _ => return,
     };
 
-    crate::util::catch_cb_panic("player_interstitial_event_monitor_event_trampoline", || {
-        (callback.callback)(event);
-    });
-}
-
-unsafe extern "C" fn player_interstitial_event_monitor_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        drop(Box::from_raw(
-            userdata.cast::<PlayerInterstitialEventMonitorObserverState>(),
-        ));
+    unsafe {
+        deliver(
+            userdata,
+            "player_interstitial_event_monitor_event_trampoline",
+            event,
+        );
     }
 }
 

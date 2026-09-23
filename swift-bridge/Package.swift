@@ -14,7 +14,12 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "AVPlayerObjCBridge",
+            path: "Sources/AVPlayerObjCBridge",
+            publicHeadersPath: "include"),
+        .target(
             name: "AVPlayerBridge",
+            dependencies: ["AVPlayerObjCBridge"],
             path: "Sources/AVPlayerBridge")
     ]
 )

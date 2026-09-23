@@ -1,23 +1,18 @@
 import AVFoundation
+import AVPlayerObjCBridge
 import Foundation
 
 private final class TimeObserverBox {
     private let player: AVPlayer
-    private let token: Any
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let queue: DispatchQueue?
+    private let gate: AVPCallbackGate
+    private var token: Any?
 
-    init(
-        player: AVPlayer,
-        token: Any,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
-    ) {
+    init(player: AVPlayer, queue: DispatchQueue?, gate: AVPCallbackGate, token: Any) {
         self.player = player
+        self.queue = queue
+        self.gate = gate
         self.token = token
-        self.userData = userData
-        self.dropUserData = dropUserData
     }
 
     deinit {
@@ -25,12 +20,15 @@ private final class TimeObserverBox {
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
-        player.removeTimeObserver(token)
-        if let userData, let dropUserData {
-            dropUserData(userData)
+        guard gate.close() else { return }
+        if let token {
+            player.removeTimeObserver(token)
+            self.token = nil
         }
+        if gate.isBusy, !avpIsCurrentQueue(queue) {
+            (queue ?? DispatchQueue.main).sync {}
+        }
+        gate.finish()
     }
 }
 
@@ -42,40 +40,89 @@ private struct PlayerRateDidChangeEventPayload: Codable {
 
 @available(macOS 12.0, *)
 private final class PlayerRateObserverBox: NSObject {
-    private weak var player: AVPlayer?
-    private let callback: AVPJsonCallback
-    private let queue: DispatchQueue?
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private let deliveryGroup = DispatchGroup()
+    private let gate: AVPCallbackGate
     private var observer: NSObjectProtocol?
-    private var disposed = false
 
     init(
         player: AVPlayer,
         queue: DispatchQueue?,
         callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
-        self.player = player
-        self.callback = callback
-        self.queue = queue
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         observer = NotificationCenter.default.addObserver(
             forName: Notification.Name(rawValue: "AVPlayerRateDidChangeNotification"),
             object: player,
             queue: nil
-        ) { [weak self, weak player] note in
-            guard let self, let player = player ?? (note.object as? AVPlayer) else { return }
-            self.send(
-                PlayerRateDidChangeEventPayload(
-                    rate: player.rate,
-                    reason: note.userInfo?[AVPlayer.rateDidChangeReasonKey] as? String,
-                    hasOriginatingParticipant: note.userInfo?[AVPlayer.rateDidChangeOriginatingParticipantKey] != nil
-                )
+        ) { [weak player, gate] note in
+            guard let player = player ?? (note.object as? AVPlayer) else { return }
+            let payload = PlayerRateDidChangeEventPayload(
+                rate: player.rate,
+                reason: note.userInfo?[AVPlayer.rateDidChangeReasonKey] as? String,
+                hasOriginatingParticipant: note.userInfo?[AVPlayer.rateDidChangeOriginatingParticipantKey] != nil
+            )
+            if let queue {
+                queue.async { gate.deliverJSON(payload, to: callback) }
+            } else {
+                gate.deliverJSON(payload, to: callback)
+            }
+        }
+    }
+
+    deinit {
+        dispose()
+    }
+
+    func dispose() {
+        guard gate.close() else { return }
+        if let observer {
+            NotificationCenter.default.removeObserver(observer)
+            self.observer = nil
+        }
+        gate.finish()
+    }
+}
+
+private struct PlayerStatusEventPayload: Codable {
+    let event: String
+    let status: Int32?
+    let errorMessage: String?
+    let timeControlStatus: Int32?
+    let reasonForWaitingToPlay: String?
+}
+
+private final class PlayerStatusObserverBox: NSObject {
+    private let gate: AVPCallbackGate
+    private var statusObservation: NSKeyValueObservation?
+    private var timeControlStatusObservation: NSKeyValueObservation?
+
+    init(player: AVPlayer, callback: @escaping AVPJsonCallback, gate: AVPCallbackGate) {
+        self.gate = gate
+        super.init()
+        statusObservation = player.observe(\.status, options: [.initial, .new]) { [gate] player, _ in
+            gate.deliverJSON(
+                PlayerStatusEventPayload(
+                    event: "status_changed",
+                    status: Int32(clamping: player.status.rawValue),
+                    errorMessage: player.error?.localizedDescription,
+                    timeControlStatus: nil,
+                    reasonForWaitingToPlay: nil
+                ),
+                to: callback
+            )
+        }
+        timeControlStatusObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) {
+            [gate] player, _ in
+            gate.deliverJSON(
+                PlayerStatusEventPayload(
+                    event: "time_control_status_changed",
+                    status: nil,
+                    errorMessage: nil,
+                    timeControlStatus: Int32(clamping: player.timeControlStatus.rawValue),
+                    reasonForWaitingToPlay: player.reasonForWaitingToPlay?.rawValue
+                ),
+                to: callback
             )
         }
     }
@@ -85,36 +132,38 @@ private final class PlayerRateObserverBox: NSObject {
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
-        if let observer {
-            NotificationCenter.default.removeObserver(observer)
-            self.observer = nil
-        }
-        deliveryGroup.wait()
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        guard gate.close() else { return }
+        statusObservation?.invalidate()
+        statusObservation = nil
+        timeControlStatusObservation?.invalidate()
+        timeControlStatusObservation = nil
+        gate.finish()
     }
+}
 
-    private func send(_ payload: PlayerRateDidChangeEventPayload) {
-        let deliver = { [callback, userData] in
-            guard let json = try? avpEncodeJSON(payload) else {
-                callback(userData, nil)
-                return
-            }
-            json.withCString { callback(userData, $0) }
-        }
-        if let queue {
-            deliveryGroup.enter()
-            queue.async { [self] in
-                defer { deliveryGroup.leave() }
-                deliver()
-            }
-        } else {
-            deliver()
-        }
+@_cdecl("av_player_add_status_observer")
+public func av_player_add_status_observer(
+    _ playerPtr: UnsafeMutableRawPointer,
+    _ callback: AVPJsonCallback?,
+    _ userData: UnsafeMutableRawPointer?,
+    _ dropUserData: AVPDropCallback?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
+    guard let callback else {
+        outErrorMessage?.pointee = ffiString("missing player status observer callback")
+        return nil
     }
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    return Unmanaged.passRetained(PlayerStatusObserverBox(player: player, callback: callback, gate: gate)).toOpaque()
+}
+
+@_cdecl("av_player_status_observer_release")
+public func av_player_status_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
+    guard let observerPtr else { return }
+    let observer = Unmanaged<PlayerStatusObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_player_create")
@@ -155,7 +204,12 @@ public func av_player_create_with_item(
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    return Unmanaged.passRetained(AVPlayer(playerItem: item)).toOpaque()
+    var reason: NSString?
+    guard let player = AVPTryCreatePlayerWithItem(item, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "AVPlayer(playerItem:) failed")
+        return nil
+    }
+    return Unmanaged.passRetained(player).toOpaque()
 }
 
 @_cdecl("av_player_release")
@@ -200,7 +254,9 @@ public func av_player_info_json(
                 return Int32(player.networkResourcePriority.rawValue)
             }
             return nil
-        }()
+        }(),
+        defaultRate: player.defaultRate,
+        audioOutputDeviceUniqueId: player.audioOutputDeviceUniqueID
     )
     do {
         return ffiString(try avpEncodeJSON(payload))
@@ -238,12 +294,84 @@ public func av_player_seek(
 ) -> Int32 {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let time = cmTime(value: value, timescale: timescale, kind: kind)
-    guard time != .invalid else {
-        outErrorMessage?.pointee = ffiString("seek time must be numeric")
+    if let message = avpSeekTimeError(time, what: "seek time") {
+        outErrorMessage?.pointee = ffiString(message)
         return AVP_INVALID_ARGUMENT
     }
     player.seek(to: time)
     return AVP_OK
+}
+
+@_cdecl("av_player_seek_with_tolerance")
+public func av_player_seek_with_tolerance(
+    _ playerPtr: UnsafeMutableRawPointer,
+    _ value: Int64,
+    _ timescale: Int32,
+    _ kind: Int32,
+    _ beforeValue: Int64,
+    _ beforeTimescale: Int32,
+    _ beforeKind: Int32,
+    _ afterValue: Int64,
+    _ afterTimescale: Int32,
+    _ afterKind: Int32,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    let time = cmTime(value: value, timescale: timescale, kind: kind)
+    let before = cmTime(value: beforeValue, timescale: beforeTimescale, kind: beforeKind)
+    let after = cmTime(value: afterValue, timescale: afterTimescale, kind: afterKind)
+    if let message = avpSeekTimeError(time, what: "seek time")
+        ?? avpToleranceError(before, what: "tolerance before")
+        ?? avpToleranceError(after, what: "tolerance after") {
+        outErrorMessage?.pointee = ffiString(message)
+        return AVP_INVALID_ARGUMENT
+    }
+    player.seek(to: time, toleranceBefore: before, toleranceAfter: after)
+    return AVP_OK
+}
+
+@_cdecl("av_player_set_rate_at_host_time")
+public func av_player_set_rate_at_host_time(
+    _ playerPtr: UnsafeMutableRawPointer,
+    _ rate: Float,
+    _ itemValue: Int64,
+    _ itemTimescale: Int32,
+    _ itemKind: Int32,
+    _ hostValue: Int64,
+    _ hostTimescale: Int32,
+    _ hostKind: Int32,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    guard !player.automaticallyWaitsToMinimizeStalling else {
+        outErrorMessage?.pointee = ffiString(
+            "setRate(_:time:atHostTime:) requires automaticallyWaitsToMinimizeStalling to be false"
+        )
+        return AVP_INVALID_ARGUMENT
+    }
+    let itemTime = cmTime(value: itemValue, timescale: itemTimescale, kind: itemKind)
+    let hostTime = cmTime(value: hostValue, timescale: hostTimescale, kind: hostKind)
+    var reason: NSString?
+    guard AVPTrySetRateTimeAtHostTime(player, rate, itemTime, hostTime, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "setRate(_:time:atHostTime:) failed")
+        return AVP_OPERATION_FAILED
+    }
+    return AVP_OK
+}
+
+@_cdecl("av_player_set_default_rate")
+public func av_player_set_default_rate(_ playerPtr: UnsafeMutableRawPointer, _ rate: Float) {
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    player.defaultRate = rate
+}
+
+@_cdecl("av_player_set_audio_output_device_unique_id")
+public func av_player_set_audio_output_device_unique_id(
+    _ playerPtr: UnsafeMutableRawPointer,
+    _ uniqueIdPtr: UnsafePointer<CChar>?
+) {
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    player.audioOutputDeviceUniqueID = uniqueIdPtr.map { String(cString: $0) }
 }
 
 @_cdecl("av_player_copy_current_item")
@@ -256,11 +384,17 @@ public func av_player_copy_current_item(_ playerPtr: UnsafeMutableRawPointer) ->
 @_cdecl("av_player_replace_current_item")
 public func av_player_replace_current_item(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ itemPtr: UnsafeMutableRawPointer?
-) {
+    _ itemPtr: UnsafeMutableRawPointer?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let item = itemPtr.map { Unmanaged<AVPlayerItem>.fromOpaque($0).takeUnretainedValue() }
-    player.replaceCurrentItem(with: item)
+    var reason: NSString?
+    guard AVPTryReplaceCurrentItem(player, item, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "replaceCurrentItem(with:) failed")
+        return AVP_OPERATION_FAILED
+    }
+    return AVP_OK
 }
 
 @_cdecl("av_player_set_action_at_item_end")
@@ -272,6 +406,10 @@ public func av_player_set_action_at_item_end(
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     guard let value = AVPlayer.ActionAtItemEnd(rawValue: Int(rawValue)) else {
         outErrorMessage?.pointee = ffiString("invalid AVPlayerActionAtItemEnd raw value: \(rawValue)")
+        return AVP_INVALID_ARGUMENT
+    }
+    if value == .advance, !(player is AVQueuePlayer) {
+        outErrorMessage?.pointee = ffiString("AVPlayerActionAtItemEndAdvance is only supported by AVQueuePlayer")
         return AVP_INVALID_ARGUMENT
     }
     player.actionAtItemEnd = value
@@ -355,6 +493,7 @@ public func av_player_add_rate_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerRateDidChangeNotification requires macOS 12.0+")
         return nil
@@ -368,8 +507,7 @@ public func av_player_add_rate_observer(
         player: player,
         queue: avpDispatchQueue(from: queueLabel),
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -378,7 +516,9 @@ public func av_player_add_rate_observer(
 public func av_player_rate_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
     if #available(macOS 12.0, *) {
-        Unmanaged<PlayerRateObserverBox>.fromOpaque(observerPtr).release()
+        let observer = Unmanaged<PlayerRateObserverBox>.fromOpaque(observerPtr)
+        observer.takeUnretainedValue().dispose()
+        observer.release()
     }
 }
 
@@ -435,27 +575,30 @@ public func av_player_add_periodic_time_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing periodic time callback")
         return nil
     }
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let interval = cmTime(value: intervalValue, timescale: intervalTimescale, kind: intervalKind)
-    guard interval != .invalid, interval != .indefinite else {
-        outErrorMessage?.pointee = ffiString("time-observer interval must be numeric")
+    guard interval.isNumeric, interval > .zero else {
+        outErrorMessage?.pointee = ffiString("time-observer interval must be a positive numeric time")
         return nil
     }
     let queue = avpDispatchQueue(from: queueLabel)
-    let token = player.addPeriodicTimeObserver(forInterval: interval, queue: queue) { time in
-        let encoded = encodeTime(time)
-        callback(
-            userData,
-            encoded.value ?? 0,
-            encoded.timescale ?? 0,
-            kindFromEncodedTime(encoded)
-        )
+    let token = player.addPeriodicTimeObserver(forInterval: interval, queue: queue) { [gate] time in
+        gate.run(()) { context in
+            let encoded = encodeTime(time)
+            callback(
+                context,
+                encoded.value ?? 0,
+                encoded.timescale ?? 0,
+                kindFromEncodedTime(encoded)
+            )
+        }
     }
-    let box = TimeObserverBox(player: player, token: token, userData: userData, dropUserData: dropUserData)
+    let box = TimeObserverBox(player: player, queue: queue, gate: gate, token: token)
     return Unmanaged.passRetained(box).toOpaque()
 }
 
@@ -469,6 +612,7 @@ public func av_player_add_boundary_time_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing boundary time callback")
         return nil
@@ -476,17 +620,21 @@ public func av_player_add_boundary_time_observer(
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     do {
         let payloads = try avpDecodeJSON(timesJson, as: [TimePayload].self)
-        let times = payloads.map { NSValue(time: cmTime(from: $0)) }
-        let queue = avpDispatchQueue(from: queueLabel)
-        let token = player.addBoundaryTimeObserver(forTimes: times, queue: queue) {
-            callback(userData)
+        let times = payloads.map { cmTime(from: $0) }
+        guard !times.isEmpty else {
+            outErrorMessage?.pointee = ffiString("boundary time observers need at least one time")
+            return nil
         }
-        let box = TimeObserverBox(
-            player: player,
-            token: token,
-            userData: userData,
-            dropUserData: dropUserData
-        )
+        guard times.allSatisfy({ $0.isNumeric }) else {
+            outErrorMessage?.pointee = ffiString("boundary times must be numeric")
+            return nil
+        }
+        let queue = avpDispatchQueue(from: queueLabel)
+        let token = player.addBoundaryTimeObserver(forTimes: times.map { NSValue(time: $0) }, queue: queue) {
+            [gate] in
+            gate.run(()) { context in callback(context) }
+        }
+        let box = TimeObserverBox(player: player, queue: queue, gate: gate, token: token)
         return Unmanaged.passRetained(box).toOpaque()
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
@@ -497,7 +645,9 @@ public func av_player_add_boundary_time_observer(
 @_cdecl("av_player_time_observer_release")
 public func av_player_time_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<TimeObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<TimeObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 private func kindFromEncodedTime(_ payload: TimePayload) -> Int32 {

@@ -43,7 +43,7 @@ retain_release_wrapper!(AssetPlaybackAssistant, release = ffi::av_ns_object_rele
 impl Asset {
     pub fn playback_assistant(&self) -> Result<AssetPlaybackAssistant, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_asset_playback_assistant_create(self.ptr, &mut err) };
+        let ptr = unsafe { ffi::av_asset_playback_assistant_create(self.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -63,7 +63,7 @@ impl AssetPlaybackAssistant {
     ) -> Result<Vec<AssetPlaybackConfigurationOption>, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
-            unsafe { ffi::av_asset_playback_assistant_copy_options_json(self.ptr, &mut err) };
+            unsafe { ffi::av_asset_playback_assistant_copy_options_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

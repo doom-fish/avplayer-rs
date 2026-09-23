@@ -219,6 +219,12 @@ public func av_player_item_legible_output_create(
         let nativeRepresentationSubtypes = try nativeRepresentationSubtypesJson.map {
             try avpDecodeJSON($0, as: [UInt32].self)
         } ?? []
+        guard !nativeRepresentationSubtypes.contains(kCMClosedCaptionFormatType_CEA608) else {
+            outErrorMessage?.pointee = ffiString(
+                "CEA-608 closed captions have no native representation; remove the 'c608' media subtype"
+            )
+            return nil
+        }
         let output: AVPlayerItemLegibleOutput
         if nativeRepresentationSubtypes.isEmpty {
             output = AVPlayerItemLegibleOutput()

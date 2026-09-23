@@ -1,4 +1,5 @@
 import AVFoundation
+import AVPlayerObjCBridge
 import CoreMedia
 import CoreVideo
 import Foundation
@@ -75,6 +76,10 @@ public func av_reader_start(
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
     let reader = Unmanaged<AVAssetReader>.fromOpaque(readerPtr).takeUnretainedValue()
+    guard reader.status == .unknown else {
+        outErrorMessage?.pointee = ffiString("startReading can only be called once, before reading has started")
+        return AVP_INVALID_ARGUMENT
+    }
     if reader.startReading() {
         return AVP_OK
     }
@@ -129,8 +134,7 @@ public func av_reader_track_output_create_video(
         let settings = try settingsJson.map {
             try videoSettingsDictionary(avpDecodeJSON($0, as: VideoOutputSettingsPayload.self))
         }
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings ?? nil)
-        return Unmanaged.passRetained(output).toOpaque()
+        return try avpRetainedTrackOutput(track: track, settings: settings)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -148,8 +152,7 @@ public func av_reader_track_output_create_audio(
         let settings = try settingsJson.map {
             try audioSettingsDictionary(avpDecodeJSON($0, as: AudioOutputSettingsPayload.self))
         }
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings ?? nil)
-        return Unmanaged.passRetained(output).toOpaque()
+        return try avpRetainedTrackOutput(track: track, settings: settings)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -162,7 +165,22 @@ public func av_reader_track_output_create_passthrough(
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
     let track = Unmanaged<AVAssetTrack>.fromOpaque(trackPtr).takeUnretainedValue()
-    let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+    do {
+        return try avpRetainedTrackOutput(track: track, settings: nil)
+    } catch {
+        outErrorMessage?.pointee = ffiString(error.localizedDescription)
+        return nil
+    }
+}
+
+private func avpRetainedTrackOutput(
+    track: AVAssetTrack,
+    settings: [String: Any]?
+) throws -> UnsafeMutableRawPointer {
+    var reason: NSString?
+    guard let output = AVPTryCreateTrackOutput(track, settings, &reason) else {
+        throw BridgeError.message((reason as String?) ?? "AVAssetReaderTrackOutput could not be created")
+    }
     return Unmanaged.passRetained(output).toOpaque()
 }
 
@@ -178,7 +196,10 @@ public func av_reader_audio_mix_output_create(
         let settings = try settingsJson.map {
             try audioSettingsDictionary(avpDecodeJSON($0, as: AudioOutputSettingsPayload.self))
         }
-        let output = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: settings ?? nil)
+        var reason: NSString?
+        guard let output = AVPTryCreateAudioMixOutput(tracks, settings, &reason) else {
+            throw BridgeError.message((reason as String?) ?? "AVAssetReaderAudioMixOutput could not be created")
+        }
         return Unmanaged.passRetained(output).toOpaque()
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
@@ -198,7 +219,10 @@ public func av_reader_video_composition_output_create(
         let settings = try settingsJson.map {
             try videoSettingsDictionary(avpDecodeJSON($0, as: VideoOutputSettingsPayload.self))
         }
-        let output = AVAssetReaderVideoCompositionOutput(videoTracks: tracks, videoSettings: settings ?? nil)
+        var reason: NSString?
+        guard let output = AVPTryCreateVideoCompositionOutput(tracks, settings, &reason) else {
+            throw BridgeError.message((reason as String?) ?? "AVAssetReaderVideoCompositionOutput could not be created")
+        }
         return Unmanaged.passRetained(output).toOpaque()
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
@@ -215,10 +239,16 @@ public func av_reader_output_release(_ outputPtr: UnsafeMutableRawPointer?) {
 @_cdecl("av_reader_output_set_always_copies_sample_data")
 public func av_reader_output_set_always_copies_sample_data(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ alwaysCopies: Bool
-) {
+    _ alwaysCopies: Bool,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
     let output = Unmanaged<AVAssetReaderOutput>.fromOpaque(outputPtr).takeUnretainedValue()
-    output.alwaysCopiesSampleData = alwaysCopies
+    var reason: NSString?
+    guard AVPTrySetAlwaysCopiesSampleData(output, alwaysCopies, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "alwaysCopiesSampleData cannot be changed")
+        return AVP_OPERATION_FAILED
+    }
+    return AVP_OK
 }
 
 @_cdecl("av_reader_output_media_type")
@@ -231,19 +261,33 @@ public func av_reader_output_media_type(
 
 @_cdecl("av_reader_output_copy_next_sample_buffer")
 public func av_reader_output_copy_next_sample_buffer(
-    _ outputPtr: UnsafeMutableRawPointer
+    _ outputPtr: UnsafeMutableRawPointer,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
     let output = Unmanaged<AVAssetReaderOutput>.fromOpaque(outputPtr).takeUnretainedValue()
-    guard let sample = output.copyNextSampleBuffer() else { return nil }
+    var reason: NSString?
+    guard let sample = AVPTryCopyNextSampleBuffer(output, &reason) else {
+        if let reason {
+            outErrorMessage?.pointee = ffiString(reason as String)
+        }
+        return nil
+    }
     return Unmanaged.passRetained(sample).toOpaque()
 }
 
 @_cdecl("av_reader_output_copy_next_video_pixel_buffer")
 public func av_reader_output_copy_next_video_pixel_buffer(
-    _ outputPtr: UnsafeMutableRawPointer
+    _ outputPtr: UnsafeMutableRawPointer,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
     let output = Unmanaged<AVAssetReaderOutput>.fromOpaque(outputPtr).takeUnretainedValue()
-    guard let sample = output.copyNextSampleBuffer() else { return nil }
+    var reason: NSString?
+    guard let sample = AVPTryCopyNextSampleBuffer(output, &reason) else {
+        if let reason {
+            outErrorMessage?.pointee = ffiString(reason as String)
+        }
+        return nil
+    }
     guard let pixelBuffer = CMSampleBufferGetImageBuffer(sample) else { return nil }
     return Unmanaged.passRetained(pixelBuffer).toOpaque()
 }
@@ -252,11 +296,14 @@ private func tracksFromPointers(
     _ trackPtrs: UnsafePointer<UnsafeMutableRawPointer?>?,
     count: Int
 ) throws -> [AVAssetTrack] {
-    guard let trackPtrs else {
+    guard let trackPtrs, count >= 0 else {
         throw BridgeError.message("missing track pointer array")
     }
-    return (0..<count).map { index in
-        Unmanaged<AVAssetTrack>.fromOpaque(trackPtrs[index]!).takeUnretainedValue()
+    return try (0..<count).map { index in
+        guard let trackPtr = trackPtrs[index] else {
+            throw BridgeError.message("track pointer array contains null at index \(index)")
+        }
+        return Unmanaged<AVAssetTrack>.fromOpaque(trackPtr).takeUnretainedValue()
     }
 }
 

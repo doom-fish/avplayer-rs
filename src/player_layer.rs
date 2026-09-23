@@ -97,7 +97,7 @@ impl PlayerLayer {
 
     fn info(&self) -> Result<PlayerLayerInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_layer_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_player_layer_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -147,5 +147,9 @@ impl PlayerLayer {
     pub fn copy_displayed_pixel_buffer(&self) -> Option<CVPixelBuffer> {
         let ptr = unsafe { ffi::av_player_layer_copy_displayed_pixel_buffer(self.ptr) };
         unsafe { CVPixelBuffer::from_raw(ptr) }
+    }
+
+    pub const fn as_ptr(&self) -> *mut c_void {
+        self.ptr
     }
 }

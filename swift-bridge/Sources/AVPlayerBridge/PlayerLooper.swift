@@ -1,4 +1,5 @@
 import AVFoundation
+import AVPlayerObjCBridge
 import Foundation
 
 @_cdecl("av_player_looper_create")
@@ -24,21 +25,35 @@ public func av_player_looper_create(
         )
         : .invalid
 
-    if #available(macOS 14.0, *) {
-        let itemOrdering: AVPlayerLooper.ItemOrdering = itemOrderingRaw == 1
-            ? .loopingItemsFollowExistingItems
-            : .loopingItemsPrecedeExistingItems
-        return Unmanaged.passRetained(
-            AVPlayerLooper(player: player, templateItem: templateItem, timeRange: loopRange, existingItemsOrdering: itemOrdering)
-        ).toOpaque()
+    if useLoopRange, loopRange.isValid {
+        guard loopRange.start.isNumeric, loopRange.start >= .zero else {
+            outErrorMessage?.pointee = ffiString("loop range start must be a non-negative numeric time")
+            return nil
+        }
+        guard loopRange.duration.isNumeric, loopRange.duration > .zero else {
+            outErrorMessage?.pointee = ffiString("loop range duration must be a positive numeric time")
+            return nil
+        }
     }
 
-    if itemOrderingRaw != 0 {
+    let ordering: Int
+    if #available(macOS 14.0, *) {
+        ordering = itemOrderingRaw == 1
+            ? AVPlayerLooper.ItemOrdering.loopingItemsFollowExistingItems.rawValue
+            : AVPlayerLooper.ItemOrdering.loopingItemsPrecedeExistingItems.rawValue
+    } else if itemOrderingRaw != 0 {
         outErrorMessage?.pointee = ffiString("existingItemsOrdering requires macOS 14.0+")
         return nil
+    } else {
+        ordering = -1
     }
 
-    return Unmanaged.passRetained(AVPlayerLooper(player: player, templateItem: templateItem, timeRange: loopRange)).toOpaque()
+    var reason: NSString?
+    guard let looper = AVPTryCreatePlayerLooper(player, templateItem, loopRange, ordering, &reason) else {
+        outErrorMessage?.pointee = ffiString((reason as String?) ?? "AVPlayerLooper could not be created")
+        return nil
+    }
+    return Unmanaged.passRetained(looper).toOpaque()
 }
 
 @_cdecl("av_player_looper_release")
@@ -76,7 +91,7 @@ public func av_player_looper_disable_looping(_ looperPtr: UnsafeMutableRawPointe
 @_cdecl("av_player_looper_looping_item_count")
 public func av_player_looper_looping_item_count(_ looperPtr: UnsafeMutableRawPointer) -> Int32 {
     let looper = Unmanaged<AVPlayerLooper>.fromOpaque(looperPtr).takeUnretainedValue()
-    return Int32(looper.loopingPlayerItems.count)
+    return Int32(clamping: looper.loopingPlayerItems.count)
 }
 
 @_cdecl("av_player_looper_copy_looping_item_at_index")

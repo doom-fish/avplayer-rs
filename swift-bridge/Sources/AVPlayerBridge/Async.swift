@@ -1,4 +1,5 @@
 import AVFoundation
+import AVPlayerObjCBridge
 import Foundation
 
 // ── avp_asset_load_properties_async ──────────────────────────────────────────
@@ -138,6 +139,32 @@ public func avp_asset_load_track_with_id_async(
 
 // ── avp_player_item_seek_async ────────────────────────────────────────────────
 
+private typealias AVPAsyncCallback = @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void
+
+private func avpFinishedCallback(
+    _ cb: AVPAsyncCallback,
+    _ ctx: UnsafeMutableRawPointer
+) -> @Sendable (Bool) -> Void {
+    let once = AVPOnceFlag()
+    return { finished in
+        guard once.claim() else { return }
+        cb(UnsafeRawPointer(bitPattern: finished ? 1 : 0), nil, ctx)
+    }
+}
+
+private func avpSeekArgumentsError(time: CMTime, before: CMTime?, after: CMTime?) -> String? {
+    if let message = avpSeekTimeError(time, what: "seek time") {
+        return message
+    }
+    if let before, let message = avpToleranceError(before, what: "tolerance before") {
+        return message
+    }
+    if let after, let message = avpToleranceError(after, what: "tolerance after") {
+        return message
+    }
+    return nil
+}
+
 @_cdecl("avp_player_item_seek_async")
 public func avp_player_item_seek_async(
     _ itemPtr: UnsafeMutableRawPointer,
@@ -149,12 +176,42 @@ public func avp_player_item_seek_async(
 ) {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let time = cmTime(value: value, timescale: timescale, kind: kind)
-    Task {
-        let finished = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-            item.seek(to: time) { finished in cont.resume(returning: finished) }
-        }
-        cb(UnsafeRawPointer(bitPattern: finished ? 1 : 0), nil, ctx)
+    if let message = avpSeekArgumentsError(time: time, before: nil, after: nil) {
+        message.withCString { cb(nil, $0, ctx) }
+        return
     }
+    item.seek(to: time, completionHandler: avpFinishedCallback(cb, ctx))
+}
+
+@_cdecl("avp_player_item_seek_with_tolerance_async")
+public func avp_player_item_seek_with_tolerance_async(
+    _ itemPtr: UnsafeMutableRawPointer,
+    _ value: Int64,
+    _ timescale: Int32,
+    _ kind: Int32,
+    _ beforeValue: Int64,
+    _ beforeTimescale: Int32,
+    _ beforeKind: Int32,
+    _ afterValue: Int64,
+    _ afterTimescale: Int32,
+    _ afterKind: Int32,
+    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ ctx: UnsafeMutableRawPointer
+) {
+    let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
+    let time = cmTime(value: value, timescale: timescale, kind: kind)
+    let before = cmTime(value: beforeValue, timescale: beforeTimescale, kind: beforeKind)
+    let after = cmTime(value: afterValue, timescale: afterTimescale, kind: afterKind)
+    if let message = avpSeekArgumentsError(time: time, before: before, after: after) {
+        message.withCString { cb(nil, $0, ctx) }
+        return
+    }
+    item.seek(
+        to: time,
+        toleranceBefore: before,
+        toleranceAfter: after,
+        completionHandler: avpFinishedCallback(cb, ctx)
+    )
 }
 
 // ── avp_player_seek_async ─────────────────────────────────────────────────────
@@ -170,12 +227,42 @@ public func avp_player_seek_async(
 ) {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let time = cmTime(value: value, timescale: timescale, kind: kind)
-    Task {
-        let finished = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-            player.seek(to: time) { finished in cont.resume(returning: finished) }
-        }
-        cb(UnsafeRawPointer(bitPattern: finished ? 1 : 0), nil, ctx)
+    if let message = avpSeekArgumentsError(time: time, before: nil, after: nil) {
+        message.withCString { cb(nil, $0, ctx) }
+        return
     }
+    player.seek(to: time, completionHandler: avpFinishedCallback(cb, ctx))
+}
+
+@_cdecl("avp_player_seek_with_tolerance_async")
+public func avp_player_seek_with_tolerance_async(
+    _ playerPtr: UnsafeMutableRawPointer,
+    _ value: Int64,
+    _ timescale: Int32,
+    _ kind: Int32,
+    _ beforeValue: Int64,
+    _ beforeTimescale: Int32,
+    _ beforeKind: Int32,
+    _ afterValue: Int64,
+    _ afterTimescale: Int32,
+    _ afterKind: Int32,
+    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ ctx: UnsafeMutableRawPointer
+) {
+    let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
+    let time = cmTime(value: value, timescale: timescale, kind: kind)
+    let before = cmTime(value: beforeValue, timescale: beforeTimescale, kind: beforeKind)
+    let after = cmTime(value: afterValue, timescale: afterTimescale, kind: afterKind)
+    if let message = avpSeekArgumentsError(time: time, before: before, after: after) {
+        message.withCString { cb(nil, $0, ctx) }
+        return
+    }
+    player.seek(
+        to: time,
+        toleranceBefore: before,
+        toleranceAfter: after,
+        completionHandler: avpFinishedCallback(cb, ctx)
+    )
 }
 
 // ── avp_player_preroll_async ──────────────────────────────────────────────────
@@ -188,11 +275,18 @@ public func avp_player_preroll_async(
     _ ctx: UnsafeMutableRawPointer
 ) {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
-    Task {
-        let finished = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-            player.preroll(atRate: rate) { finished in cont.resume(returning: finished) }
-        }
+    guard player.status == .readyToPlay else {
+        "preroll requires the player status to be ReadyToPlay".withCString { cb(nil, $0, ctx) }
+        return
+    }
+    let once = AVPOnceFlag()
+    var reason: NSString?
+    let started = AVPTryPreroll(player, rate, { finished in
+        guard once.claim() else { return }
         cb(UnsafeRawPointer(bitPattern: finished ? 1 : 0), nil, ctx)
+    }, &reason)
+    if !started, once.claim() {
+        ((reason as String?) ?? "prerollAtRate(_:completionHandler:) failed").withCString { cb(nil, $0, ctx) }
     }
 }
 

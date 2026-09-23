@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         audio_track,
         Some(&AudioOutputSettings::pcm_i16(44_100.0, 1)),
     )?;
-    output.set_always_copies_sample_data(false);
+    output.set_always_copies_sample_data(false)?;
     assert!(reader.can_add_track_output(&output));
     reader.add_track_output(&output)?;
     reader.start_reading()?;
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut sample_buffers = 0usize;
     let mut samples = 0i64;
     while sample_buffers < 10 {
-        let Some(buffer) = output.copy_next_sample_buffer() else {
+        let Some(buffer) = output.copy_next_sample_buffer()? else {
             break;
         };
         sample_buffers += 1;

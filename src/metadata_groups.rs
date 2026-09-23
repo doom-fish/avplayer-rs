@@ -74,7 +74,7 @@ impl MetadataGroup<'_> {
 
     fn info(&self) -> Result<MetadataGroupPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_metadata_group_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_metadata_group_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -124,7 +124,7 @@ impl TimedMetadataGroupHandle {
                 duration_value,
                 duration_timescale,
                 duration_kind,
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -135,7 +135,7 @@ impl TimedMetadataGroupHandle {
 
     fn info(&self) -> Result<TimedMetadataGroupPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_timed_metadata_group_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_timed_metadata_group_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -189,7 +189,7 @@ impl MutableTimedMetadataGroup {
                 duration_value,
                 duration_timescale,
                 duration_kind,
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -200,7 +200,7 @@ impl MutableTimedMetadataGroup {
 
     fn info(&self) -> Result<TimedMetadataGroupPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_timed_metadata_group_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_timed_metadata_group_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -247,7 +247,11 @@ impl MutableTimedMetadataGroup {
         let items = json_cstring(items, "mutable timed metadata items")?;
         let mut err: *mut c_char = ptr::null_mut();
         let status = unsafe {
-            ffi::av_mutable_timed_metadata_group_set_items_json(self.ptr, items.as_ptr(), &mut err)
+            ffi::av_mutable_timed_metadata_group_set_items_json(
+                self.ptr,
+                items.as_ptr(),
+                &raw mut err,
+            )
         };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -286,7 +290,7 @@ impl DateRangeMetadataGroupHandle {
                 end_date
                     .as_ref()
                     .map_or(ptr::null(), |value| value.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -297,7 +301,8 @@ impl DateRangeMetadataGroupHandle {
 
     fn info(&self) -> Result<DateRangeMetadataGroupPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_date_range_metadata_group_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_date_range_metadata_group_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -359,7 +364,7 @@ impl MutableDateRangeMetadataGroup {
                 end_date
                     .as_ref()
                     .map_or(ptr::null(), |value| value.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -393,7 +398,8 @@ impl MutableDateRangeMetadataGroup {
 
     fn info(&self) -> Result<DateRangeMetadataGroupPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_date_range_metadata_group_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_date_range_metadata_group_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -461,7 +467,7 @@ impl MutableMetadataItem {
 
     fn info(&self) -> Result<MutableMetadataItemPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_mutable_metadata_item_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_mutable_metadata_item_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -624,7 +630,7 @@ impl MutableMetadataItem {
                 start_date
                     .as_ref()
                     .map_or(ptr::null(), |value| value.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -684,8 +690,9 @@ impl MetadataItemFilter {
     pub fn filter(&self, items: &[MetadataItem]) -> Result<Vec<MetadataItem>, AVPlayerError> {
         let items = json_cstring(items, "metadata items to filter")?;
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_metadata_item_filter_filter_json(self.ptr, items.as_ptr(), &mut err) };
+        let json_ptr = unsafe {
+            ffi::av_metadata_item_filter_filter_json(self.ptr, items.as_ptr(), &raw mut err)
+        };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

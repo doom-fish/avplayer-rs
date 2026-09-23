@@ -50,8 +50,9 @@ use crate::asset::{Asset, MediaType, Size};
 use crate::error::AVPlayerError;
 use crate::ffi;
 use crate::metadata::MetadataItem;
-use crate::player::{Player, PlayerItem};
+use crate::player::{Player, PlayerItem, PlayerStatus};
 use crate::time::Time;
+use crate::util::{to_cstring, validate_seek_time, validate_tolerance};
 
 // ── JSON payloads (private) ───────────────────────────────────────────────────
 
@@ -131,6 +132,31 @@ const fn bridge_err(msg: String) -> AVPlayerError {
     AVPlayerError::LoadFailed(msg)
 }
 
+enum Pending<T> {
+    Waiting(AsyncCompletionFuture<T>),
+    Failed(Option<AVPlayerError>),
+}
+
+impl<T> Pending<T> {
+    fn poll_bridge(&mut self, cx: &mut Context<'_>) -> Poll<Result<T, AVPlayerError>> {
+        match self {
+            Self::Waiting(inner) => Pin::new(inner).poll(cx).map(|r| r.map_err(bridge_err)),
+            Self::Failed(error) => Poll::Ready(Err(error.take().unwrap_or_else(|| {
+                AVPlayerError::OperationFailed("future polled after completion".into())
+            }))),
+        }
+    }
+}
+
+fn bool_future<F>(start: F) -> Pending<bool>
+where
+    F: FnOnce(*mut c_void),
+{
+    let (future, ctx) = AsyncCompletion::create();
+    start(ctx);
+    Pending::Waiting(future)
+}
+
 // ── AssetProperties future ────────────────────────────────────────────────────
 
 extern "C" fn asset_properties_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
@@ -203,7 +229,7 @@ extern "C" fn asset_tracks_cb(result: *const c_void, error: *const i8, ctx: *mut
 
 /// Future returned by [`AsyncAsset::load_tracks`] and [`AsyncAsset::load_tracks_with_media_type`].
 pub struct AssetTracksFuture {
-    inner: AsyncCompletionFuture<String>,
+    inner: Pending<String>,
 }
 
 impl std::fmt::Debug for AssetTracksFuture {
@@ -216,8 +242,8 @@ impl Future for AssetTracksFuture {
     type Output = Result<Vec<TrackProperties>, AVPlayerError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.inner).poll(cx).map(|r| {
-            let json = r.map_err(bridge_err)?;
+        self.inner.poll_bridge(cx).map(|r| {
+            let json = r?;
             let payloads = serde_json::from_str::<Vec<TrackInfoPayload>>(&json).map_err(|e| {
                 AVPlayerError::OperationFailed(format!("async bridge JSON decode failed: {e}"))
             })?;
@@ -287,7 +313,7 @@ extern "C" fn bool_completion_cb(result: *const c_void, error: *const i8, ctx: *
 
 /// Future returned by [`AsyncPlayerItem::seek`].
 pub struct PlayerItemSeekFuture {
-    inner: AsyncCompletionFuture<bool>,
+    inner: Pending<bool>,
 }
 
 impl std::fmt::Debug for PlayerItemSeekFuture {
@@ -301,15 +327,13 @@ impl Future for PlayerItemSeekFuture {
     type Output = Result<bool, AVPlayerError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.inner)
-            .poll(cx)
-            .map(|r| r.map_err(bridge_err))
+        self.inner.poll_bridge(cx)
     }
 }
 
 /// Future returned by [`AsyncPlayer::seek`].
 pub struct PlayerSeekFuture {
-    inner: AsyncCompletionFuture<bool>,
+    inner: Pending<bool>,
 }
 
 impl std::fmt::Debug for PlayerSeekFuture {
@@ -322,15 +346,13 @@ impl Future for PlayerSeekFuture {
     type Output = Result<bool, AVPlayerError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.inner)
-            .poll(cx)
-            .map(|r| r.map_err(bridge_err))
+        self.inner.poll_bridge(cx)
     }
 }
 
 /// Future returned by [`AsyncPlayer::preroll`].
 pub struct PlayerPrerollFuture {
-    inner: AsyncCompletionFuture<bool>,
+    inner: Pending<bool>,
 }
 
 impl std::fmt::Debug for PlayerPrerollFuture {
@@ -344,9 +366,7 @@ impl Future for PlayerPrerollFuture {
     type Output = Result<bool, AVPlayerError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.inner)
-            .poll(cx)
-            .map(|r| r.map_err(bridge_err))
+        self.inner.poll_bridge(cx)
     }
 }
 
@@ -392,15 +412,23 @@ impl<'a> AsyncAsset<'a> {
         // SAFETY: `self.asset.ptr` is a valid borrowed AVAsset handle and `ctx` is
         // the raw completion context returned by `AsyncCompletion::create()`.
         unsafe { ffi::avp_asset_load_tracks_async(self.asset.ptr, asset_tracks_cb, ctx) };
-        AssetTracksFuture { inner: future }
+        AssetTracksFuture {
+            inner: Pending::Waiting(future),
+        }
     }
 
     /// Load tracks filtered by media type via `AVAsset.loadTracks(withMediaType:)`.
     ///
     /// `media_type` should be one of `"audio"`, `"video"`, `"text"`, etc.
     pub fn load_tracks_with_media_type(&self, media_type: &str) -> AssetTracksFuture {
-        use std::ffi::CString;
-        let mt = CString::new(media_type).unwrap_or_default();
+        let mt = match to_cstring(media_type, "media type") {
+            Ok(mt) => mt,
+            Err(error) => {
+                return AssetTracksFuture {
+                    inner: Pending::Failed(Some(error)),
+                }
+            }
+        };
         let (future, ctx) = AsyncCompletion::create();
         // SAFETY: `self.asset.ptr` is a valid borrowed AVAsset handle, `mt` is a
         // NUL-terminated string owned by this frame, and `ctx` is the raw
@@ -413,7 +441,9 @@ impl<'a> AsyncAsset<'a> {
                 ctx,
             );
         };
-        AssetTracksFuture { inner: future }
+        AssetTracksFuture {
+            inner: Pending::Waiting(future),
+        }
     }
 
     /// Load a single track by persistent track ID via
@@ -460,21 +490,60 @@ impl<'a> AsyncPlayerItem<'a> {
     /// Returns `Ok(true)` when the seek completed to the requested time,
     /// `Ok(false)` when it was interrupted by another seek.
     pub fn seek(&self, time: Time) -> PlayerItemSeekFuture {
-        let (future, ctx) = AsyncCompletion::create();
+        if let Err(error) = validate_seek_time(time, "seek time") {
+            return PlayerItemSeekFuture {
+                inner: Pending::Failed(Some(error)),
+            };
+        }
         let (value, timescale, kind) = time.to_raw();
-        // SAFETY: `self.item.ptr` is a valid borrowed AVPlayerItem handle and
-        // `ctx` is the raw completion context returned by `AsyncCompletion::create()`.
-        unsafe {
-            ffi::avp_player_item_seek_async(
-                self.item.ptr,
-                value,
-                timescale,
-                kind,
-                bool_completion_cb,
-                ctx,
-            );
-        };
-        PlayerItemSeekFuture { inner: future }
+        PlayerItemSeekFuture {
+            // SAFETY: `self.item.ptr` is a valid borrowed AVPlayerItem handle and
+            // `ctx` is the raw completion context returned by `AsyncCompletion::create()`.
+            inner: bool_future(|ctx| unsafe {
+                ffi::avp_player_item_seek_async(
+                    self.item.ptr,
+                    value,
+                    timescale,
+                    kind,
+                    bool_completion_cb,
+                    ctx,
+                );
+            }),
+        }
+    }
+
+    pub fn seek_with_tolerance(
+        &self,
+        time: Time,
+        tolerance_before: Time,
+        tolerance_after: Time,
+    ) -> PlayerItemSeekFuture {
+        if let Err(error) = validate_seek_arguments(time, tolerance_before, tolerance_after) {
+            return PlayerItemSeekFuture {
+                inner: Pending::Failed(Some(error)),
+            };
+        }
+        let (value, timescale, kind) = time.to_raw();
+        let (before_value, before_timescale, before_kind) = tolerance_before.to_raw();
+        let (after_value, after_timescale, after_kind) = tolerance_after.to_raw();
+        PlayerItemSeekFuture {
+            inner: bool_future(|ctx| unsafe {
+                ffi::avp_player_item_seek_with_tolerance_async(
+                    self.item.ptr,
+                    value,
+                    timescale,
+                    kind,
+                    before_value,
+                    before_timescale,
+                    before_kind,
+                    after_value,
+                    after_timescale,
+                    after_kind,
+                    bool_completion_cb,
+                    ctx,
+                );
+            }),
+        }
     }
 }
 
@@ -504,21 +573,60 @@ impl<'a> AsyncPlayer<'a> {
     /// Returns `Ok(true)` when the seek completed to the requested time,
     /// `Ok(false)` when it was interrupted by another seek.
     pub fn seek(&self, time: Time) -> PlayerSeekFuture {
-        let (future, ctx) = AsyncCompletion::create();
+        if let Err(error) = validate_seek_time(time, "seek time") {
+            return PlayerSeekFuture {
+                inner: Pending::Failed(Some(error)),
+            };
+        }
         let (value, timescale, kind) = time.to_raw();
-        // SAFETY: `self.player.ptr` is a valid borrowed AVPlayer handle and `ctx`
-        // is the raw completion context returned by `AsyncCompletion::create()`.
-        unsafe {
-            ffi::avp_player_seek_async(
-                self.player.ptr,
-                value,
-                timescale,
-                kind,
-                bool_completion_cb,
-                ctx,
-            );
-        };
-        PlayerSeekFuture { inner: future }
+        PlayerSeekFuture {
+            // SAFETY: `self.player.ptr` is a valid borrowed AVPlayer handle and `ctx`
+            // is the raw completion context returned by `AsyncCompletion::create()`.
+            inner: bool_future(|ctx| unsafe {
+                ffi::avp_player_seek_async(
+                    self.player.ptr,
+                    value,
+                    timescale,
+                    kind,
+                    bool_completion_cb,
+                    ctx,
+                );
+            }),
+        }
+    }
+
+    pub fn seek_with_tolerance(
+        &self,
+        time: Time,
+        tolerance_before: Time,
+        tolerance_after: Time,
+    ) -> PlayerSeekFuture {
+        if let Err(error) = validate_seek_arguments(time, tolerance_before, tolerance_after) {
+            return PlayerSeekFuture {
+                inner: Pending::Failed(Some(error)),
+            };
+        }
+        let (value, timescale, kind) = time.to_raw();
+        let (before_value, before_timescale, before_kind) = tolerance_before.to_raw();
+        let (after_value, after_timescale, after_kind) = tolerance_after.to_raw();
+        PlayerSeekFuture {
+            inner: bool_future(|ctx| unsafe {
+                ffi::avp_player_seek_with_tolerance_async(
+                    self.player.ptr,
+                    value,
+                    timescale,
+                    kind,
+                    before_value,
+                    before_timescale,
+                    before_kind,
+                    after_value,
+                    after_timescale,
+                    after_kind,
+                    bool_completion_cb,
+                    ctx,
+                );
+            }),
+        }
     }
 
     /// Preroll the player at `rate`.
@@ -529,12 +637,37 @@ impl<'a> AsyncPlayer<'a> {
     /// Note: `AVPlayer.preroll(atRate:completionHandler:)` is deprecated in
     /// macOS 26+ but remains functional on all supported platforms.
     pub fn preroll(&self, rate: f32) -> PlayerPrerollFuture {
-        let (future, ctx) = AsyncCompletion::create();
-        // SAFETY: `self.player.ptr` is a valid borrowed AVPlayer handle and `ctx`
-        // is the raw completion context returned by `AsyncCompletion::create()`.
-        unsafe {
-            ffi::avp_player_preroll_async(self.player.ptr, rate, bool_completion_cb, ctx);
-        };
-        PlayerPrerollFuture { inner: future }
+        match self.player.status() {
+            Ok(PlayerStatus::ReadyToPlay) => {}
+            Ok(status) => {
+                return PlayerPrerollFuture {
+                    inner: Pending::Failed(Some(AVPlayerError::OperationFailed(format!(
+                        "preroll requires the player status to be ReadyToPlay, found {status:?}"
+                    )))),
+                }
+            }
+            Err(error) => {
+                return PlayerPrerollFuture {
+                    inner: Pending::Failed(Some(error)),
+                }
+            }
+        }
+        PlayerPrerollFuture {
+            // SAFETY: `self.player.ptr` is a valid borrowed AVPlayer handle and `ctx`
+            // is the raw completion context returned by `AsyncCompletion::create()`.
+            inner: bool_future(|ctx| unsafe {
+                ffi::avp_player_preroll_async(self.player.ptr, rate, bool_completion_cb, ctx);
+            }),
+        }
     }
+}
+
+fn validate_seek_arguments(
+    time: Time,
+    tolerance_before: Time,
+    tolerance_after: Time,
+) -> Result<(), AVPlayerError> {
+    validate_seek_time(time, "seek time")?;
+    validate_tolerance(tolerance_before, "tolerance before")?;
+    validate_tolerance(tolerance_after, "tolerance after")
 }

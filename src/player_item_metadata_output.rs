@@ -12,7 +12,9 @@ use crate::player::PlayerItem;
 use crate::player_item_output::PlayerItemOutput;
 use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
-use crate::util::{json_cstring, parse_json_and_free, to_cstring};
+use crate::util::{
+    deliver, json_cstring, json_payload, parse_json_and_free, to_cstring, Handler, Registration,
+};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,10 +70,6 @@ pub enum MetadataOutputEvent {
     },
 }
 
-struct MetadataOutputObserverState {
-    callback: Box<dyn Fn(MetadataOutputEvent) + Send + 'static>,
-}
-
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemMetadataOutput`.
 #[derive(Debug)]
 pub struct PlayerItemMetadataOutput {
@@ -102,7 +100,7 @@ impl PlayerItemMetadataOutput {
                 identifiers
                     .as_ref()
                     .map_or(ptr::null(), |identifiers| identifiers.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -113,7 +111,8 @@ impl PlayerItemMetadataOutput {
 
     fn info(&self) -> Result<MetadataOutputInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_metadata_output_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_player_item_metadata_output_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -147,33 +146,29 @@ impl PlayerItemMetadataOutput {
         callback: F,
     ) -> Result<MetadataOutputObserver, AVPlayerError>
     where
-        F: Fn(MetadataOutputEvent) + Send + 'static,
+        F: Fn(MetadataOutputEvent) + Send + Sync + 'static,
     {
         let queue_label = queue_label
             .map(|label| to_cstring(label, "metadata output queue label"))
             .transpose()?;
-        let state = Box::new(MetadataOutputObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
-        let mut err: *mut c_char = ptr::null_mut();
-        let token = unsafe {
-            ffi::av_player_item_metadata_output_add_observer(
-                self.ptr,
-                queue_label
-                    .as_ref()
-                    .map_or(ptr::null(), |label| label.as_ptr()),
-                Some(metadata_output_event_trampoline),
-                userdata,
-                Some(metadata_output_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            unsafe { metadata_output_observer_drop(userdata) };
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(MetadataOutputObserver { token })
+        let handler: Handler<MetadataOutputEvent> = Box::new(callback);
+        let inner = Registration::new(
+            handler,
+            ffi::av_player_item_metadata_output_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_player_item_metadata_output_add_observer(
+                    self.ptr,
+                    queue_label
+                        .as_ref()
+                        .map_or(ptr::null(), |label| label.as_ptr()),
+                    Some(metadata_output_event_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(MetadataOutputObserver { _inner: inner })
     }
 
     /// Calls the `AVPlayer` framework counterpart for `advance_interval_for_delegate_invocation`.
@@ -195,14 +190,8 @@ impl PlayerItemMetadataOutput {
 /// Mirrors the `AVPlayer` framework counterpart for `MetadataOutputObserver`.
 #[derive(Debug)]
 pub struct MetadataOutputObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
-
-retain_release_wrapper!(
-    MetadataOutputObserver,
-    field = token,
-    release = ffi::av_player_item_metadata_output_observer_release
-);
 
 // SAFETY: These metadata-output handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.
@@ -216,7 +205,7 @@ impl PlayerItem {
         output: &PlayerItemMetadataOutput,
     ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &mut err) };
+        let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
         }
@@ -233,15 +222,8 @@ unsafe extern "C" fn metadata_output_event_trampoline(
     userdata: *mut c_void,
     payload_json: *const c_char,
 ) {
-    if userdata.is_null() || payload_json.is_null() {
-        return;
-    }
-
-    let callback = &*userdata.cast::<MetadataOutputObserverState>();
-    let Ok(payload) = core::ffi::CStr::from_ptr(payload_json).to_str() else {
-        return;
-    };
-    let Ok(payload) = serde_json::from_str::<MetadataOutputEventPayload>(payload) else {
+    let Some(payload) = (unsafe { json_payload::<MetadataOutputEventPayload>(payload_json) })
+    else {
         return;
     };
 
@@ -258,15 +240,5 @@ unsafe extern "C" fn metadata_output_event_trampoline(
         _ => return,
     };
 
-    crate::util::catch_cb_panic("metadata_output_event_trampoline", || {
-        (callback.callback)(event);
-    });
-}
-
-unsafe extern "C" fn metadata_output_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        drop(Box::from_raw(
-            userdata.cast::<MetadataOutputObserverState>(),
-        ));
-    }
+    unsafe { deliver(userdata, "metadata_output_event_trampoline", event) };
 }

@@ -228,25 +228,19 @@ public func av_asset_image_generator_copy_image_at_time(
     let generator = Unmanaged<AVAssetImageGenerator>.fromOpaque(generatorPtr).takeUnretainedValue()
     let requestedTime = cmTime(value: value, timescale: timescale, kind: kind)
 
-    var actualTime = CMTime.invalid
-    var image: CGImage?
-
     guard #available(macOS 13.0, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetImageGenerator.image(at:) requires macOS 13.0")
         return nil
     }
 
-    let status = avpBlockOnAsync(
-        work: { try await generator.image(at: requestedTime) },
-        onSuccess: { result in
-            image = result.image
-            actualTime = result.actualTime
-        },
-        outErrorMessage: outErrorMessage
-    )
-    guard status == AVP_OK, let image else { return nil }
-    writeTime(actualTime, value: outActualValue, timescale: outActualTimescale, kind: outActualKind)
-    return Unmanaged.passRetained(AVPAssetImageBox(image: image)).toOpaque()
+    switch avpAwait(label: "AVAssetImageGenerator image", work: { try await generator.image(at: requestedTime) }) {
+    case .success(let result):
+        writeTime(result.actualTime, value: outActualValue, timescale: outActualTimescale, kind: outActualKind)
+        return Unmanaged.passRetained(AVPAssetImageBox(image: result.image)).toOpaque()
+    case .failure(let error):
+        avpWriteError(error, outErrorMessage)
+        return nil
+    }
 }
 
 @_cdecl("av_asset_image_generator_cancel_all_image_generation")

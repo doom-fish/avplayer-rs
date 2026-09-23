@@ -22,6 +22,7 @@ pub enum AVPlayerError {
     ObserverFailed(String),
     /// Asynchronous key loading failed or timed out.
     LoadFailed(String),
+    TimedOut(String),
 }
 
 impl fmt::Display for AVPlayerError {
@@ -36,6 +37,7 @@ impl fmt::Display for AVPlayerError {
             Self::OperationFailed(message) => write!(f, "operation failed: {message}"),
             Self::ObserverFailed(message) => write!(f, "observer registration failed: {message}"),
             Self::LoadFailed(message) => write!(f, "load failed: {message}"),
+            Self::TimedOut(message) => write!(f, "timed out: {message}"),
         }
     }
 }
@@ -62,6 +64,7 @@ pub unsafe fn from_swift(status: i32, error_str: *mut core::ffi::c_char) -> AVPl
         ffi::status::OPERATION_FAILED => AVPlayerError::OperationFailed(message),
         ffi::status::OBSERVER_FAILED => AVPlayerError::ObserverFailed(message),
         ffi::status::LOAD_FAILED => AVPlayerError::LoadFailed(message),
+        ffi::status::TIMED_OUT => AVPlayerError::TimedOut(message),
         _ => AVPlayerError::OperationFailed(format!("unknown status {status}: {message}")),
     }
 }

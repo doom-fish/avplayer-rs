@@ -386,44 +386,22 @@ private struct AssetDownloadDelegateEventPayload: Codable {
 
 private final class AssetDownloadDelegateBridge: NSObject, AVAssetDownloadDelegate {
     private let callback: AVPJsonCallback?
-    private let userDataBits: UInt
-    private let hasUserData: Bool
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
 
-    init(
-        callback: AVPJsonCallback?,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
-    ) {
+    init(callback: AVPJsonCallback?, gate: AVPCallbackGate) {
         self.callback = callback
-        userDataBits = userData.map { UInt(bitPattern: $0) } ?? 0
-        hasUserData = userData != nil
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
     }
 
-    deinit {
-        dispose()
-    }
-
-    private var userDataPointer: UnsafeMutableRawPointer? {
-        guard hasUserData else { return nil }
-        return UnsafeMutableRawPointer(bitPattern: userDataBits)
-    }
-
-    func dispose() {
-        guard !disposed else { return }
-        disposed = true
-        if let userData = userDataPointer, let dropUserData {
-            dropUserData(userData)
-        }
+    func close() {
+        guard gate.close() else { return }
+        gate.finish()
     }
 
     private func send(_ payload: AssetDownloadDelegateEventPayload) {
-        guard !disposed, let callback else { return }
-        guard let json = try? avpEncodeJSON(payload) else { return }
-        json.withCString { callback(userDataPointer, $0) }
+        guard let callback else { return }
+        gate.deliverJSON(payload, to: callback)
     }
 
     func urlSession(
@@ -591,12 +569,8 @@ private final class AssetDownloadURLSessionBox: NSObject {
     let underlyingQueue: DispatchQueue?
     let session: AVAssetDownloadURLSession
 
-    init(identifier: String, queueLabel: String?, callback: AVPJsonCallback?, userData: UnsafeMutableRawPointer?, dropUserData: AVPDropCallback?) {
-        delegateBridge = AssetDownloadDelegateBridge(
-            callback: callback,
-            userData: userData,
-            dropUserData: dropUserData
-        )
+    init(identifier: String, queueLabel: String?, callback: AVPJsonCallback?, gate: AVPCallbackGate) {
+        delegateBridge = AssetDownloadDelegateBridge(callback: callback, gate: gate)
         if let queueLabel {
             let queue = OperationQueue()
             queue.name = queueLabel
@@ -620,7 +594,12 @@ private final class AssetDownloadURLSessionBox: NSObject {
     }
 
     deinit {
-        delegateBridge.dispose()
+        dispose()
+    }
+
+    func dispose() {
+        delegateBridge.close()
+        session.finishTasksAndInvalidate()
     }
 }
 
@@ -651,6 +630,7 @@ public func av_asset_download_url_session_create_background(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadURLSession requires macOS 10.15")
         return nil
@@ -661,8 +641,7 @@ public func av_asset_download_url_session_create_background(
         identifier: identifier,
         queueLabel: queueLabel,
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(box).toOpaque()
 }
@@ -670,7 +649,9 @@ public func av_asset_download_url_session_create_background(
 @_cdecl("av_asset_download_url_session_release")
 public func av_asset_download_url_session_release(_ sessionPtr: UnsafeMutableRawPointer?) {
     guard let sessionPtr else { return }
-    Unmanaged<AssetDownloadURLSessionBox>.fromOpaque(sessionPtr).release()
+    let box = Unmanaged<AssetDownloadURLSessionBox>.fromOpaque(sessionPtr)
+    box.takeUnretainedValue().dispose()
+    box.release()
 }
 
 @_cdecl("av_asset_download_url_session_finish_tasks_and_invalidate")

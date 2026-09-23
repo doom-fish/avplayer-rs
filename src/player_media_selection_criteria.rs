@@ -8,9 +8,11 @@ use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
-use crate::player::Player;
+use crate::player::{Player, PlayerItem};
 use crate::retained::retain_release_wrapper;
-use crate::util::{json_cstring, parse_json_and_free, to_cstring};
+use crate::util::{
+    deliver, json_cstring, json_payload, parse_json_and_free, to_cstring, Handler, Registration,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +35,8 @@ struct PlayerInfoPayload {
     eligible_for_hdr_playback: Option<bool>,
     audiovisual_background_playback_policy: Option<i32>,
     network_resource_priority: Option<i32>,
+    default_rate: Option<f32>,
+    audio_output_device_unique_id: Option<String>,
 }
 
 /// Mirrors the `AVPlayer` framework counterpart for `MediaCharacteristic`.
@@ -323,10 +327,6 @@ pub struct PlayerRateDidChangeEvent {
     pub has_originating_participant: bool,
 }
 
-struct PlayerRateObserverState {
-    callback: Box<dyn Fn(PlayerRateDidChangeEvent) + Send + 'static>,
-}
-
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerMediaSelectionCriteria`.
 #[derive(Debug)]
 pub struct PlayerMediaSelectionCriteria {
@@ -392,7 +392,7 @@ impl PlayerMediaSelectionCriteria {
                 principal_media_characteristics
                     .as_ref()
                     .map_or(ptr::null(), |value| value.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -404,7 +404,7 @@ impl PlayerMediaSelectionCriteria {
     fn info(&self) -> Result<CriteriaPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
-            unsafe { ffi::av_player_media_selection_criteria_info_json(self.ptr, &mut err) };
+            unsafe { ffi::av_player_media_selection_criteria_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -446,7 +446,7 @@ impl PlayerMediaSelectionCriteria {
 impl Player {
     fn info_for_media_selection(&self) -> Result<PlayerInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -491,8 +491,62 @@ impl Player {
         action: PlayerActionAtItemEnd,
     ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let status =
-            unsafe { ffi::av_player_set_action_at_item_end(self.ptr, action.as_raw(), &mut err) };
+        let status = unsafe {
+            ffi::av_player_set_action_at_item_end(self.ptr, action.as_raw(), &raw mut err)
+        };
+        if status != ffi::status::OK {
+            return Err(unsafe { from_swift(status, err) });
+        }
+        Ok(())
+    }
+
+    pub fn default_rate(&self) -> Result<f32, AVPlayerError> {
+        Ok(self.info_for_media_selection()?.default_rate.unwrap_or(1.0))
+    }
+
+    pub fn set_default_rate(&self, rate: f32) -> Result<(), AVPlayerError> {
+        if !rate.is_finite() {
+            return Err(AVPlayerError::InvalidArgument(
+                "default rate must be a finite number".into(),
+            ));
+        }
+        unsafe { ffi::av_player_set_default_rate(self.ptr, rate) };
+        Ok(())
+    }
+
+    pub fn audio_output_device_unique_id(&self) -> Result<Option<String>, AVPlayerError> {
+        Ok(self
+            .info_for_media_selection()?
+            .audio_output_device_unique_id)
+    }
+
+    pub fn set_audio_output_device_unique_id(
+        &self,
+        unique_id: Option<&str>,
+    ) -> Result<(), AVPlayerError> {
+        let unique_id = unique_id
+            .map(|unique_id| to_cstring(unique_id, "audio output device unique ID"))
+            .transpose()?;
+        unsafe {
+            ffi::av_player_set_audio_output_device_unique_id(
+                self.ptr,
+                unique_id
+                    .as_ref()
+                    .map_or(ptr::null(), |unique_id| unique_id.as_ptr()),
+            );
+        }
+        Ok(())
+    }
+
+    pub fn replace_current_item(&self, item: Option<&PlayerItem>) -> Result<(), AVPlayerError> {
+        let mut err: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            ffi::av_player_replace_current_item(
+                self.ptr,
+                item.map_or(ptr::null_mut(), |item| item.ptr),
+                &raw mut err,
+            )
+        };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
         }
@@ -577,7 +631,7 @@ impl Player {
             ffi::av_player_set_audiovisual_background_playback_policy(
                 self.ptr,
                 policy.as_raw(),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -604,7 +658,7 @@ impl Player {
     ) -> Result<(), AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let status = unsafe {
-            ffi::av_player_set_network_resource_priority(self.ptr, priority.as_raw(), &mut err)
+            ffi::av_player_set_network_resource_priority(self.ptr, priority.as_raw(), &raw mut err)
         };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -619,33 +673,29 @@ impl Player {
         callback: F,
     ) -> Result<PlayerRateDidChangeObserver, AVPlayerError>
     where
-        F: Fn(PlayerRateDidChangeEvent) + Send + 'static,
+        F: Fn(PlayerRateDidChangeEvent) + Send + Sync + 'static,
     {
         let queue_label = queue_label
             .map(|label| to_cstring(label, "player rate observer queue label"))
             .transpose()?;
-        let state = Box::new(PlayerRateObserverState {
-            callback: Box::new(callback),
-        });
-        let userdata = Box::into_raw(state).cast::<c_void>();
-        let mut err: *mut c_char = ptr::null_mut();
-        let token = unsafe {
-            ffi::av_player_add_rate_observer(
-                self.ptr,
-                queue_label
-                    .as_ref()
-                    .map_or(ptr::null(), |label| label.as_ptr()),
-                Some(player_rate_event_trampoline),
-                userdata,
-                Some(player_rate_observer_drop),
-                &mut err,
-            )
-        };
-        if token.is_null() {
-            unsafe { player_rate_observer_drop(userdata) };
-            return Err(unsafe { from_swift(ffi::status::OBSERVER_FAILED, err) });
-        }
-        Ok(PlayerRateDidChangeObserver { token })
+        let handler: Handler<PlayerRateDidChangeEvent> = Box::new(callback);
+        let inner = Registration::new(
+            handler,
+            ffi::av_player_rate_observer_release,
+            |userdata, drop_userdata, err| unsafe {
+                ffi::av_player_add_rate_observer(
+                    self.ptr,
+                    queue_label
+                        .as_ref()
+                        .map_or(ptr::null(), |label| label.as_ptr()),
+                    Some(player_rate_event_trampoline),
+                    userdata,
+                    drop_userdata,
+                    err,
+                )
+            },
+        )?;
+        Ok(PlayerRateDidChangeObserver { _inner: inner })
     }
 
     /// Calls the `AVPlayer` framework counterpart for `set_media_selection_criteria`.
@@ -662,7 +712,7 @@ impl Player {
                 self.ptr,
                 media_characteristic.as_ptr(),
                 criteria.map_or(ptr::null_mut(), |criteria| criteria.ptr),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -683,7 +733,7 @@ impl Player {
             ffi::av_player_copy_media_selection_criteria(
                 self.ptr,
                 media_characteristic.as_ptr(),
-                &mut err,
+                &raw mut err,
             )
         };
         if ptr.is_null() {
@@ -699,14 +749,8 @@ impl Player {
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerRateDidChangeObserver`.
 #[derive(Debug)]
 pub struct PlayerRateDidChangeObserver {
-    token: *mut c_void,
+    _inner: Registration,
 }
-
-retain_release_wrapper!(
-    PlayerRateDidChangeObserver,
-    field = token,
-    release = ffi::av_player_rate_observer_release
-);
 
 // SAFETY: These media-selection handles are safe to transfer across thread
 // boundaries; method calls are internally dispatched safely.
@@ -716,8 +760,9 @@ unsafe impl Send for PlayerRateDidChangeObserver {}
 /// Calls the `AVPlayer` framework counterpart for `player_eligible_for_hdr_playback_did_change_notification`.
 pub fn player_eligible_for_hdr_playback_did_change_notification() -> Result<String, AVPlayerError> {
     let mut err: *mut c_char = ptr::null_mut();
-    let string_ptr =
-        unsafe { ffi::av_player_eligible_for_hdr_playback_did_change_notification_name(&mut err) };
+    let string_ptr = unsafe {
+        ffi::av_player_eligible_for_hdr_playback_did_change_notification_name(&raw mut err)
+    };
     if string_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
@@ -732,34 +777,21 @@ unsafe extern "C" fn player_rate_event_trampoline(
     userdata: *mut c_void,
     payload_json: *const c_char,
 ) {
-    if userdata.is_null() || payload_json.is_null() {
-        return;
-    }
-
-    let callback = &*userdata.cast::<PlayerRateObserverState>();
-    let Ok(payload) = CStr::from_ptr(payload_json).to_str() else {
-        return;
-    };
-    let Ok(payload) = serde_json::from_str::<PlayerRateDidChangeEventPayload>(payload) else {
+    let Some(payload) = (unsafe { json_payload::<PlayerRateDidChangeEventPayload>(payload_json) })
+    else {
         return;
     };
 
-    crate::util::catch_cb_panic("player_rate_event_trampoline", || {
-        (callback.callback)(PlayerRateDidChangeEvent {
-            rate: payload.rate,
-            reason: payload
-                .reason
-                .as_deref()
-                .map(PlayerRateDidChangeReason::from_raw),
-            has_originating_participant: payload.has_originating_participant,
-        });
-    });
-}
+    let event = PlayerRateDidChangeEvent {
+        rate: payload.rate,
+        reason: payload
+            .reason
+            .as_deref()
+            .map(PlayerRateDidChangeReason::from_raw),
+        has_originating_participant: payload.has_originating_participant,
+    };
 
-unsafe extern "C" fn player_rate_observer_drop(userdata: *mut c_void) {
-    if !userdata.is_null() {
-        drop(Box::from_raw(userdata.cast::<PlayerRateObserverState>()));
-    }
+    unsafe { deliver(userdata, "player_rate_event_trampoline", event) };
 }
 
 fn availability_error(symbol: &str, macos_version: &str) -> AVPlayerError {

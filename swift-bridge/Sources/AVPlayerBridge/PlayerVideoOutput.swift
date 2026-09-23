@@ -261,6 +261,7 @@ public func av_player_video_output_sample_json(
     _ hostTimeValue: Int64,
     _ hostTimeTimescale: Int32,
     _ hostTimeKind: Int32,
+    _ outBuffers: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
     guard #available(macOS 14.2, *) else {
@@ -270,7 +271,8 @@ public func av_player_video_output_sample_json(
 
     let output = Unmanaged<AVPPlayerVideoOutputBox>.fromOpaque(outputPtr).takeUnretainedValue().videoOutput
     let hostTime = cmTime(value: hostTimeValue, timescale: hostTimeTimescale, kind: hostTimeKind)
-    let sample = output.taggedBuffers(forHostTime: hostTime).map { sample in
+    let taggedSample = output.taggedBuffers(forHostTime: hostTime)
+    let sample = taggedSample.map { sample in
         PlayerVideoOutputSamplePayload(
             taggedBuffers: sample.taggedBufferGroup.map(encodeTaggedBuffer),
             presentationTime: encodeTime(sample.presentationTime),
@@ -278,10 +280,30 @@ public func av_player_video_output_sample_json(
         )
     }
     do {
-        return ffiString(try avpEncodeJSON(sample))
+        guard let json = ffiString(try avpEncodeJSON(sample)) else {
+            outErrorMessage?.pointee = ffiString("failed to allocate AVPlayerVideoOutput sample JSON")
+            return nil
+        }
+        if let taggedSample {
+            let buffers = taggedSample.taggedBufferGroup.map(avpTaggedBufferObject)
+            outBuffers?.pointee = Unmanaged.passRetained(AVPObjectArrayBox(objects: buffers)).toOpaque()
+        }
+        return json
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
+    }
+}
+
+@available(macOS 14.0, *)
+private func avpTaggedBufferObject(_ taggedBuffer: CMTaggedBuffer) -> AnyObject {
+    switch taggedBuffer.buffer {
+    case .pixelBuffer(let pixelBuffer):
+        return pixelBuffer
+    case .sampleBuffer(let sampleBuffer):
+        return sampleBuffer
+    @unknown default:
+        return NSNull()
     }
 }
 

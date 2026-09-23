@@ -130,7 +130,7 @@ impl UrlAsset {
 impl AssetImageGenerator {
     fn info(&self) -> Result<AssetImageGeneratorInfoPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_image_generator_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_asset_image_generator_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -237,7 +237,7 @@ impl AssetImageGenerator {
             ffi::av_asset_image_generator_set_dynamic_range_policy(
                 self.ptr,
                 policy.as_ptr(),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -269,10 +269,10 @@ impl AssetImageGenerator {
                 value,
                 timescale,
                 kind,
-                &mut actual_value,
-                &mut actual_timescale,
-                &mut actual_kind,
-                &mut err,
+                &raw mut actual_value,
+                &raw mut actual_timescale,
+                &raw mut actual_kind,
+                &raw mut err,
             )
         };
         if image_ptr.is_null() {
@@ -292,7 +292,7 @@ impl AssetImageGenerator {
 impl AssetImage {
     fn info(&self) -> Result<AssetImagePayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_image_info_json(self.ptr, &mut err) };
+        let json_ptr = unsafe { ffi::av_asset_image_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }

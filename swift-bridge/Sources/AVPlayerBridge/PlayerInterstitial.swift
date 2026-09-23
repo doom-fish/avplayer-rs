@@ -67,21 +67,17 @@ final class AVPPlayerInterstitialEventControllerBox: AVPPlayerInterstitialEventM
 final class InterstitialEventMonitorObserverBox: NSObject {
     private weak var monitor: AVPlayerInterstitialEventMonitor?
     private let callback: AVPJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
     private var observers: [NSObjectProtocol] = []
 
     init(
         monitor: AVPlayerInterstitialEventMonitor,
         callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
         self.monitor = monitor
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         registerObservers(for: monitor)
     }
@@ -91,13 +87,10 @@ final class InterstitialEventMonitorObserverBox: NSObject {
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         observers.forEach(NotificationCenter.default.removeObserver)
         observers.removeAll()
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     private func registerObservers(for monitor: AVPlayerInterstitialEventMonitor) {
@@ -253,12 +246,7 @@ final class InterstitialEventMonitorObserverBox: NSObject {
     }
 
     private func send(_ payload: PlayerInterstitialMonitorEventPayload) {
-        guard !disposed else { return }
-        guard let json = try? avpEncodeJSON(payload) else {
-            callback(userData, nil)
-            return
-        }
-        json.withCString { callback(userData, $0) }
+        gate.deliverJSON(payload, to: callback)
     }
 }
 
@@ -439,6 +427,7 @@ public func av_player_interstitial_event_monitor_add_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing interstitial monitor observer callback")
         return nil
@@ -447,8 +436,7 @@ public func av_player_interstitial_event_monitor_add_observer(
     let observer = InterstitialEventMonitorObserverBox(
         monitor: monitor,
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -456,7 +444,9 @@ public func av_player_interstitial_event_monitor_add_observer(
 @_cdecl("av_player_interstitial_event_monitor_observer_release")
 public func av_player_interstitial_event_monitor_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<InterstitialEventMonitorObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<InterstitialEventMonitorObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_player_interstitial_event_controller_create")

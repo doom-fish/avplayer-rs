@@ -26,21 +26,17 @@ private struct LegibleOutputEventPayload: Codable {
 final class VideoOutputObserverBox: NSObject, AVPlayerItemOutputPullDelegate {
     private weak var output: AVPlayerItemVideoOutput?
     private let callback: AVPJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
 
     init(
         output: AVPlayerItemVideoOutput,
         queue: DispatchQueue?,
         callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
         self.output = output
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         output.setDelegate(self, queue: queue)
     }
@@ -50,12 +46,9 @@ final class VideoOutputObserverBox: NSObject, AVPlayerItemOutputPullDelegate {
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         output?.setDelegate(nil, queue: nil)
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     func outputMediaDataWillChange(_ sender: AVPlayerItemOutput) {
@@ -67,33 +60,24 @@ final class VideoOutputObserverBox: NSObject, AVPlayerItemOutputPullDelegate {
     }
 
     private func send(_ payload: VideoOutputEventPayload) {
-        guard !disposed else { return }
-        guard let json = try? avpEncodeJSON(payload) else {
-            callback(userData, nil)
-            return
-        }
-        json.withCString { callback(userData, $0) }
+        gate.deliverJSON(payload, to: callback)
     }
 }
 
 final class MetadataOutputObserverBox: NSObject, AVPlayerItemMetadataOutputPushDelegate {
     private weak var output: AVPlayerItemMetadataOutput?
     private let callback: AVPJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let gate: AVPCallbackGate
 
     init(
         output: AVPlayerItemMetadataOutput,
         queue: DispatchQueue?,
         callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        gate: AVPCallbackGate
     ) {
         self.output = output
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         output.setDelegate(self, queue: queue)
     }
@@ -103,12 +87,9 @@ final class MetadataOutputObserverBox: NSObject, AVPlayerItemMetadataOutputPushD
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         output?.setDelegate(nil, queue: nil)
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     func outputSequenceWasFlushed(_ output: AVPlayerItemOutput) {
@@ -130,33 +111,24 @@ final class MetadataOutputObserverBox: NSObject, AVPlayerItemMetadataOutputPushD
     }
 
     private func send(_ payload: MetadataOutputEventPayload) {
-        guard !disposed else { return }
-        guard let json = try? avpEncodeJSON(payload) else {
-            callback(userData, nil)
-            return
-        }
-        json.withCString { callback(userData, $0) }
+        gate.deliverJSON(payload, to: callback)
     }
 }
 
 final class LegibleOutputObserverBox: NSObject, AVPlayerItemLegibleOutputPushDelegate {
     private weak var output: AVPlayerItemLegibleOutput?
-    private let callback: AVPJsonCallback
-    private let userData: UnsafeMutableRawPointer?
-    private let dropUserData: AVPDropCallback?
-    private var disposed = false
+    private let callback: AVPJsonObjectsCallback
+    private let gate: AVPCallbackGate
 
     init(
         output: AVPlayerItemLegibleOutput,
         queue: DispatchQueue?,
-        callback: @escaping AVPJsonCallback,
-        userData: UnsafeMutableRawPointer?,
-        dropUserData: AVPDropCallback?
+        callback: @escaping AVPJsonObjectsCallback,
+        gate: AVPCallbackGate
     ) {
         self.output = output
         self.callback = callback
-        self.userData = userData
-        self.dropUserData = dropUserData
+        self.gate = gate
         super.init()
         output.setDelegate(self, queue: queue)
     }
@@ -166,22 +138,21 @@ final class LegibleOutputObserverBox: NSObject, AVPlayerItemLegibleOutputPushDel
     }
 
     func dispose() {
-        guard !disposed else { return }
-        disposed = true
+        guard gate.close() else { return }
         output?.setDelegate(nil, queue: nil)
-        if let userData, let dropUserData {
-            dropUserData(userData)
-        }
+        gate.finish()
     }
 
     func outputSequenceWasFlushed(_ output: AVPlayerItemOutput) {
-        send(
+        gate.deliverJSON(
             LegibleOutputEventPayload(
                 event: "sequence_was_flushed",
                 itemTime: nil,
                 strings: [],
                 nativeSampleBufferCount: 0
-            )
+            ),
+            objects: [],
+            to: callback
         )
     }
 
@@ -191,23 +162,21 @@ final class LegibleOutputObserverBox: NSObject, AVPlayerItemLegibleOutputPushDel
         nativeSampleBuffers nativeSamples: [Any],
         forItemTime itemTime: CMTime
     ) {
-        send(
+        let sampleBuffers: [AnyObject] = nativeSamples.compactMap { sample in
+            let object = sample as AnyObject
+            guard CFGetTypeID(object) == CMSampleBufferGetTypeID() else { return nil }
+            return object
+        }
+        gate.deliverJSON(
             LegibleOutputEventPayload(
                 event: "attributed_strings",
                 itemTime: encodeTime(itemTime),
                 strings: strings.map(\.string),
-                nativeSampleBufferCount: nativeSamples.count
-            )
+                nativeSampleBufferCount: sampleBuffers.count
+            ),
+            objects: sampleBuffers,
+            to: callback
         )
-    }
-
-    private func send(_ payload: LegibleOutputEventPayload) {
-        guard !disposed else { return }
-        guard let json = try? avpEncodeJSON(payload) else {
-            callback(userData, nil)
-            return
-        }
-        json.withCString { callback(userData, $0) }
     }
 }
 
@@ -220,6 +189,7 @@ public func av_player_item_video_output_add_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing video-output observer callback")
         return nil
@@ -229,8 +199,7 @@ public func av_player_item_video_output_add_observer(
         output: output,
         queue: avpDispatchQueue(from: queueLabel),
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -238,7 +207,9 @@ public func av_player_item_video_output_add_observer(
 @_cdecl("av_player_item_video_output_observer_release")
 public func av_player_item_video_output_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<VideoOutputObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<VideoOutputObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_player_item_video_output_request_notification_of_media_data_change")
@@ -259,6 +230,7 @@ public func av_player_item_metadata_output_add_observer(
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing metadata-output observer callback")
         return nil
@@ -268,8 +240,7 @@ public func av_player_item_metadata_output_add_observer(
         output: output,
         queue: avpDispatchQueue(from: queueLabel),
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -277,18 +248,21 @@ public func av_player_item_metadata_output_add_observer(
 @_cdecl("av_player_item_metadata_output_observer_release")
 public func av_player_item_metadata_output_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<MetadataOutputObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<MetadataOutputObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 @_cdecl("av_player_item_legible_output_add_observer")
 public func av_player_item_legible_output_add_observer(
     _ outputPtr: UnsafeMutableRawPointer,
     _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPJsonCallback?,
+    _ callback: AVPJsonObjectsCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
         outErrorMessage?.pointee = ffiString("missing legible-output observer callback")
         return nil
@@ -298,8 +272,7 @@ public func av_player_item_legible_output_add_observer(
         output: output,
         queue: avpDispatchQueue(from: queueLabel),
         callback: callback,
-        userData: userData,
-        dropUserData: dropUserData
+        gate: gate
     )
     return Unmanaged.passRetained(observer).toOpaque()
 }
@@ -307,7 +280,9 @@ public func av_player_item_legible_output_add_observer(
 @_cdecl("av_player_item_legible_output_observer_release")
 public func av_player_item_legible_output_observer_release(_ observerPtr: UnsafeMutableRawPointer?) {
     guard let observerPtr else { return }
-    Unmanaged<LegibleOutputObserverBox>.fromOpaque(observerPtr).release()
+    let observer = Unmanaged<LegibleOutputObserverBox>.fromOpaque(observerPtr)
+    observer.takeUnretainedValue().dispose()
+    observer.release()
 }
 
 private func encodeTimedMetadataGroup(_ group: AVTimedMetadataGroup) -> TimedMetadataGroupPayload {

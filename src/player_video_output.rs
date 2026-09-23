@@ -7,6 +7,8 @@
 use core::ffi::{c_char, c_void};
 use core::ptr;
 
+use apple_cf::cm::CMSampleBuffer;
+use apple_cf::cv::CVPixelBuffer;
 use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
@@ -15,7 +17,7 @@ use crate::player::Player;
 use crate::reader::VideoOutputSettings;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
-use crate::util::{maybe_json_cstring, parse_json_and_free};
+use crate::util::{maybe_json_cstring, parse_json_and_free, take_object_array};
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutputSettings`.
 pub type PlayerVideoOutputSettings = VideoOutputSettings;
@@ -107,6 +109,14 @@ struct PlayerVideoTaggedBufferPayload {
     pixel_buffer_height: Option<usize>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PlayerVideoTaggedBufferData {
+    PixelBuffer(CVPixelBuffer),
+    SampleBuffer(CMSampleBuffer),
+    Unavailable,
+}
+
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoTaggedBuffer`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerVideoTaggedBuffer {
@@ -118,16 +128,43 @@ pub struct PlayerVideoTaggedBuffer {
     pub pixel_buffer_width: Option<usize>,
     /// Mirrors the `AVPlayer` framework property for `pixel_buffer_height`.
     pub pixel_buffer_height: Option<usize>,
+    pub buffer: PlayerVideoTaggedBufferData,
 }
 
-impl From<PlayerVideoTaggedBufferPayload> for PlayerVideoTaggedBuffer {
-    fn from(payload: PlayerVideoTaggedBufferPayload) -> Self {
+impl PlayerVideoTaggedBuffer {
+    fn from_payload(payload: PlayerVideoTaggedBufferPayload, retained_buffer: *mut c_void) -> Self {
+        let kind = PlayerVideoTaggedBufferKind::from_raw(&payload.buffer_kind);
+        let buffer = match kind {
+            PlayerVideoTaggedBufferKind::PixelBuffer => {
+                unsafe { CVPixelBuffer::from_raw(retained_buffer) }.map_or(
+                    PlayerVideoTaggedBufferData::Unavailable,
+                    PlayerVideoTaggedBufferData::PixelBuffer,
+                )
+            }
+            PlayerVideoTaggedBufferKind::SampleBuffer => {
+                unsafe { CMSampleBuffer::from_raw(retained_buffer) }.map_or(
+                    PlayerVideoTaggedBufferData::Unavailable,
+                    PlayerVideoTaggedBufferData::SampleBuffer,
+                )
+            }
+            PlayerVideoTaggedBufferKind::Unknown(_) => {
+                release_object(retained_buffer);
+                PlayerVideoTaggedBufferData::Unavailable
+            }
+        };
         Self {
             tags: payload.tags,
-            kind: PlayerVideoTaggedBufferKind::from_raw(&payload.buffer_kind),
+            kind,
             pixel_buffer_width: payload.pixel_buffer_width,
             pixel_buffer_height: payload.pixel_buffer_height,
+            buffer,
         }
+    }
+}
+
+fn release_object(object: *mut c_void) {
+    if !object.is_null() {
+        unsafe { ffi::av_ns_object_release(object) };
     }
 }
 
@@ -150,14 +187,25 @@ pub struct PlayerVideoOutputSample {
     pub active_configuration: PlayerVideoOutputConfiguration,
 }
 
-impl From<PlayerVideoOutputSamplePayload> for PlayerVideoOutputSample {
-    fn from(payload: PlayerVideoOutputSamplePayload) -> Self {
+impl PlayerVideoOutputSample {
+    fn from_payload(
+        payload: PlayerVideoOutputSamplePayload,
+        retained_buffers: Vec<*mut c_void>,
+    ) -> Self {
+        let mut retained_buffers = retained_buffers.into_iter();
+        let tagged_buffers = payload
+            .tagged_buffers
+            .into_iter()
+            .map(|buffer| {
+                PlayerVideoTaggedBuffer::from_payload(
+                    buffer,
+                    retained_buffers.next().unwrap_or(ptr::null_mut()),
+                )
+            })
+            .collect();
+        retained_buffers.for_each(release_object);
         Self {
-            tagged_buffers: payload
-                .tagged_buffers
-                .into_iter()
-                .map(PlayerVideoTaggedBuffer::from)
-                .collect(),
+            tagged_buffers,
             presentation_time: payload.presentation_time,
             active_configuration: payload.active_configuration,
         }
@@ -182,7 +230,10 @@ impl PlayerVideoOutputTagCollection {
     ) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let ptr = unsafe {
-            ffi::av_player_video_output_tag_collection_create_with_preset(preset.raw(), &mut err)
+            ffi::av_player_video_output_tag_collection_create_with_preset(
+                preset.raw(),
+                &raw mut err,
+            )
         };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -193,7 +244,7 @@ impl PlayerVideoOutputTagCollection {
     fn info(&self) -> Result<PlayerVideoOutputTagCollectionPayload, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr =
-            unsafe { ffi::av_player_video_output_tag_collection_info_json(self.ptr, &mut err) };
+            unsafe { ffi::av_player_video_output_tag_collection_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -231,7 +282,7 @@ impl VideoOutputSpecification {
             .map(|collection| collection.ptr)
             .collect::<Vec<_>>();
         let ptr = unsafe {
-            ffi::av_video_output_specification_create(ptrs.as_ptr(), ptrs.len(), &mut err)
+            ffi::av_video_output_specification_create(ptrs.as_ptr(), ptrs.len(), &raw mut err)
         };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -243,7 +294,8 @@ impl VideoOutputSpecification {
         &self,
     ) -> Result<Vec<PlayerVideoOutputTagCollectionPayload>, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_video_output_specification_info_json(self.ptr, &mut err) };
+        let json_ptr =
+            unsafe { ffi::av_video_output_specification_info_json(self.ptr, &raw mut err) };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -272,7 +324,7 @@ impl VideoOutputSpecification {
                 settings
                     .as_ref()
                     .map_or(ptr::null(), |settings| settings.as_ptr()),
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -296,7 +348,7 @@ impl VideoOutputSpecification {
                     .as_ref()
                     .map_or(ptr::null(), |settings| settings.as_ptr()),
                 tag_collection.ptr,
-                &mut err,
+                &raw mut err,
             )
         };
         if status != ffi::status::OK {
@@ -327,7 +379,7 @@ impl PlayerVideoOutput {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(specification: &VideoOutputSpecification) -> Result<Self, AVPlayerError> {
         let mut err: *mut c_char = ptr::null_mut();
-        let ptr = unsafe { ffi::av_player_video_output_create(specification.ptr, &mut err) };
+        let ptr = unsafe { ffi::av_player_video_output_create(specification.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
@@ -340,17 +392,30 @@ impl PlayerVideoOutput {
         host_time: Time,
     ) -> Result<Option<PlayerVideoOutputSample>, AVPlayerError> {
         let (value, timescale, kind) = host_time.to_raw();
+        let mut buffers: *mut c_void = ptr::null_mut();
         let mut err: *mut c_char = ptr::null_mut();
         let json_ptr = unsafe {
-            ffi::av_player_video_output_sample_json(self.ptr, value, timescale, kind, &mut err)
+            ffi::av_player_video_output_sample_json(
+                self.ptr,
+                value,
+                timescale,
+                kind,
+                &raw mut buffers,
+                &raw mut err,
+            )
         };
         if json_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        Ok(
-            parse_json_and_free::<Option<PlayerVideoOutputSamplePayload>>(json_ptr)?
-                .map(PlayerVideoOutputSample::from),
-        )
+        let retained_buffers = unsafe { take_object_array(buffers) };
+        match parse_json_and_free::<Option<PlayerVideoOutputSamplePayload>>(json_ptr) {
+            Ok(payload) => Ok(payload
+                .map(|payload| PlayerVideoOutputSample::from_payload(payload, retained_buffers))),
+            Err(error) => {
+                retained_buffers.into_iter().for_each(release_object);
+                Err(error)
+            }
+        }
     }
 }
 
@@ -369,5 +434,63 @@ impl Player {
     pub fn video_output(&self) -> Option<PlayerVideoOutput> {
         let ptr = unsafe { ffi::av_player_copy_video_output(self.ptr) };
         (!ptr.is_null()).then_some(PlayerVideoOutput { ptr })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BGRA: u32 = u32::from_be_bytes(*b"BGRA");
+
+    fn tagged(kind: &str) -> PlayerVideoTaggedBufferPayload {
+        PlayerVideoTaggedBufferPayload {
+            tags: vec!["tag".into()],
+            buffer_kind: kind.into(),
+            pixel_buffer_width: Some(4),
+            pixel_buffer_height: Some(2),
+        }
+    }
+
+    #[test]
+    fn samples_adopt_the_retained_buffers_in_order() {
+        let pixel_buffer = CVPixelBuffer::create(4, 2, BGRA).unwrap();
+        let retained = pixel_buffer.clone();
+        let retained_ptr = retained.as_ptr();
+        core::mem::forget(retained);
+        let payload = PlayerVideoOutputSamplePayload {
+            tagged_buffers: vec![
+                tagged("pixel_buffer"),
+                tagged("sample_buffer"),
+                tagged("other"),
+            ],
+            presentation_time: Time::new(1, 30),
+            active_configuration: PlayerVideoOutputConfiguration {
+                has_source_player_item: true,
+                data_channel_descriptions: Vec::new(),
+                preferred_transform: None,
+                activation_time: Time::new(0, 1),
+            },
+        };
+
+        let sample = PlayerVideoOutputSample::from_payload(
+            payload,
+            vec![retained_ptr, ptr::null_mut(), ptr::null_mut()],
+        );
+
+        assert_eq!(sample.tagged_buffers.len(), 3);
+        assert_eq!(
+            sample.tagged_buffers[0].buffer,
+            PlayerVideoTaggedBufferData::PixelBuffer(pixel_buffer)
+        );
+        assert_eq!(
+            sample.tagged_buffers[1].buffer,
+            PlayerVideoTaggedBufferData::Unavailable
+        );
+        assert_eq!(
+            sample.tagged_buffers[2].kind,
+            PlayerVideoTaggedBufferKind::Unknown("other".into())
+        );
+        assert_eq!(sample.presentation_time, Time::new(1, 30));
     }
 }
