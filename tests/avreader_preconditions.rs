@@ -1,5 +1,7 @@
 mod support;
 
+use std::time::Duration;
+
 use avplayer::prelude::*;
 
 fn reader_with_output(
@@ -63,6 +65,14 @@ fn output_configuration_changes_after_start_are_errors() -> support::TestResult 
 
 #[test]
 fn reset_for_reading_rejects_bad_time_ranges() -> support::TestResult {
+    support::run_with_deadline(
+        "reset_for_reading_rejects_bad_time_ranges",
+        Duration::from_secs(90),
+        reset_for_reading_rejects_bad_time_ranges_body,
+    )
+}
+
+fn reset_for_reading_rejects_bad_time_ranges_body() -> support::TestResult {
     let (reader, output) = reader_with_output("test-reader-reset")?;
     let borrowed = output.as_output();
     let second = TimeRange::new(Time::new(0, 1), Time::new(1, 10));

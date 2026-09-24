@@ -3,14 +3,59 @@
 use std::error::Error;
 use std::fs;
 use std::io;
+use std::panic;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
 use avplayer::prelude::*;
 
 pub type TestResult = Result<(), Box<dyn Error>>;
+
+pub fn run_with_deadline<F>(name: &str, limit: Duration, body: F) -> TestResult
+where
+    F: FnOnce() -> TestResult + Send + 'static,
+{
+    let (sender, receiver) = mpsc::channel();
+    let worker = thread::Builder::new().name(name.to_owned()).spawn(move || {
+        let _ = sender.send(body().map_err(|error| error.to_string()));
+    })?;
+    match receiver.recv_timeout(limit) {
+        Ok(result) => result.map_err(Into::into),
+        Err(mpsc::RecvTimeoutError::Disconnected) => match worker.join() {
+            Err(payload) => panic::resume_unwind(payload),
+            Ok(()) => Err(format!("{name} ended without reporting a result").into()),
+        },
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            eprintln!("{}", stack_report(name));
+            Err(format!("{name} did not finish within {limit:?}").into())
+        }
+    }
+}
+
+fn stack_report(name: &str) -> String {
+    let path = match artifacts_dir() {
+        Ok(dir) => dir.join(format!("{name}-stacks.txt")),
+        Err(error) => return format!("no artifacts directory for a stack report: {error}"),
+    };
+    let pid = std::process::id().to_string();
+    let file = path.to_string_lossy().into_owned();
+    match Command::new("/usr/bin/sample")
+        .args([pid.as_str(), "2", "-mayDie", "-file", file.as_str()])
+        .output()
+    {
+        Ok(output) if output.status.success() => fs::read_to_string(&path)
+            .unwrap_or_else(|error| format!("could not read the stack report {file}: {error}")),
+        Ok(output) => format!(
+            "`sample` failed with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ),
+        Err(error) => format!("could not run `sample`: {error}"),
+    }
+}
 
 pub fn artifacts_dir() -> Result<PathBuf, Box<dyn Error>> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/example-artifacts");
