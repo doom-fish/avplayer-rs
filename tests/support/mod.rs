@@ -19,9 +19,11 @@ where
     F: FnOnce() -> TestResult + Send + 'static,
 {
     let (sender, receiver) = mpsc::channel();
-    let worker = thread::Builder::new().name(name.to_owned()).spawn(move || {
-        let _ = sender.send(body().map_err(|error| error.to_string()));
-    })?;
+    let worker = thread::Builder::new()
+        .name(name.to_owned())
+        .spawn(move || {
+            let _ = sender.send(body().map_err(|error| error.to_string()));
+        })?;
     match receiver.recv_timeout(limit) {
         Ok(result) => result.map_err(Into::into),
         Err(mpsc::RecvTimeoutError::Disconnected) => match worker.join() {
