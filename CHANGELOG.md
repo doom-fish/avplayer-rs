@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-23
+
+### Changed
+
+- **BREAKING:** `ffi::av_player_set_default_rate` returns `bool` instead of `()`.
+
 ### Fixed
 
+- `Cargo.lock` matches the crate version.
 - The Swift bridge now supports macOS 12.0. Interstitial event creation and playback configuration options return errors before macOS 13.0.
 - The default rate setter and video composition from asset properties return errors before macOS 13.0.
 - The displayed pixel buffer returns `None` before macOS 13.0.
