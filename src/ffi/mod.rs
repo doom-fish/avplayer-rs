@@ -734,7 +734,7 @@ extern "C" {
         host_kind: i32,
         out_error_message: *mut *mut c_char,
     ) -> i32;
-    pub fn av_player_set_default_rate(player: *mut c_void, rate: f32);
+    pub fn av_player_set_default_rate(player: *mut c_void, rate: f32) -> bool;
     pub fn av_player_set_audio_output_device_unique_id(
         player: *mut c_void,
         unique_id: *const c_char,

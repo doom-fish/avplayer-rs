@@ -58,6 +58,7 @@ public func av_player_layer_set_video_gravity(
 public func av_player_layer_copy_displayed_pixel_buffer(
     _ layerPtr: UnsafeMutableRawPointer
 ) -> UnsafeMutableRawPointer? {
+    guard #available(macOS 13.0, *) else { return nil }
     let layer = Unmanaged<AVPlayerLayer>.fromOpaque(layerPtr).takeUnretainedValue()
     guard let pixelBuffer = layer.displayedPixelBuffer() else { return nil }
     return Unmanaged.passRetained(pixelBuffer).toOpaque()

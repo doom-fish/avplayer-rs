@@ -258,6 +258,10 @@ public func av_player_interstitial_event_create_with_time(
     _ kind: Int32,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
+    guard #available(macOS 13.0, *) else {
+        outErrorMessage?.pointee = ffiString("interstitial events require macOS 13.0 or later")
+        return nil
+    }
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let event = AVPlayerInterstitialEvent(primaryItem: item, time: cmTime(value: value, timescale: timescale, kind: kind))
     return Unmanaged.passRetained(AVPPlayerInterstitialEventBox(event: event)).toOpaque()
@@ -288,6 +292,7 @@ public func av_player_interstitial_event_set_identifier(
     _ eventPtr: UnsafeMutableRawPointer,
     _ identifierPtr: UnsafePointer<CChar>
 ) {
+    guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     event.identifier = String(cString: identifierPtr)
 }
@@ -297,6 +302,7 @@ public func av_player_interstitial_event_set_restrictions(
     _ eventPtr: UnsafeMutableRawPointer,
     _ restrictions: UInt
 ) {
+    guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     event.restrictions = AVPlayerInterstitialEvent.Restrictions(rawValue: restrictions)
 }
@@ -308,6 +314,7 @@ public func av_player_interstitial_event_set_resumption_offset(
     _ timescale: Int32,
     _ kind: Int32
 ) {
+    guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     event.resumptionOffset = cmTime(value: value, timescale: timescale, kind: kind)
 }
@@ -319,6 +326,7 @@ public func av_player_interstitial_event_set_playout_limit(
     _ timescale: Int32,
     _ kind: Int32
 ) {
+    guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     event.playoutLimit = cmTime(value: value, timescale: timescale, kind: kind)
 }
@@ -328,6 +336,7 @@ public func av_player_interstitial_event_set_aligns_start_with_primary_segment_b
     _ eventPtr: UnsafeMutableRawPointer,
     _ enabled: Bool
 ) {
+    guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     event.alignsStartWithPrimarySegmentBoundary = enabled
 }
@@ -337,6 +346,7 @@ public func av_player_interstitial_event_set_aligns_resumption_with_primary_segm
     _ eventPtr: UnsafeMutableRawPointer,
     _ enabled: Bool
 ) {
+    guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     event.alignsResumptionWithPrimarySegmentBoundary = enabled
 }
@@ -346,6 +356,7 @@ public func av_player_interstitial_event_set_cue(
     _ eventPtr: UnsafeMutableRawPointer,
     _ cuePtr: UnsafePointer<CChar>
 ) {
+    guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     event.cue = interstitialCue(from: String(cString: cuePtr))
 }
@@ -355,6 +366,7 @@ public func av_player_interstitial_event_set_will_play_once(
     _ eventPtr: UnsafeMutableRawPointer,
     _ enabled: Bool
 ) {
+    guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     event.willPlayOnce = enabled
 }
@@ -539,10 +551,30 @@ func encodeInterstitialEventSummary(_ event: AVPlayerInterstitialEvent) -> Playe
         restrictions: event.restrictions.rawValue,
         resumptionOffset: encodeTime(event.resumptionOffset),
         playoutLimit: encodeTime(event.playoutLimit),
-        alignsStartWithPrimarySegmentBoundary: event.alignsStartWithPrimarySegmentBoundary,
-        alignsResumptionWithPrimarySegmentBoundary: event.alignsResumptionWithPrimarySegmentBoundary,
-        cue: interstitialCueString(event.cue),
-        willPlayOnce: event.willPlayOnce,
+        alignsStartWithPrimarySegmentBoundary: {
+            if #available(macOS 13.0, *) {
+                return event.alignsStartWithPrimarySegmentBoundary
+            }
+            return false
+        }(),
+        alignsResumptionWithPrimarySegmentBoundary: {
+            if #available(macOS 13.0, *) {
+                return event.alignsResumptionWithPrimarySegmentBoundary
+            }
+            return false
+        }(),
+        cue: {
+            if #available(macOS 13.0, *) {
+                return interstitialCueString(event.cue)
+            }
+            return nil
+        }(),
+        willPlayOnce: {
+            if #available(macOS 13.0, *) {
+                return event.willPlayOnce
+            }
+            return false
+        }(),
         userDefinedAttributesJSON: jsonString(fromJSONObject: event.userDefinedAttributes),
         assetListResponseJSON: {
             if #available(macOS 13.3, *) {
@@ -591,6 +623,7 @@ private func encodeInterstitialMonitorState(_ monitor: AVPlayerInterstitialEvent
     )
 }
 
+@available(macOS 13.0, *)
 private func interstitialCueString(_ cue: AVPlayerInterstitialEvent.Cue) -> String {
     switch cue {
     case .noCue:
@@ -604,6 +637,7 @@ private func interstitialCueString(_ cue: AVPlayerInterstitialEvent.Cue) -> Stri
     }
 }
 
+@available(macOS 13.0, *)
 private func interstitialCue(from raw: String) -> AVPlayerInterstitialEvent.Cue {
     switch raw {
     case "no_cue":

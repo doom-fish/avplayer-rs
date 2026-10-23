@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The Swift bridge now supports macOS 12.0. Interstitial event creation and playback configuration options return errors before macOS 13.0.
+- The default rate setter and video composition from asset properties return errors before macOS 13.0.
+- The displayed pixel buffer returns `None` before macOS 13.0.
+
 ## [0.8.1] - 2026-10-23
 
 ### Added

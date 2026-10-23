@@ -95,9 +95,15 @@ private func avpURLAssetOptions(from payload: UrlAssetOptionsPayload) throws -> 
         options[AVURLAssetURLRequestAttributionKey] = value
     }
     if let value = payload.httpUserAgent {
+        guard #available(macOS 13.0, *) else {
+            throw BridgeError.message("HTTP user agent requires macOS 13.0 or later")
+        }
         options[AVURLAssetHTTPUserAgentKey] = value
     }
     if let value = payload.primarySessionIdentifier {
+        guard #available(macOS 13.0, *) else {
+            throw BridgeError.message("primary session identifier requires macOS 13.0 or later")
+        }
         guard let identifier = UUID(uuidString: value) else {
             throw BridgeError.message("primary session identifier is not a UUID: \(value)")
         }

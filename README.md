@@ -10,8 +10,8 @@ Safe Rust bindings for Apple's [AVFoundation playback stack](https://developer.a
 > actual `CVPixelBuffer`/`CMSampleBuffer` objects. See [`CHANGELOG.md`](CHANGELOG.md)
 > and [`COVERAGE.md`](COVERAGE.md).
 
-Requires macOS 13 or later (the Swift bridge's deployment target). Newer APIs
-are checked at runtime and return an error on older systems.
+Requires macOS 12.0 or later. Interstitial event creation, playback configuration options,
+and the default rate setter return an error before macOS 13.0. The displayed pixel buffer returns `None`.
 
 ## Quick start
 
@@ -45,9 +45,10 @@ avplayer = { version = "0.8", features = ["async"] }
 ```
 
 ```rust,no_run
-use avplayer::{UrlAsset, async_api::AsyncAsset};
-
+# #[cfg(feature = "async")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use avplayer::{UrlAsset, async_api::AsyncAsset};
+
     pollster::block_on(async {
         let asset = UrlAsset::from_file_path("my.mp4")?;
         let props = AsyncAsset::new(asset.as_asset()).load_properties().await?;
@@ -57,6 +58,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     })
 }
+# #[cfg(not(feature = "async"))]
+# fn main() {}
 ```
 
 | Type | API wrapped |

@@ -510,8 +510,13 @@ impl Player {
                 "default rate must be a finite number".into(),
             ));
         }
-        unsafe { ffi::av_player_set_default_rate(self.ptr, rate) };
-        Ok(())
+        if unsafe { ffi::av_player_set_default_rate(self.ptr, rate) } {
+            Ok(())
+        } else {
+            Err(AVPlayerError::OperationFailed(
+                "default rate requires macOS 13.0 or later".into(),
+            ))
+        }
     }
 
     pub fn audio_output_device_unique_id(&self) -> Result<Option<String>, AVPlayerError> {

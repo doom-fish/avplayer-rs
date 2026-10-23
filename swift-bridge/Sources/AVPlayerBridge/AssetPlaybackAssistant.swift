@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 
+@available(macOS 13.0, *)
 private func avpAssetPlaybackConfigurationOptionString(
     _ option: AVAssetPlaybackConfigurationOption
 ) -> String {

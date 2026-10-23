@@ -255,7 +255,12 @@ public func av_player_info_json(
             }
             return nil
         }(),
-        defaultRate: player.defaultRate,
+        defaultRate: {
+            if #available(macOS 13.0, *) {
+                return player.defaultRate
+            }
+            return nil
+        }(),
         audioOutputDeviceUniqueId: player.audioOutputDeviceUniqueID
     )
     do {
@@ -360,9 +365,11 @@ public func av_player_set_rate_at_host_time(
 }
 
 @_cdecl("av_player_set_default_rate")
-public func av_player_set_default_rate(_ playerPtr: UnsafeMutableRawPointer, _ rate: Float) {
+public func av_player_set_default_rate(_ playerPtr: UnsafeMutableRawPointer, _ rate: Float) -> Bool {
+    guard #available(macOS 13.0, *) else { return false }
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     player.defaultRate = rate
+    return true
 }
 
 @_cdecl("av_player_set_audio_output_device_unique_id")

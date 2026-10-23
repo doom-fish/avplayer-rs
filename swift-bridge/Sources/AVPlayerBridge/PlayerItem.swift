@@ -564,6 +564,10 @@ public func av_player_item_set_video_composition_from_asset(
     _ assetPtr: UnsafeMutableRawPointer,
     _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    guard #available(macOS 13.0, *) else {
+        outErrorMessage?.pointee = ffiString("video composition from asset properties requires macOS 13.0 or later")
+        return AVP_OPERATION_FAILED
+    }
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     let result = avpAwait(label: "AVVideoComposition from asset properties") {
