@@ -21,7 +21,7 @@ fn avplayer_item_metadata_output_can_be_attached() -> support::TestResult {
     }
     output.set_advance_interval_for_delegate_invocation(0.25);
     assert!((output.advance_interval_for_delegate_invocation()? - 0.25).abs() < 1e-9);
-    assert!(output.identifiers()?.is_empty());
+    assert_eq!(output.identifiers()?, [] as [std::string::String; 0]);
     item.remove_metadata_output(&output);
     assert_eq!(item.output_count()?, 0);
     Ok(())

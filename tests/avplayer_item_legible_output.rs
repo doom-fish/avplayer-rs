@@ -33,7 +33,7 @@ fn avplayer_item_legible_output_can_be_attached() -> support::TestResult {
     }
     output.set_advance_interval_for_delegate_invocation(0.5);
     assert!((output.advance_interval_for_delegate_invocation()? - 0.5).abs() < 1e-9);
-    assert!(output.native_representation_subtypes()?.is_empty());
+    assert_eq!(output.native_representation_subtypes()?, [] as [u32; 0]);
     item.remove_legible_output(&output);
     assert_eq!(item.output_count()?, 0);
     Ok(())

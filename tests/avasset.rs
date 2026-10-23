@@ -11,7 +11,7 @@ fn avasset_exposes_duration_tracks_and_metadata() -> support::TestResult {
     assert!(asset.url()?.ends_with("test-avasset.aiff"));
     assert_eq!(track.media_type()?, MediaType::Audio);
     assert!(track.track_id()? > 0);
-    assert!(!asset.metadata()?.is_empty());
+    assert_ne!(asset.metadata()?, [] as [avplayer::MetadataItem; 0]);
     Ok(())
 }
 
@@ -23,7 +23,7 @@ fn avasset_exposes_extended_asset_and_track_surface() -> support::TestResult {
     assert!(asset.preferred_rate()? >= 0.0);
     assert!(asset.preferred_volume()? >= 0.0);
     assert!(asset.overall_duration_hint()?.as_numeric().is_some());
-    assert!(!asset.available_metadata_formats()?.is_empty());
+    assert_ne!(asset.available_metadata_formats()?, [] as [std::string::String; 0]);
     let _ = asset.common_metadata()?;
     assert!(asset.is_playable()?);
     assert!(asset.is_readable()?);

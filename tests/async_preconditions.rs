@@ -89,6 +89,6 @@ fn media_types_with_nul_bytes_are_rejected() -> support::TestResult {
     assert!(tracks
         .iter()
         .all(|track| track.media_type == MediaType::Audio));
-    assert!(!tracks.is_empty());
+    assert_ne!(tracks, [] as [avplayer::async_api::TrackProperties; 0]);
     Ok(())
 }

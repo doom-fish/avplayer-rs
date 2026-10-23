@@ -336,6 +336,6 @@ mod tests {
             })
         };
         assert_eq!(adopted, vec![NonNullToken::VALUE as usize]);
-        assert!(unsafe { borrowed_objects(ptr::null(), 3, |_| Some(0_u8)) }.is_empty());
+        assert_eq!(unsafe { borrowed_objects(ptr::null(), 3, |_| Some(0_u8)) }, [] as [u8; 0]);
     }
 }

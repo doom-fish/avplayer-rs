@@ -12,18 +12,16 @@ fn avplayer_item_integrated_timeline_surfaces_smoke() -> support::TestResult {
     let snapshot = timeline.current_snapshot()?;
     let snapshot_info = snapshot.info()?;
     assert_eq!(snapshot.segment_count(), snapshot_info.segments.len());
-    assert!(!player_integrated_timeline_snapshots_out_of_sync_notification()?.is_empty());
-    assert!(!player_integrated_timeline_snapshots_out_of_sync_reason_key()?.is_empty());
-    assert!(
-        !player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed()?.is_empty()
+    assert_ne!(player_integrated_timeline_snapshots_out_of_sync_notification()?, "");
+    assert_ne!(player_integrated_timeline_snapshots_out_of_sync_reason_key()?, "");
+    assert_ne!(
+        player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed()?, ""
     );
-    assert!(
-        !player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed()?
-            .is_empty()
+    assert_ne!(
+        player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed()?, ""
     );
-    assert!(
-        !player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_ranges_changed()?
-            .is_empty()
+    assert_ne!(
+        player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_ranges_changed()?, ""
     );
 
     let _periodic = timeline.observe_periodic_times(Time::new(1, 10), |_| {})?;

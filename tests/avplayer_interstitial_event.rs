@@ -41,6 +41,6 @@ fn avplayer_interstitial_event_surfaces_smoke() -> support::TestResult {
     let _observer = monitor.observe(|_| {})?;
     let _monitor_state = monitor.state()?;
 
-    assert!(!player_waiting_during_interstitial_event_reason()?.is_empty());
+    assert_ne!(player_waiting_during_interstitial_event_reason()?, "");
     Ok(())
 }

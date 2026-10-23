@@ -16,7 +16,7 @@ fn avfragmented_asset_exposes_tracks_minder_and_extensions() -> support::TestRes
     assert!(track.track_id()? > 0);
     assert!(track.segment_count()? >= 1);
     assert!(asset.track_with_id(track.track_id()?).is_some());
-    assert!(!asset.url()?.unwrap_or_default().is_empty());
+    assert_ne!(asset.url()?.unwrap_or_default(), "");
     let _ = asset
         .media_extension_properties()
         .map(|properties| properties.info())

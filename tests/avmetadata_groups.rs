@@ -6,7 +6,7 @@ use avplayer::prelude::*;
 fn avmetadata_groups_and_mutable_items_round_trip() -> support::TestResult {
     let asset = support::loaded_audio_asset("test-avmetadata-groups")?;
     let items = asset.metadata()?;
-    assert!(!items.is_empty());
+    assert_ne!(items, [] as [avplayer::MetadataItem; 0]);
     let time_range = TimeRange::new(Time::new(0, 1), Time::new(1, 1));
 
     let timed = TimedMetadataGroupHandle::new(&items, time_range)?;
