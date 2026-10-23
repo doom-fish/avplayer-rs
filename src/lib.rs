@@ -167,8 +167,8 @@ pub use player_item_rendered_legible_output::{
 pub use player_item_track::{PlayerItemTrack, PlayerItemTrackVideoFieldMode};
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_item_video_output::{
-    PlayerItemVideoOutput, PlayerItemVideoOutputEvent, PlayerItemVideoOutputObserver,
-    PlayerItemVideoOutputSettings,
+    PixelBufferAttributes, PlayerItemVideoOutput, PlayerItemVideoOutputEvent,
+    PlayerItemVideoOutputObserver, PlayerItemVideoOutputSettings,
 };
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use player_layer::{PlayerLayer, Rect, VideoGravity};

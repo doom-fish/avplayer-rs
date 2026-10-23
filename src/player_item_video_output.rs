@@ -4,7 +4,7 @@ use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use apple_cf::cv::CVPixelBuffer;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -14,8 +14,8 @@ use crate::reader::VideoOutputSettings;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::{
-    deliver, json_payload, maybe_json_cstring, parse_json_and_free, to_cstring, Handler,
-    Registration,
+    deliver, json_cstring, json_payload, maybe_json_cstring, parse_json_and_free, to_cstring,
+    Handler, Registration,
 };
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -43,6 +43,53 @@ pub enum PlayerItemVideoOutputEvent {
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemVideoOutputSettings`.
 pub type PlayerItemVideoOutputSettings = VideoOutputSettings;
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PixelBufferAttributes {
+    pixel_format: u32,
+    width: Option<i32>,
+    height: Option<i32>,
+    io_surface: bool,
+    metal_compatible: bool,
+}
+
+impl PixelBufferAttributes {
+    #[must_use]
+    pub const fn new(pixel_format: u32) -> Self {
+        Self {
+            pixel_format,
+            width: None,
+            height: None,
+            io_surface: false,
+            metal_compatible: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn bgra() -> Self {
+        Self::new(u32::from_be_bytes(*b"BGRA"))
+    }
+
+    #[must_use]
+    pub const fn with_dimensions(mut self, width: i32, height: i32) -> Self {
+        self.width = Some(width);
+        self.height = Some(height);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_io_surface(mut self) -> Self {
+        self.io_surface = true;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_metal_compatibility(mut self) -> Self {
+        self.metal_compatible = true;
+        self
+    }
+}
+
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemVideoOutput`.
 #[derive(Debug)]
 pub struct PlayerItemVideoOutput {
@@ -64,6 +111,21 @@ impl PlayerItemVideoOutput {
                 settings
                     .as_ref()
                     .map_or(ptr::null(), |settings| settings.as_ptr()),
+                &raw mut err,
+            )
+        };
+        if ptr.is_null() {
+            return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
+        }
+        Ok(Self { ptr })
+    }
+
+    pub fn with_pixel_buffer_attributes(attributes: &PixelBufferAttributes) -> Result<Self, AVPlayerError> {
+        let attributes = json_cstring(attributes, "player-item video output pixel buffer attributes")?;
+        let mut err: *mut c_char = ptr::null_mut();
+        let ptr = unsafe {
+            ffi::av_player_item_video_output_create_with_pixel_buffer_attributes(
+                attributes.as_ptr(),
                 &raw mut err,
             )
         };

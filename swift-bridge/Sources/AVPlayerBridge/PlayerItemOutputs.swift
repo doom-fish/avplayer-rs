@@ -121,6 +121,45 @@ public func av_player_item_video_output_create(
     }
 }
 
+struct PixelBufferAttributesPayload: Codable {
+    let pixelFormat: UInt32
+    let width: Int?
+    let height: Int?
+    let ioSurface: Bool
+    let metalCompatible: Bool
+}
+
+@_cdecl("av_player_item_video_output_create_with_pixel_buffer_attributes")
+public func av_player_item_video_output_create_with_pixel_buffer_attributes(
+    _ attributesJson: UnsafePointer<CChar>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    do {
+        let payload = try avpDecodeJSON(attributesJson, as: PixelBufferAttributesPayload.self)
+        var attributes: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(payload.pixelFormat)
+        ]
+        if let width = payload.width {
+            attributes[kCVPixelBufferWidthKey as String] = width
+        }
+        if let height = payload.height {
+            attributes[kCVPixelBufferHeightKey as String] = height
+        }
+        if payload.ioSurface {
+            attributes[kCVPixelBufferIOSurfacePropertiesKey as String] = [String: Any]()
+        }
+        if payload.metalCompatible {
+            attributes[kCVPixelBufferMetalCompatibilityKey as String] = true
+        }
+        let output = AVPlayerItemVideoOutput(pixelBufferAttributes: attributes)
+        let box = AVPPlayerItemVideoOutputBox(videoOutput: output)
+        return Unmanaged.passRetained(box).toOpaque()
+    } catch {
+        outErrorMessage?.pointee = ffiString(error.localizedDescription)
+        return nil
+    }
+}
+
 @_cdecl("av_player_item_video_output_info_json")
 public func av_player_item_video_output_info_json(
     _ outputPtr: UnsafeMutableRawPointer,

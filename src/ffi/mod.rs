@@ -1028,6 +1028,10 @@ extern "C" {
         settings_json: *const c_char,
         out_error_message: *mut *mut c_char,
     ) -> *mut c_void;
+    pub fn av_player_item_video_output_create_with_pixel_buffer_attributes(
+        attributes_json: *const c_char,
+        out_error_message: *mut *mut c_char,
+    ) -> *mut c_void;
     /// Calls the `AVPlayer` framework counterpart for `av_player_item_video_output_info_json`.
     pub fn av_player_item_video_output_info_json(
         output: *mut c_void,
