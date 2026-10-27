@@ -1,13 +1,14 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 import ObjectiveC.runtime
 
-private struct AVPFragmentedAssetMinderPayload: Codable {
+private struct AVPFragmentedAssetMinderPayload: AVPBridge {
     let mindingInterval: Double
     let assetCount: Int
 }
 
-private struct AVPMediaExtensionPropertiesPayload: Codable {
+private struct AVPMediaExtensionPropertiesPayload: AVPBridge {
     let containingBundleName: String?
     let containingBundleURL: String?
     let extensionIdentifier: String?
@@ -43,11 +44,11 @@ private func avpVoidSelector(_ object: AnyObject, _ selectorName: String, argume
 
 @_cdecl("av_fragmented_asset_create")
 public func av_fragmented_asset_create(
-    _ urlPtr: UnsafePointer<CChar>,
+    _ urlPtr: UnsafePointer<AVPValue>,
     _ isFileURL: Bool,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
-    let urlString = String(cString: urlPtr)
+    let urlString = String(bridge: urlPtr)
     if isFileURL {
         return avpRetained(AVFragmentedAsset(url: URL(fileURLWithPath: urlString), options: nil))
     }
@@ -100,9 +101,9 @@ public func av_fragmented_asset_expects_property_revised_notifications() -> Bool
 
 @_cdecl("av_fragmented_asset_is_playable_extended_mime_type")
 public func av_fragmented_asset_is_playable_extended_mime_type(
-    _ mimeTypePtr: UnsafePointer<CChar>
+    _ mimeTypePtr: UnsafePointer<AVPValue>
 ) -> Bool {
-    AVFragmentedAsset.isPlayableExtendedMIMEType(String(cString: mimeTypePtr))
+    AVFragmentedAsset.isPlayableExtendedMIMEType(String(bridge: mimeTypePtr))
 }
 
 @_cdecl("av_fragmented_asset_track_segment_count")
@@ -120,11 +121,11 @@ public func av_url_asset_copy_media_extension_properties(
     return asset.mediaExtensionProperties.map(avpRetained)
 }
 
-@_cdecl("av_media_extension_properties_info_json")
-public func av_media_extension_properties_info_json(
+@_cdecl("av_media_extension_properties_info_value")
+public func av_media_extension_properties_info_value(
     _ propertiesPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         outErrorMessage?.pointee = ffiString("media extension properties require macOS 15.0")
         return nil
@@ -138,7 +139,7 @@ public func av_media_extension_properties_info_json(
         extensionURL: properties.extensionURL.absoluteString
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -149,24 +150,24 @@ public func av_media_extension_properties_info_json(
 public func av_fragmented_asset_minder_create(
     _ assetPtr: UnsafeMutableRawPointer,
     _ mindingInterval: Double,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let asset = Unmanaged<AVFragmentedAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     return avpRetained(AVFragmentedAssetMinder(asset: asset, mindingInterval: mindingInterval))
 }
 
-@_cdecl("av_fragmented_asset_minder_info_json")
-public func av_fragmented_asset_minder_info_json(
+@_cdecl("av_fragmented_asset_minder_info_value")
+public func av_fragmented_asset_minder_info_value(
     _ minderPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let minder = Unmanaged<AVFragmentedAssetMinder>.fromOpaque(minderPtr).takeUnretainedValue()
     let payload = AVPFragmentedAssetMinderPayload(
         mindingInterval: minder.mindingInterval,
         assetCount: minder.assets.count
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -211,4 +212,42 @@ public func av_fragmented_asset_minder_remove_asset(
     let minder = Unmanaged<AVFragmentedAssetMinder>.fromOpaque(minderPtr).takeUnretainedValue()
     let asset = Unmanaged<AVFragmentedAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     avpVoidSelector(minder, "removeFragmentedAsset:", argument: asset)
+}
+
+extension AVPFragmentedAssetMinderPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            mindingInterval.binaryValue,
+            assetCount.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            mindingInterval: try binaryValue.field(0),
+            assetCount: try binaryValue.field(1)
+        )
+    }
+}
+
+extension AVPMediaExtensionPropertiesPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            containingBundleName.binaryValue,
+            containingBundleURL.binaryValue,
+            extensionIdentifier.binaryValue,
+            extensionName.binaryValue,
+            extensionURL.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            containingBundleName: try binaryValue.field(0),
+            containingBundleURL: try binaryValue.field(1),
+            extensionIdentifier: try binaryValue.field(2),
+            extensionName: try binaryValue.field(3),
+            extensionURL: try binaryValue.field(4)
+        )
+    }
 }

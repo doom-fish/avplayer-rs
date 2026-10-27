@@ -1,17 +1,18 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-struct PlayerItemMediaDataCollectorInfoPayload: Codable {
+struct PlayerItemMediaDataCollectorInfoPayload: AVPBridge {
     let kind: String
 }
 
-struct MetadataCollectorInfoPayload: Codable {
+struct MetadataCollectorInfoPayload: AVPBridge {
     let identifiers: [String]?
     let classifyingLabels: [String]?
     let hasDelegate: Bool
 }
 
-struct DateRangeMetadataGroupPayload: Codable {
+struct DateRangeMetadataGroupPayload: AVPBridge {
     let startDate: String
     let endDate: String?
     let classifyingLabel: String?
@@ -19,7 +20,7 @@ struct DateRangeMetadataGroupPayload: Codable {
     let items: [MetadataItemPayload]
 }
 
-struct MetadataCollectorEventPayload: Codable {
+struct MetadataCollectorEventPayload: AVPBridge {
     let event: String
     let groups: [DateRangeMetadataGroupPayload]
     let newIndices: [Int]
@@ -54,13 +55,13 @@ final class AVPPlayerItemMetadataCollectorBox: AVPPlayerItemMediaDataCollectorBo
 
 final class MetadataCollectorObserverBox: NSObject, AVPlayerItemMetadataCollectorPushDelegate {
     private weak var collector: AVPlayerItemMetadataCollector?
-    private let callback: AVPJsonCallback
+    private let callback: AVPValueCallback
     private let gate: AVPCallbackGate
 
     init(
         collector: AVPlayerItemMetadataCollector,
         queue: DispatchQueue?,
-        callback: @escaping AVPJsonCallback,
+        callback: @escaping AVPValueCallback,
         gate: AVPCallbackGate
     ) {
         self.collector = collector
@@ -97,19 +98,19 @@ final class MetadataCollectorObserverBox: NSObject, AVPlayerItemMetadataCollecto
     }
 
     private func send(_ payload: MetadataCollectorEventPayload) {
-        gate.deliverJSON(payload, to: callback)
+        gate.deliverValue(payload, to: callback)
     }
 }
 
 @_cdecl("av_player_item_metadata_collector_create")
 public func av_player_item_metadata_collector_create(
-    _ identifiersJson: UnsafePointer<CChar>?,
-    _ classifyingLabelsJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ identifiersValue: UnsafePointer<AVPValue>?,
+    _ classifyingLabelsValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
-        let identifiers = try identifiersJson.map { try avpDecodeJSON($0, as: [String].self) }
-        let classifyingLabels = try classifyingLabelsJson.map { try avpDecodeJSON($0, as: [String].self) }
+        let identifiers = try identifiersValue.map { try avpDecodeValue($0, as: [String].self) }
+        let classifyingLabels = try classifyingLabelsValue.map { try avpDecodeValue($0, as: [String].self) }
         let collector = AVPlayerItemMetadataCollector(identifiers: identifiers, classifyingLabels: classifyingLabels)
         return Unmanaged.passRetained(
             AVPPlayerItemMetadataCollectorBox(
@@ -130,11 +131,11 @@ public func av_player_item_metadata_collector_release(_ collectorPtr: UnsafeMuta
     Unmanaged<AVPPlayerItemMediaDataCollectorBox>.fromOpaque(collectorPtr).release()
 }
 
-@_cdecl("av_player_item_metadata_collector_info_json")
-public func av_player_item_metadata_collector_info_json(
+@_cdecl("av_player_item_metadata_collector_info_value")
+public func av_player_item_metadata_collector_info_value(
     _ collectorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let box = Unmanaged<AVPPlayerItemMetadataCollectorBox>.fromOpaque(collectorPtr).takeUnretainedValue()
     let payload = MetadataCollectorInfoPayload(
         identifiers: box.identifiers,
@@ -142,7 +143,7 @@ public func av_player_item_metadata_collector_info_json(
         hasDelegate: box.metadataCollector.delegate != nil
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -152,8 +153,8 @@ public func av_player_item_metadata_collector_info_json(
 @_cdecl("av_player_item_media_data_collector_kind")
 public func av_player_item_media_data_collector_kind(
     _ collectorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let collector = Unmanaged<AVPPlayerItemMediaDataCollectorBox>.fromOpaque(collectorPtr).takeUnretainedValue().collector
     if collector is AVPlayerItemMetadataCollector {
         return ffiString("metadata_collector")
@@ -164,11 +165,11 @@ public func av_player_item_media_data_collector_kind(
 @_cdecl("av_player_item_metadata_collector_add_observer")
 public func av_player_item_metadata_collector_add_observer(
     _ collectorPtr: UnsafeMutableRawPointer,
-    _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPJsonCallback?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -197,7 +198,7 @@ public func av_player_item_metadata_collector_observer_release(_ observerPtr: Un
 public func av_player_item_add_media_data_collector(
     _ itemPtr: UnsafeMutableRawPointer,
     _ collectorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let collector = Unmanaged<AVPPlayerItemMediaDataCollectorBox>.fromOpaque(collectorPtr).takeUnretainedValue().collector
@@ -215,11 +216,11 @@ public func av_player_item_remove_media_data_collector(
     item.remove(collector)
 }
 
-@_cdecl("av_player_item_media_data_collectors_json")
-public func av_player_item_media_data_collectors_json(
+@_cdecl("av_player_item_media_data_collectors_value")
+public func av_player_item_media_data_collectors_value(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let payload = item.mediaDataCollectors.map { collector in
         if collector is AVPlayerItemMetadataCollector {
@@ -228,7 +229,7 @@ public func av_player_item_media_data_collectors_json(
         return PlayerItemMediaDataCollectorInfoPayload(kind: String(describing: type(of: collector)))
     }
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -243,4 +244,78 @@ private func encodeDateRangeMetadataGroup(_ group: AVDateRangeMetadataGroup) -> 
         uniqueID: group.uniqueID,
         items: group.items.map(avpEncodeMetadataItem)
     )
+}
+
+extension PlayerItemMediaDataCollectorInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            kind.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            kind: try binaryValue.field(0)
+        )
+    }
+}
+
+extension MetadataCollectorInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            identifiers.binaryValue,
+            classifyingLabels.binaryValue,
+            hasDelegate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            identifiers: try binaryValue.field(0),
+            classifyingLabels: try binaryValue.field(1),
+            hasDelegate: try binaryValue.field(2)
+        )
+    }
+}
+
+extension DateRangeMetadataGroupPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            startDate.binaryValue,
+            endDate.binaryValue,
+            classifyingLabel.binaryValue,
+            uniqueID.binaryValue,
+            items.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            startDate: try binaryValue.field(0),
+            endDate: try binaryValue.field(1),
+            classifyingLabel: try binaryValue.field(2),
+            uniqueID: try binaryValue.field(3),
+            items: try binaryValue.field(4)
+        )
+    }
+}
+
+extension MetadataCollectorEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            groups.binaryValue,
+            newIndices.binaryValue,
+            modifiedIndices.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            groups: try binaryValue.field(1),
+            newIndices: try binaryValue.field(2),
+            modifiedIndices: try binaryValue.field(3)
+        )
+    }
 }

@@ -1,10 +1,10 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
 
 use apple_cf::cv::CVPixelBuffer;
-use serde::{Deserialize, Serialize};
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -14,19 +14,17 @@ use crate::reader::VideoOutputSettings;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::{
-    deliver, json_cstring, json_payload, maybe_json_cstring, parse_json_and_free, to_cstring,
+    deliver, maybe_value_buffer, parse_value_and_free, to_cstring, value_buffer, value_payload,
     Handler, Registration,
 };
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct VideoOutputInfoPayload {
     suppresses_player_rendering: bool,
     has_delegate: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct VideoOutputEventPayload {
     event: String,
 }
@@ -43,8 +41,7 @@ pub enum PlayerItemVideoOutputEvent {
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemVideoOutputSettings`.
 pub type PlayerItemVideoOutputSettings = VideoOutputSettings;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PixelBufferAttributes {
     pixel_format: u32,
     width: Option<i32>,
@@ -104,13 +101,13 @@ retain_release_wrapper!(
 impl PlayerItemVideoOutput {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(settings: Option<&PlayerItemVideoOutputSettings>) -> Result<Self, AVPlayerError> {
-        let settings = maybe_json_cstring(settings, "player-item video output settings")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let settings = maybe_value_buffer(settings, "player-item video output settings")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_video_output_create(
                 settings
                     .as_ref()
-                    .map_or(ptr::null(), |settings| settings.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -120,9 +117,14 @@ impl PlayerItemVideoOutput {
         Ok(Self { ptr })
     }
 
-    pub fn with_pixel_buffer_attributes(attributes: &PixelBufferAttributes) -> Result<Self, AVPlayerError> {
-        let attributes = json_cstring(attributes, "player-item video output pixel buffer attributes")?;
-        let mut err: *mut c_char = ptr::null_mut();
+    pub fn with_pixel_buffer_attributes(
+        attributes: &PixelBufferAttributes,
+    ) -> Result<Self, AVPlayerError> {
+        let attributes = value_buffer(
+            attributes,
+            "player-item video output pixel buffer attributes",
+        )?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_video_output_create_with_pixel_buffer_attributes(
                 attributes.as_ptr(),
@@ -136,13 +138,13 @@ impl PlayerItemVideoOutput {
     }
 
     fn info(&self) -> Result<VideoOutputInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_item_video_output_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_player_item_video_output_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
@@ -195,7 +197,7 @@ impl PlayerItemVideoOutput {
                     self.ptr,
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(video_output_event_trampoline),
                     userdata,
                     drop_userdata,
@@ -242,7 +244,7 @@ unsafe impl Send for PlayerItemVideoOutputObserver {}
 impl PlayerItem {
     /// Calls the `AVPlayer` framework counterpart for `add_video_output`.
     pub fn add_video_output(&self, output: &PlayerItemVideoOutput) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -258,9 +260,9 @@ impl PlayerItem {
 
 unsafe extern "C" fn video_output_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
-    let Some(payload) = (unsafe { json_payload::<VideoOutputEventPayload>(payload_json) }) else {
+    let Some(payload) = (unsafe { value_payload::<VideoOutputEventPayload>(payload_value) }) else {
         return;
     };
 
@@ -271,4 +273,33 @@ unsafe extern "C" fn video_output_event_trampoline(
     };
 
     unsafe { deliver(userdata, "video_output_event_trampoline", event) };
+}
+
+impl crate::binary::FromValue for VideoOutputInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            suppresses_player_rendering: value.field(0)?,
+            has_delegate: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for VideoOutputEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+        })
+    }
+}
+
+impl crate::binary::ToValue for PixelBufferAttributes {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.pixel_format),
+            crate::binary::ToValue::to_value(&self.width),
+            crate::binary::ToValue::to_value(&self.height),
+            crate::binary::ToValue::to_value(&self.io_surface),
+            crate::binary::ToValue::to_value(&self.metal_compatible),
+        ])
+    }
 }

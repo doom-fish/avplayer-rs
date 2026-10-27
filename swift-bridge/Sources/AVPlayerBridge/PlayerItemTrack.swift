@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
@@ -7,11 +8,11 @@ public func av_player_item_track_release(_ trackPtr: UnsafeMutableRawPointer?) {
     Unmanaged<AVPlayerItemTrack>.fromOpaque(trackPtr).release()
 }
 
-@_cdecl("av_player_item_track_info_json")
-public func av_player_item_track_info_json(
+@_cdecl("av_player_item_track_info_value")
+public func av_player_item_track_info_value(
     _ trackPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let track = Unmanaged<AVPlayerItemTrack>.fromOpaque(trackPtr).takeUnretainedValue()
     let payload = PlayerItemTrackInfoPayload(
         enabled: track.isEnabled,
@@ -20,7 +21,7 @@ public func av_player_item_track_info_json(
         hasAssetTrack: track.assetTrack != nil
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -39,10 +40,10 @@ public func av_player_item_track_set_enabled(
 @_cdecl("av_player_item_track_set_video_field_mode")
 public func av_player_item_track_set_video_field_mode(
     _ trackPtr: UnsafeMutableRawPointer,
-    _ modePtr: UnsafePointer<CChar>?
+    _ modePtr: UnsafePointer<AVPValue>?
 ) {
     let track = Unmanaged<AVPlayerItemTrack>.fromOpaque(trackPtr).takeUnretainedValue()
-    track.videoFieldMode = modePtr.map { String(cString: $0) }
+    track.videoFieldMode = modePtr.map { String(bridge: $0) }
 }
 
 @_cdecl("av_player_item_track_copy_asset_track")

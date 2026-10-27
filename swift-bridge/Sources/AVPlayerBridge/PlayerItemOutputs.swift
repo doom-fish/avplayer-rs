@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
@@ -70,30 +71,30 @@ public func av_player_item_output_set_suppresses_player_rendering(
     output.suppressesPlayerRendering = suppresses
 }
 
-@_cdecl("av_player_item_output_item_time_for_host_time_json")
-public func av_player_item_output_item_time_for_host_time_json(
+@_cdecl("av_player_item_output_item_time_for_host_time_value")
+public func av_player_item_output_item_time_for_host_time_value(
     _ outputPtr: UnsafeMutableRawPointer,
     _ hostTime: Double,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let output = Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).takeUnretainedValue().output
     do {
-        return ffiString(try avpEncodeJSON(encodeTime(output.itemTime(forHostTime: hostTime))))
+        return try avpEncodeValue(encodeTime(output.itemTime(forHostTime: hostTime)))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
     }
 }
 
-@_cdecl("av_player_item_output_item_time_for_mach_absolute_time_json")
-public func av_player_item_output_item_time_for_mach_absolute_time_json(
+@_cdecl("av_player_item_output_item_time_for_mach_absolute_time_value")
+public func av_player_item_output_item_time_for_mach_absolute_time_value(
     _ outputPtr: UnsafeMutableRawPointer,
     _ machAbsoluteTime: Int64,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let output = Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).takeUnretainedValue().output
     do {
-        return ffiString(try avpEncodeJSON(encodeTime(output.itemTime(forMachAbsoluteTime: machAbsoluteTime))))
+        return try avpEncodeValue(encodeTime(output.itemTime(forMachAbsoluteTime: machAbsoluteTime)))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -102,13 +103,13 @@ public func av_player_item_output_item_time_for_mach_absolute_time_json(
 
 @_cdecl("av_player_item_video_output_create")
 public func av_player_item_video_output_create(
-    _ settingsJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ settingsValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
         let output: AVPlayerItemVideoOutput
-        if let settingsJson {
-            let settings = try videoOutputSettingsDictionary(avpDecodeJSON(settingsJson, as: VideoOutputSettingsPayload.self))
+        if let settingsValue {
+            let settings = try videoOutputSettingsDictionary(avpDecodeValue(settingsValue, as: VideoOutputSettingsPayload.self))
             output = AVPlayerItemVideoOutput(outputSettings: settings)
         } else {
             output = AVPlayerItemVideoOutput(pixelBufferAttributes: nil)
@@ -121,7 +122,7 @@ public func av_player_item_video_output_create(
     }
 }
 
-struct PixelBufferAttributesPayload: Codable {
+struct PixelBufferAttributesPayload: AVPBridge {
     let pixelFormat: UInt32
     let width: Int?
     let height: Int?
@@ -131,11 +132,11 @@ struct PixelBufferAttributesPayload: Codable {
 
 @_cdecl("av_player_item_video_output_create_with_pixel_buffer_attributes")
 public func av_player_item_video_output_create_with_pixel_buffer_attributes(
-    _ attributesJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ attributesValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
-        let payload = try avpDecodeJSON(attributesJson, as: PixelBufferAttributesPayload.self)
+        let payload = try avpDecodeValue(attributesValue, as: PixelBufferAttributesPayload.self)
         var attributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: Int(payload.pixelFormat)
         ]
@@ -160,18 +161,18 @@ public func av_player_item_video_output_create_with_pixel_buffer_attributes(
     }
 }
 
-@_cdecl("av_player_item_video_output_info_json")
-public func av_player_item_video_output_info_json(
+@_cdecl("av_player_item_video_output_info_value")
+public func av_player_item_video_output_info_value(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let box = Unmanaged<AVPPlayerItemVideoOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
     let payload = VideoOutputInfoPayload(
         suppressesPlayerRendering: box.videoOutput.suppressesPlayerRendering,
         hasDelegate: box.videoOutput.delegate != nil
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -206,11 +207,11 @@ public func av_player_item_video_output_copy_pixel_buffer_for_item_time(
 
 @_cdecl("av_player_item_metadata_output_create")
 public func av_player_item_metadata_output_create(
-    _ identifiersJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ identifiersValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
-        let identifiers = try identifiersJson.map { try avpDecodeJSON($0, as: [String].self) }
+        let identifiers = try identifiersValue.map { try avpDecodeValue($0, as: [String].self) }
         let output = AVPlayerItemMetadataOutput(identifiers: identifiers)
         let box = AVPPlayerItemMetadataOutputBox(metadataOutput: output, identifiers: identifiers)
         return Unmanaged.passRetained(box).toOpaque()
@@ -220,11 +221,11 @@ public func av_player_item_metadata_output_create(
     }
 }
 
-@_cdecl("av_player_item_metadata_output_info_json")
-public func av_player_item_metadata_output_info_json(
+@_cdecl("av_player_item_metadata_output_info_value")
+public func av_player_item_metadata_output_info_value(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let box = Unmanaged<AVPPlayerItemMetadataOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
     let payload = MetadataOutputInfoPayload(
         suppressesPlayerRendering: box.metadataOutput.suppressesPlayerRendering,
@@ -233,7 +234,7 @@ public func av_player_item_metadata_output_info_json(
         hasDelegate: box.metadataOutput.delegate != nil
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -251,12 +252,12 @@ public func av_player_item_metadata_output_set_advance_interval(
 
 @_cdecl("av_player_item_legible_output_create")
 public func av_player_item_legible_output_create(
-    _ nativeRepresentationSubtypesJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ nativeRepresentationSubtypesValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
-        let nativeRepresentationSubtypes = try nativeRepresentationSubtypesJson.map {
-            try avpDecodeJSON($0, as: [UInt32].self)
+        let nativeRepresentationSubtypes = try nativeRepresentationSubtypesValue.map {
+            try avpDecodeValue($0, as: [UInt32].self)
         } ?? []
         guard !nativeRepresentationSubtypes.contains(kCMClosedCaptionFormatType_CEA608) else {
             outErrorMessage?.pointee = ffiString(
@@ -283,11 +284,11 @@ public func av_player_item_legible_output_create(
     }
 }
 
-@_cdecl("av_player_item_legible_output_info_json")
-public func av_player_item_legible_output_info_json(
+@_cdecl("av_player_item_legible_output_info_value")
+public func av_player_item_legible_output_info_value(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let box = Unmanaged<AVPPlayerItemLegibleOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
     let payload = LegibleOutputInfoPayload(
         suppressesPlayerRendering: box.legibleOutput.suppressesPlayerRendering,
@@ -297,7 +298,7 @@ public func av_player_item_legible_output_info_json(
         textStylingResolution: avpLegibleOutputTextStylingResolutionString(box.legibleOutput.textStylingResolution)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -316,11 +317,11 @@ public func av_player_item_legible_output_set_advance_interval(
 @_cdecl("av_player_item_legible_output_set_text_styling_resolution")
 public func av_player_item_legible_output_set_text_styling_resolution(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ resolutionPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ resolutionPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let box = Unmanaged<AVPPlayerItemLegibleOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
-    let rawValue = String(cString: resolutionPtr)
+    let rawValue = String(bridge: resolutionPtr)
     guard let resolution = avpLegibleOutputTextStylingResolution(from: rawValue) else {
         outErrorMessage?.pointee = ffiString("invalid AVPlayerItemLegibleOutputTextStylingResolution: \(rawValue)")
         return AVP_INVALID_ARGUMENT
@@ -365,4 +366,26 @@ private func videoOutputSettingsDictionary(_ payload: VideoOutputSettingsPayload
         settings[kCVPixelBufferHeightKey as String] = height
     }
     return settings
+}
+
+extension PixelBufferAttributesPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            pixelFormat.binaryValue,
+            width.binaryValue,
+            height.binaryValue,
+            ioSurface.binaryValue,
+            metalCompatible.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            pixelFormat: try binaryValue.field(0),
+            width: try binaryValue.field(1),
+            height: try binaryValue.field(2),
+            ioSurface: try binaryValue.field(3),
+            metalCompatible: try binaryValue.field(4)
+        )
+    }
 }

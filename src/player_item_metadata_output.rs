@@ -1,9 +1,8 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -13,11 +12,10 @@ use crate::player_item_output::PlayerItemOutput;
 use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
 use crate::util::{
-    deliver, json_cstring, json_payload, parse_json_and_free, to_cstring, Handler, Registration,
+    deliver, parse_value_and_free, to_cstring, value_buffer, value_payload, Handler, Registration,
 };
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct MetadataOutputInfoPayload {
     suppresses_player_rendering: bool,
     advance_interval_for_delegate_invocation: f64,
@@ -25,8 +23,7 @@ struct MetadataOutputInfoPayload {
     has_delegate: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct TimedMetadataGroupPayload {
     time_range: TimeRange,
     items: Vec<MetadataItem>,
@@ -50,8 +47,7 @@ impl From<TimedMetadataGroupPayload> for TimedMetadataGroup {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct MetadataOutputEventPayload {
     event: String,
     groups: Vec<TimedMetadataGroupPayload>,
@@ -92,14 +88,14 @@ impl PlayerItemMetadataOutput {
         });
         let identifiers = identifiers
             .as_ref()
-            .map(|identifiers| json_cstring(identifiers, "metadata output identifiers"))
+            .map(|identifiers| value_buffer(identifiers, "metadata output identifiers"))
             .transpose()?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_metadata_output_create(
                 identifiers
                     .as_ref()
-                    .map_or(ptr::null(), |identifiers| identifiers.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -110,13 +106,13 @@ impl PlayerItemMetadataOutput {
     }
 
     fn info(&self) -> Result<MetadataOutputInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_item_metadata_output_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_player_item_metadata_output_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
@@ -160,7 +156,7 @@ impl PlayerItemMetadataOutput {
                     self.ptr,
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(metadata_output_event_trampoline),
                     userdata,
                     drop_userdata,
@@ -204,7 +200,7 @@ impl PlayerItem {
         &self,
         output: &PlayerItemMetadataOutput,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -220,9 +216,9 @@ impl PlayerItem {
 
 unsafe extern "C" fn metadata_output_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
-    let Some(payload) = (unsafe { json_payload::<MetadataOutputEventPayload>(payload_json) })
+    let Some(payload) = (unsafe { value_payload::<MetadataOutputEventPayload>(payload_value) })
     else {
         return;
     };
@@ -241,4 +237,34 @@ unsafe extern "C" fn metadata_output_event_trampoline(
     };
 
     unsafe { deliver(userdata, "metadata_output_event_trampoline", event) };
+}
+
+impl crate::binary::FromValue for MetadataOutputInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            suppresses_player_rendering: value.field(0)?,
+            advance_interval_for_delegate_invocation: value.field(1)?,
+            identifiers: value.field(2)?,
+            has_delegate: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for TimedMetadataGroupPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            time_range: value.field(0)?,
+            items: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for MetadataOutputEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            groups: value.field(1)?,
+            track_present: value.field(2)?,
+        })
+    }
 }

@@ -1,22 +1,23 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-private struct VideoOutputEventPayload: Codable {
+private struct VideoOutputEventPayload: AVPBridge {
     let event: String
 }
 
-private struct TimedMetadataGroupPayload: Codable {
+private struct TimedMetadataGroupPayload: AVPBridge {
     let timeRange: TimeRangePayload
     let items: [MetadataItemPayload]
 }
 
-private struct MetadataOutputEventPayload: Codable {
+private struct MetadataOutputEventPayload: AVPBridge {
     let event: String
     let groups: [TimedMetadataGroupPayload]
     let trackPresent: Bool
 }
 
-private struct LegibleOutputEventPayload: Codable {
+private struct LegibleOutputEventPayload: AVPBridge {
     let event: String
     let itemTime: TimePayload?
     let strings: [String]
@@ -25,13 +26,13 @@ private struct LegibleOutputEventPayload: Codable {
 
 final class VideoOutputObserverBox: NSObject, AVPlayerItemOutputPullDelegate {
     private weak var output: AVPlayerItemVideoOutput?
-    private let callback: AVPJsonCallback
+    private let callback: AVPValueCallback
     private let gate: AVPCallbackGate
 
     init(
         output: AVPlayerItemVideoOutput,
         queue: DispatchQueue?,
-        callback: @escaping AVPJsonCallback,
+        callback: @escaping AVPValueCallback,
         gate: AVPCallbackGate
     ) {
         self.output = output
@@ -60,19 +61,19 @@ final class VideoOutputObserverBox: NSObject, AVPlayerItemOutputPullDelegate {
     }
 
     private func send(_ payload: VideoOutputEventPayload) {
-        gate.deliverJSON(payload, to: callback)
+        gate.deliverValue(payload, to: callback)
     }
 }
 
 final class MetadataOutputObserverBox: NSObject, AVPlayerItemMetadataOutputPushDelegate {
     private weak var output: AVPlayerItemMetadataOutput?
-    private let callback: AVPJsonCallback
+    private let callback: AVPValueCallback
     private let gate: AVPCallbackGate
 
     init(
         output: AVPlayerItemMetadataOutput,
         queue: DispatchQueue?,
-        callback: @escaping AVPJsonCallback,
+        callback: @escaping AVPValueCallback,
         gate: AVPCallbackGate
     ) {
         self.output = output
@@ -111,19 +112,19 @@ final class MetadataOutputObserverBox: NSObject, AVPlayerItemMetadataOutputPushD
     }
 
     private func send(_ payload: MetadataOutputEventPayload) {
-        gate.deliverJSON(payload, to: callback)
+        gate.deliverValue(payload, to: callback)
     }
 }
 
 final class LegibleOutputObserverBox: NSObject, AVPlayerItemLegibleOutputPushDelegate {
     private weak var output: AVPlayerItemLegibleOutput?
-    private let callback: AVPJsonObjectsCallback
+    private let callback: AVPValueObjectsCallback
     private let gate: AVPCallbackGate
 
     init(
         output: AVPlayerItemLegibleOutput,
         queue: DispatchQueue?,
-        callback: @escaping AVPJsonObjectsCallback,
+        callback: @escaping AVPValueObjectsCallback,
         gate: AVPCallbackGate
     ) {
         self.output = output
@@ -144,7 +145,7 @@ final class LegibleOutputObserverBox: NSObject, AVPlayerItemLegibleOutputPushDel
     }
 
     func outputSequenceWasFlushed(_ output: AVPlayerItemOutput) {
-        gate.deliverJSON(
+        gate.deliverValue(
             LegibleOutputEventPayload(
                 event: "sequence_was_flushed",
                 itemTime: nil,
@@ -167,7 +168,7 @@ final class LegibleOutputObserverBox: NSObject, AVPlayerItemLegibleOutputPushDel
             guard CFGetTypeID(object) == CMSampleBufferGetTypeID() else { return nil }
             return object
         }
-        gate.deliverJSON(
+        gate.deliverValue(
             LegibleOutputEventPayload(
                 event: "attributed_strings",
                 itemTime: encodeTime(itemTime),
@@ -183,11 +184,11 @@ final class LegibleOutputObserverBox: NSObject, AVPlayerItemLegibleOutputPushDel
 @_cdecl("av_player_item_video_output_add_observer")
 public func av_player_item_video_output_add_observer(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPJsonCallback?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -224,11 +225,11 @@ public func av_player_item_video_output_request_notification_of_media_data_chang
 @_cdecl("av_player_item_metadata_output_add_observer")
 public func av_player_item_metadata_output_add_observer(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPJsonCallback?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -256,11 +257,11 @@ public func av_player_item_metadata_output_observer_release(_ observerPtr: Unsaf
 @_cdecl("av_player_item_legible_output_add_observer")
 public func av_player_item_legible_output_add_observer(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPJsonObjectsCallback?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
+    _ callback: AVPValueObjectsCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -287,4 +288,72 @@ public func av_player_item_legible_output_observer_release(_ observerPtr: Unsafe
 
 private func encodeTimedMetadataGroup(_ group: AVTimedMetadataGroup) -> TimedMetadataGroupPayload {
     TimedMetadataGroupPayload(timeRange: encodeTimeRange(group.timeRange), items: group.items.map(avpEncodeMetadataItem))
+}
+
+extension VideoOutputEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0)
+        )
+    }
+}
+
+extension TimedMetadataGroupPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            timeRange.binaryValue,
+            items.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            timeRange: try binaryValue.field(0),
+            items: try binaryValue.field(1)
+        )
+    }
+}
+
+extension MetadataOutputEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            groups.binaryValue,
+            trackPresent.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            groups: try binaryValue.field(1),
+            trackPresent: try binaryValue.field(2)
+        )
+    }
+}
+
+extension LegibleOutputEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            itemTime.binaryValue,
+            strings.binaryValue,
+            nativeSampleBufferCount.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            itemTime: try binaryValue.field(1),
+            strings: try binaryValue.field(2),
+            nativeSampleBufferCount: try binaryValue.field(3)
+        )
+    }
 }

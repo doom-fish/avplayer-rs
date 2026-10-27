@@ -1,21 +1,20 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CString;
 
 use apple_cf::cm::CMSampleBuffer;
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player_layer::VideoGravity;
 use crate::retained::retain_release_wrapper;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct SampleBufferDisplayLayerPayload {
     status: i32,
     error_message: Option<String>,
@@ -75,13 +74,13 @@ impl SampleBufferDisplayLayer {
     }
 
     fn info(&self) -> Result<SampleBufferDisplayLayerPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_sample_buffer_display_layer_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_sample_buffer_display_layer_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn status(&self) -> Result<QueuedSampleBufferRenderingStatus, AVPlayerError> {
@@ -99,7 +98,7 @@ impl SampleBufferDisplayLayer {
     }
 
     pub fn set_video_gravity(&self, video_gravity: VideoGravity) -> Result<(), AVPlayerError> {
-        let video_gravity = CString::new(video_gravity.as_raw()).map_err(|error| {
+        let video_gravity = InputString::new(video_gravity.as_raw()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("video gravity contains NUL byte: {error}"))
         })?;
         unsafe {
@@ -170,5 +169,21 @@ impl SampleBufferDisplayLayer {
 
     pub fn stop_requesting_media_data(&self) {
         unsafe { ffi::av_sample_buffer_display_layer_stop_requesting_media_data(self.ptr) };
+    }
+}
+
+impl crate::binary::FromValue for SampleBufferDisplayLayerPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            status: value.field(0)?,
+            error_message: value.field(1)?,
+            video_gravity: value.field(2)?,
+            ready_for_display: value.field(3)?,
+            ready_for_more_media_data: value.field(4)?,
+            has_sufficient_media_data_for_reliable_playback_start: value.field(5)?,
+            requires_flush_to_resume_decoding: value.field(6)?,
+            prevents_capture: value.field(7)?,
+            prevents_display_sleep_during_video_playback: value.field(8)?,
+        })
     }
 }

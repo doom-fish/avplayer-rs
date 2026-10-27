@@ -1,7 +1,8 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-private struct AVPSampleBufferDisplayLayerPayload: Codable {
+private struct AVPSampleBufferDisplayLayerPayload: AVPBridge {
     let status: Int32
     let errorMessage: String?
     let videoGravity: String
@@ -39,11 +40,11 @@ public func av_sample_buffer_display_layer_release(_ layerPtr: UnsafeMutableRawP
     Unmanaged<AVSampleBufferDisplayLayer>.fromOpaque(layerPtr).release()
 }
 
-@_cdecl("av_sample_buffer_display_layer_info_json")
-public func av_sample_buffer_display_layer_info_json(
+@_cdecl("av_sample_buffer_display_layer_info_value")
+public func av_sample_buffer_display_layer_info_value(
     _ layerPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let layer = Unmanaged<AVSampleBufferDisplayLayer>.fromOpaque(layerPtr).takeUnretainedValue()
     let payload = AVPSampleBufferDisplayLayerPayload(
         status: avpQueuedSampleBufferRenderingStatusRaw(layer.status),
@@ -62,7 +63,7 @@ public func av_sample_buffer_display_layer_info_json(
         preventsDisplaySleepDuringVideoPlayback: layer.preventsDisplaySleepDuringVideoPlayback
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -72,10 +73,10 @@ public func av_sample_buffer_display_layer_info_json(
 @_cdecl("av_sample_buffer_display_layer_set_video_gravity")
 public func av_sample_buffer_display_layer_set_video_gravity(
     _ layerPtr: UnsafeMutableRawPointer,
-    _ gravityPtr: UnsafePointer<CChar>
+    _ gravityPtr: UnsafePointer<AVPValue>
 ) {
     let layer = Unmanaged<AVSampleBufferDisplayLayer>.fromOpaque(layerPtr).takeUnretainedValue()
-    layer.videoGravity = avpVideoGravity(from: String(cString: gravityPtr))
+    layer.videoGravity = avpVideoGravity(from: String(bridge: gravityPtr))
 }
 
 @_cdecl("av_sample_buffer_display_layer_set_prevents_capture")
@@ -126,4 +127,34 @@ public func av_sample_buffer_display_layer_stop_requesting_media_data(
 ) {
     let layer = Unmanaged<AVSampleBufferDisplayLayer>.fromOpaque(layerPtr).takeUnretainedValue()
     layer.stopRequestingMediaData()
+}
+
+extension AVPSampleBufferDisplayLayerPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            status.binaryValue,
+            errorMessage.binaryValue,
+            videoGravity.binaryValue,
+            readyForDisplay.binaryValue,
+            readyForMoreMediaData.binaryValue,
+            hasSufficientMediaDataForReliablePlaybackStart.binaryValue,
+            requiresFlushToResumeDecoding.binaryValue,
+            preventsCapture.binaryValue,
+            preventsDisplaySleepDuringVideoPlayback.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            status: try binaryValue.field(0),
+            errorMessage: try binaryValue.field(1),
+            videoGravity: try binaryValue.field(2),
+            readyForDisplay: try binaryValue.field(3),
+            readyForMoreMediaData: try binaryValue.field(4),
+            hasSufficientMediaDataForReliablePlaybackStart: try binaryValue.field(5),
+            requiresFlushToResumeDecoding: try binaryValue.field(6),
+            preventsCapture: try binaryValue.field(7),
+            preventsDisplaySleepDuringVideoPlayback: try binaryValue.field(8)
+        )
+    }
 }

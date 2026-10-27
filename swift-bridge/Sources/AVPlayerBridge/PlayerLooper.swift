@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import AVPlayerObjCBridge
 import Foundation
@@ -14,7 +15,7 @@ public func av_player_looper_create(
     _ durationTimescale: Int32,
     _ durationKind: Int32,
     _ itemOrderingRaw: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let player = Unmanaged<AVQueuePlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let templateItem = Unmanaged<AVPlayerItem>.fromOpaque(templateItemPtr).takeUnretainedValue()
@@ -62,11 +63,11 @@ public func av_player_looper_release(_ looperPtr: UnsafeMutableRawPointer?) {
     Unmanaged<AVPlayerLooper>.fromOpaque(looperPtr).release()
 }
 
-@_cdecl("av_player_looper_info_json")
-public func av_player_looper_info_json(
+@_cdecl("av_player_looper_info_value")
+public func av_player_looper_info_value(
     _ looperPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let looper = Unmanaged<AVPlayerLooper>.fromOpaque(looperPtr).takeUnretainedValue()
     let payload = PlayerLooperInfoPayload(
         status: Int32(looper.status.rawValue),
@@ -75,7 +76,7 @@ public func av_player_looper_info_json(
         loopingItemCount: looper.loopingPlayerItems.count
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil

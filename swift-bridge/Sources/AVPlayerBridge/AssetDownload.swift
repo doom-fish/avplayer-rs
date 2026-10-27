@@ -1,17 +1,18 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-private struct AssetDownloadStorageManagementPolicyPayload: Codable {
+private struct AssetDownloadStorageManagementPolicyPayload: AVPBridge {
     let priority: String
     let expirationDateISO8601: String?
 }
 
-private struct AssetDownloadConfigurationPayload: Codable {
+private struct AssetDownloadConfigurationPayload: AVPBridge {
     let optimizesAuxiliaryContentConfigurations: Bool
     let downloadsInterstitialAssets: Bool?
 }
 
-private struct AssetDownloadContentConfigurationPayload: Codable {
+private struct AssetDownloadContentConfigurationPayload: AVPBridge {
     let variantQualifierCount: Int
     let mediaSelectionCount: Int
 }
@@ -26,8 +27,8 @@ public func av_asset_download_storage_manager_shared() -> UnsafeMutableRawPointe
 public func av_asset_download_storage_manager_set_policy_for_file_path(
     _ managerPtr: UnsafeMutableRawPointer,
     _ policyPtr: UnsafeMutableRawPointer,
-    _ pathPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ pathPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadStorageManager requires macOS 10.15")
@@ -35,7 +36,7 @@ public func av_asset_download_storage_manager_set_policy_for_file_path(
     }
     let manager = Unmanaged<AVAssetDownloadStorageManager>.fromOpaque(managerPtr).takeUnretainedValue()
     let policy = Unmanaged<AVAssetDownloadStorageManagementPolicy>.fromOpaque(policyPtr).takeUnretainedValue()
-    let path = String(cString: pathPtr)
+    let path = String(bridge: pathPtr)
     manager.setStorageManagementPolicy(policy, for: URL(fileURLWithPath: path))
     return AVP_OK
 }
@@ -43,15 +44,15 @@ public func av_asset_download_storage_manager_set_policy_for_file_path(
 @_cdecl("av_asset_download_storage_manager_copy_policy_for_file_path")
 public func av_asset_download_storage_manager_copy_policy_for_file_path(
     _ managerPtr: UnsafeMutableRawPointer,
-    _ pathPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ pathPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadStorageManager requires macOS 10.15")
         return nil
     }
     let manager = Unmanaged<AVAssetDownloadStorageManager>.fromOpaque(managerPtr).takeUnretainedValue()
-    let path = String(cString: pathPtr)
+    let path = String(bridge: pathPtr)
     guard let policy = manager.storageManagementPolicy(for: URL(fileURLWithPath: path)) else {
         return nil
     }
@@ -64,23 +65,21 @@ public func av_asset_download_storage_management_policy_create_mutable() -> Unsa
     return Unmanaged.passRetained(AVMutableAssetDownloadStorageManagementPolicy()).toOpaque()
 }
 
-@_cdecl("av_asset_download_storage_management_policy_info_json")
-public func av_asset_download_storage_management_policy_info_json(
+@_cdecl("av_asset_download_storage_management_policy_info_value")
+public func av_asset_download_storage_management_policy_info_value(
     _ policyPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadStorageManagementPolicy requires macOS 10.15")
         return nil
     }
     let policy = Unmanaged<AVAssetDownloadStorageManagementPolicy>.fromOpaque(policyPtr).takeUnretainedValue()
     do {
-        return ffiString(
-            try avpEncodeJSON(
-                AssetDownloadStorageManagementPolicyPayload(
-                    priority: policy.priority.rawValue,
-                    expirationDateISO8601: avpISO8601String(policy.expirationDate)
-                )
+        return try avpEncodeValue(
+            AssetDownloadStorageManagementPolicyPayload(
+                priority: policy.priority.rawValue,
+                expirationDateISO8601: avpISO8601String(policy.expirationDate)
             )
         )
     } catch {
@@ -92,8 +91,8 @@ public func av_asset_download_storage_management_policy_info_json(
 @_cdecl("av_asset_download_storage_management_policy_set_priority")
 public func av_asset_download_storage_management_policy_set_priority(
     _ policyPtr: UnsafeMutableRawPointer,
-    _ priorityPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ priorityPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadStorageManagementPolicy requires macOS 10.15")
@@ -105,15 +104,15 @@ public func av_asset_download_storage_management_policy_set_priority(
         outErrorMessage?.pointee = ffiString("storage management policy is not mutable")
         return AVP_INVALID_ARGUMENT
     }
-    mutablePolicy.priority = AVAssetDownloadedAssetEvictionPriority(rawValue: String(cString: priorityPtr))
+    mutablePolicy.priority = AVAssetDownloadedAssetEvictionPriority(rawValue: String(bridge: priorityPtr))
     return AVP_OK
 }
 
 @_cdecl("av_asset_download_storage_management_policy_set_expiration_date_iso8601")
 public func av_asset_download_storage_management_policy_set_expiration_date_iso8601(
     _ policyPtr: UnsafeMutableRawPointer,
-    _ valuePtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ valuePtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadStorageManagementPolicy requires macOS 10.15")
@@ -125,7 +124,7 @@ public func av_asset_download_storage_management_policy_set_expiration_date_iso8
         outErrorMessage?.pointee = ffiString("storage management policy is not mutable")
         return AVP_INVALID_ARGUMENT
     }
-    guard let date = avpDate(fromISO8601: String(cString: valuePtr)) else {
+    guard let date = avpDate(fromISO8601: String(bridge: valuePtr)) else {
         outErrorMessage?.pointee = ffiString("invalid ISO-8601 expiration date")
         return AVP_INVALID_ARGUMENT
     }
@@ -136,8 +135,8 @@ public func av_asset_download_storage_management_policy_set_expiration_date_iso8
 @_cdecl("av_asset_download_configuration_create")
 public func av_asset_download_configuration_create(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ titlePtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ titlePtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadConfiguration requires macOS 12.0")
@@ -148,15 +147,15 @@ public func av_asset_download_configuration_create(
         outErrorMessage?.pointee = ffiString("download configuration requires AVURLAsset")
         return nil
     }
-    let title = String(cString: titlePtr)
+    let title = String(bridge: titlePtr)
     return Unmanaged.passRetained(AVAssetDownloadConfiguration(asset: urlAsset, title: title)).toOpaque()
 }
 
-@_cdecl("av_asset_download_configuration_info_json")
-public func av_asset_download_configuration_info_json(
+@_cdecl("av_asset_download_configuration_info_value")
+public func av_asset_download_configuration_info_value(
     _ configurationPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadConfiguration requires macOS 12.0")
         return nil
@@ -172,7 +171,7 @@ public func av_asset_download_configuration_info_json(
         }()
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -193,7 +192,7 @@ public func av_asset_download_configuration_set_optimizes_auxiliary_content_conf
 public func av_asset_download_configuration_set_downloads_interstitial_assets(
     _ configurationPtr: UnsafeMutableRawPointer,
     _ enabled: Bool,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 15.0, *) else {
         outErrorMessage?.pointee = ffiString("downloadsInterstitialAssets requires macOS 15.0")
@@ -265,11 +264,11 @@ public func av_asset_download_content_configuration_create() -> UnsafeMutableRaw
     return Unmanaged.passRetained(AVAssetDownloadContentConfiguration()).toOpaque()
 }
 
-@_cdecl("av_asset_download_content_configuration_info_json")
-public func av_asset_download_content_configuration_info_json(
+@_cdecl("av_asset_download_content_configuration_info_value")
+public func av_asset_download_content_configuration_info_value(
     _ configurationPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadContentConfiguration requires macOS 12.0")
         return nil
@@ -280,7 +279,7 @@ public func av_asset_download_content_configuration_info_json(
         mediaSelectionCount: configuration.mediaSelections.count
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -366,14 +365,14 @@ private func assetVariantQualifiersFromPointers(
     }
 }
 
-private struct AssetDownloadTaskInfoPayload: Codable {
+private struct AssetDownloadTaskInfoPayload: AVPBridge {
     let taskIdentifier: Int
     let urlAssetURL: String?
     let state: Int
     let loadedTimeRanges: [TimeRangePayload]
 }
 
-private struct AssetDownloadDelegateEventPayload: Codable {
+private struct AssetDownloadDelegateEventPayload: AVPBridge {
     let event: String
     let taskIdentifier: Int
     let location: String?
@@ -385,10 +384,10 @@ private struct AssetDownloadDelegateEventPayload: Codable {
 }
 
 private final class AssetDownloadDelegateBridge: NSObject, AVAssetDownloadDelegate {
-    private let callback: AVPJsonCallback?
+    private let callback: AVPValueCallback?
     private let gate: AVPCallbackGate
 
-    init(callback: AVPJsonCallback?, gate: AVPCallbackGate) {
+    init(callback: AVPValueCallback?, gate: AVPCallbackGate) {
         self.callback = callback
         self.gate = gate
         super.init()
@@ -401,7 +400,7 @@ private final class AssetDownloadDelegateBridge: NSObject, AVAssetDownloadDelega
 
     private func send(_ payload: AssetDownloadDelegateEventPayload) {
         guard let callback else { return }
-        gate.deliverJSON(payload, to: callback)
+        gate.deliverValue(payload, to: callback)
     }
 
     func urlSession(
@@ -569,7 +568,7 @@ private final class AssetDownloadURLSessionBox: NSObject {
     let underlyingQueue: DispatchQueue?
     let session: AVAssetDownloadURLSession
 
-    init(identifier: String, queueLabel: String?, callback: AVPJsonCallback?, gate: AVPCallbackGate) {
+    init(identifier: String, queueLabel: String?, callback: AVPValueCallback?, gate: AVPCallbackGate) {
         delegateBridge = AssetDownloadDelegateBridge(callback: callback, gate: gate)
         if let queueLabel {
             let queue = OperationQueue()
@@ -623,20 +622,20 @@ private func makeAggregateAssetDownloadTaskInfoPayload(_ task: AVAggregateAssetD
 
 @_cdecl("av_asset_download_url_session_create_background")
 public func av_asset_download_url_session_create_background(
-    _ identifierPtr: UnsafePointer<CChar>,
-    _ queueLabelPtr: UnsafePointer<CChar>?,
-    _ callback: AVPJsonCallback?,
+    _ identifierPtr: UnsafePointer<AVPValue>,
+    _ queueLabelPtr: UnsafePointer<AVPValue>?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadURLSession requires macOS 10.15")
         return nil
     }
-    let identifier = String(cString: identifierPtr)
-    let queueLabel = queueLabelPtr.map { String(cString: $0) }
+    let identifier = String(bridge: identifierPtr)
+    let queueLabel = queueLabelPtr.map { String(bridge: $0) }
     let box = AssetDownloadURLSessionBox(
         identifier: identifier,
         queueLabel: queueLabel,
@@ -674,7 +673,7 @@ public func av_asset_download_url_session_invalidate_and_cancel(
 public func av_asset_download_url_session_create_task_with_configuration(
     _ sessionPtr: UnsafeMutableRawPointer,
     _ configurationPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetDownloadTask requires macOS 12.0")
@@ -691,10 +690,10 @@ public func av_asset_download_url_session_create_aggregate_task(
     _ assetPtr: UnsafeMutableRawPointer,
     _ mediaSelectionPtrs: UnsafePointer<UnsafeMutableRawPointer?>?,
     _ count: Int,
-    _ titlePtr: UnsafePointer<CChar>,
+    _ titlePtr: UnsafePointer<AVPValue>,
     _ artworkBytes: UnsafePointer<UInt8>?,
     _ artworkLen: Int,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVAggregateAssetDownloadTask requires macOS 10.15")
@@ -709,7 +708,7 @@ public func av_asset_download_url_session_create_aggregate_task(
     let task = box.session.aggregateAssetDownloadTask(
         with: urlAsset,
         mediaSelections: mediaSelectionsFromPointers(mediaSelectionPtrs, count: count),
-        assetTitle: String(cString: titlePtr),
+        assetTitle: String(bridge: titlePtr),
         assetArtworkData: artworkBytes.map { Data(bytes: $0, count: artworkLen) },
         options: nil
     )
@@ -720,28 +719,28 @@ public func av_asset_download_url_session_create_aggregate_task(
     return Unmanaged.passRetained(task).toOpaque()
 }
 
-@_cdecl("av_asset_download_task_info_json")
-public func av_asset_download_task_info_json(
+@_cdecl("av_asset_download_task_info_value")
+public func av_asset_download_task_info_value(
     _ taskPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let task = Unmanaged<AVAssetDownloadTask>.fromOpaque(taskPtr).takeUnretainedValue()
     do {
-        return ffiString(try avpEncodeJSON(makeAssetDownloadTaskInfoPayload(task)))
+        return try avpEncodeValue(makeAssetDownloadTaskInfoPayload(task))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
     }
 }
 
-@_cdecl("av_aggregate_asset_download_task_info_json")
-public func av_aggregate_asset_download_task_info_json(
+@_cdecl("av_aggregate_asset_download_task_info_value")
+public func av_aggregate_asset_download_task_info_value(
     _ taskPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let task = Unmanaged<AVAggregateAssetDownloadTask>.fromOpaque(taskPtr).takeUnretainedValue()
     do {
-        return ffiString(try avpEncodeJSON(makeAggregateAssetDownloadTaskInfoPayload(task)))
+        return try avpEncodeValue(makeAggregateAssetDownloadTaskInfoPayload(task))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -764,4 +763,100 @@ public func av_asset_download_task_suspend(_ taskPtr: UnsafeMutableRawPointer) {
 public func av_asset_download_task_cancel(_ taskPtr: UnsafeMutableRawPointer) {
     let task = Unmanaged<URLSessionTask>.fromOpaque(taskPtr).takeUnretainedValue()
     task.cancel()
+}
+
+extension AssetDownloadStorageManagementPolicyPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            priority.binaryValue,
+            expirationDateISO8601.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            priority: try binaryValue.field(0),
+            expirationDateISO8601: try binaryValue.field(1)
+        )
+    }
+}
+
+extension AssetDownloadConfigurationPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            optimizesAuxiliaryContentConfigurations.binaryValue,
+            downloadsInterstitialAssets.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            optimizesAuxiliaryContentConfigurations: try binaryValue.field(0),
+            downloadsInterstitialAssets: try binaryValue.field(1)
+        )
+    }
+}
+
+extension AssetDownloadContentConfigurationPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            variantQualifierCount.binaryValue,
+            mediaSelectionCount.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            variantQualifierCount: try binaryValue.field(0),
+            mediaSelectionCount: try binaryValue.field(1)
+        )
+    }
+}
+
+extension AssetDownloadTaskInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            taskIdentifier.binaryValue,
+            urlAssetURL.binaryValue,
+            state.binaryValue,
+            loadedTimeRanges.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            taskIdentifier: try binaryValue.field(0),
+            urlAssetURL: try binaryValue.field(1),
+            state: try binaryValue.field(2),
+            loadedTimeRanges: try binaryValue.field(3)
+        )
+    }
+}
+
+extension AssetDownloadDelegateEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            taskIdentifier.binaryValue,
+            location.binaryValue,
+            loadedTimeRange.binaryValue,
+            totalTimeRangesLoaded.binaryValue,
+            timeRangeExpectedToLoad.binaryValue,
+            variantCount.binaryValue,
+            metricEventClassName.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            taskIdentifier: try binaryValue.field(1),
+            location: try binaryValue.field(2),
+            loadedTimeRange: try binaryValue.field(3),
+            totalTimeRangesLoaded: try binaryValue.field(4),
+            timeRangeExpectedToLoad: try binaryValue.field(5),
+            variantCount: try binaryValue.field(6),
+            metricEventClassName: try binaryValue.field(7)
+        )
+    }
 }

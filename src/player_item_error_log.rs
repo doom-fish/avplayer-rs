@@ -1,26 +1,23 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
 use crate::retained::retain_release_wrapper;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct ErrorLogPayload {
     extended_log: Option<String>,
     extended_log_data_string_encoding: usize,
     events: Vec<ErrorLogEventPayload>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct ErrorLogEventPayload {
     date: Option<String>,
     uri: Option<String>,
@@ -85,12 +82,12 @@ unsafe impl Send for PlayerItemErrorLog {}
 
 impl PlayerItemErrorLog {
     fn info(&self) -> Result<ErrorLogPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_error_log_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_player_item_error_log_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `extended_log`.
@@ -122,5 +119,30 @@ impl PlayerItem {
             return Ok(None);
         }
         Ok(Some(PlayerItemErrorLog { ptr }))
+    }
+}
+
+impl crate::binary::FromValue for ErrorLogPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            extended_log: value.field(0)?,
+            extended_log_data_string_encoding: value.field(1)?,
+            events: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for ErrorLogEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            date: value.field(0)?,
+            uri: value.field(1)?,
+            server_address: value.field(2)?,
+            playback_session_id: value.field(3)?,
+            error_status_code: value.field(4)?,
+            error_domain: value.field(5)?,
+            error_comment: value.field(6)?,
+            all_http_response_header_fields: value.field(7)?,
+        })
     }
 }

@@ -1,12 +1,11 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use crate::util::parse_value_and_free;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::{CStr, CString};
 use std::path::Path;
-
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -15,26 +14,23 @@ use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::take_object_array;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetInfoPayload {
     url: Option<String>,
     duration: Time,
     metadata: Vec<MetadataItem>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct TrackInfoPayload {
     track_id: i32,
     media_type: String,
     natural_size: Size,
-    nominal_frame_rate: String,
-    estimated_data_rate: String,
+    nominal_frame_rate: f32,
+    estimated_data_rate: f32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct KeyLoadStatusPayload {
     key: String,
     status: i32,
@@ -85,8 +81,8 @@ impl MediaType {
     }
 }
 
-/// Serializable `CGSize` mirror.
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+/// Native `CGSize` mirror.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Size {
     /// Width in points / pixels depending on API context.
     pub width: f64,
@@ -145,12 +141,12 @@ retain_release_wrapper!(Asset, release = ffi::av_asset_release);
 
 impl Asset {
     fn info(&self) -> Result<AssetInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Asset duration.
@@ -170,10 +166,10 @@ impl Asset {
 
     /// Query the current load status of a key without triggering loading.
     pub fn status_of_value(&self, key: &str) -> Result<KeyValueStatus, AVPlayerError> {
-        let key = CString::new(key).map_err(|error| {
+        let key = InputString::new(key).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("key contains NUL byte: {error}"))
         })?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let raw = unsafe { ffi::av_asset_status_of_value(self.ptr, key.as_ptr(), &raw mut err) };
         if raw < 0 {
             return Err(unsafe { from_swift(raw, err) });
@@ -194,19 +190,14 @@ impl Asset {
             .into_iter()
             .map(|key| key.as_ref().to_owned())
             .collect::<Vec<_>>();
-        let json = serde_json::to_string(&keys).map_err(|error| {
-            AVPlayerError::InvalidArgument(format!("failed to encode keys: {error}"))
-        })?;
-        let json = CString::new(json).map_err(|error| {
-            AVPlayerError::InvalidArgument(format!("keys JSON contains NUL byte: {error}"))
-        })?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let value = crate::util::value_buffer(&keys, "asset keys")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let statuses_ptr =
-            unsafe { ffi::av_asset_load_values_json(self.ptr, json.as_ptr(), 30, &raw mut err) };
+            unsafe { ffi::av_asset_load_values_value(self.ptr, value.as_ptr(), 30, &raw mut err) };
         if statuses_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::LOAD_FAILED, err) });
         }
-        let raw_statuses: Vec<KeyLoadStatusPayload> = parse_json_and_free(statuses_ptr)?;
+        let raw_statuses: Vec<KeyLoadStatusPayload> = parse_value_and_free(statuses_ptr)?;
         Ok(raw_statuses
             .into_iter()
             .map(|status| KeyLoadStatus {
@@ -220,7 +211,7 @@ impl Asset {
     /// Enumerate all tracks owned by the asset.
     pub fn tracks(&self) -> Result<Vec<AssetTrack>, AVPlayerError> {
         let mut status = ffi::status::OK;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let array = unsafe { ffi::av_asset_load_tracks(self.ptr, &raw mut status, &raw mut err) };
         if array.is_null() {
             let status = if status == ffi::status::OK {
@@ -264,10 +255,10 @@ impl UrlAsset {
         is_file_url: bool,
         prefer_precise_duration_and_timing: bool,
     ) -> Result<Self, AVPlayerError> {
-        let url = CString::new(url).map_err(|error| {
+        let url = InputString::new(url).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
         })?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_url_asset_create(
                 url.as_ptr(),
@@ -356,12 +347,12 @@ unsafe impl Send for AssetTrack {}
 
 impl AssetTrack {
     fn info(&self) -> Result<TrackInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_track_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_track_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Persistent track identifier.
@@ -381,29 +372,52 @@ impl AssetTrack {
 
     /// Nominal frame rate when video-bearing.
     pub fn nominal_frame_rate(&self) -> Result<Option<f32>, AVPlayerError> {
-        self.info()?
-            .nominal_frame_rate
-            .parse::<f32>()
-            .ok()
-            .map_or_else(|| Ok(None), |value| Ok(Some(value)))
+        Ok(Some(self.info()?.nominal_frame_rate))
     }
 
     /// Estimated data rate in bits per second.
     pub fn estimated_data_rate(&self) -> Result<Option<f32>, AVPlayerError> {
-        self.info()?
-            .estimated_data_rate
-            .parse::<f32>()
-            .ok()
-            .map_or_else(|| Ok(None), |value| Ok(Some(value)))
+        Ok(Some(self.info()?.estimated_data_rate))
     }
 }
 
-fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, AVPlayerError> {
-    let json = unsafe { CStr::from_ptr(json_ptr) }
-        .to_string_lossy()
-        .into_owned();
-    unsafe { ffi::avp_string_free(json_ptr) };
-    serde_json::from_str::<T>(&json).map_err(|error| {
-        AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}"))
-    })
+impl crate::binary::FromValue for AssetInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            url: value.field(0)?,
+            duration: value.field(1)?,
+            metadata: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for TrackInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            track_id: value.field(0)?,
+            media_type: value.field(1)?,
+            natural_size: value.field(2)?,
+            nominal_frame_rate: value.field(3)?,
+            estimated_data_rate: value.field(4)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for KeyLoadStatusPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            key: value.field(0)?,
+            status: value.field(1)?,
+            error_message: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for Size {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            width: value.field(0)?,
+            height: value.field(1)?,
+        })
+    }
 }

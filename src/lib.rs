@@ -12,6 +12,7 @@ mod asset_variant;
 #[cfg(feature = "async")]
 #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub mod async_api;
+mod binary;
 mod content_key_session;
 mod error;
 /// Groups `AVPlayer` framework constants for `ffi`.
@@ -71,6 +72,7 @@ pub use asset_variant::{
     AssetVariant, AssetVariantAudioAttributes, AssetVariantAudioRenditionSpecificAttributes,
     AssetVariantQualifier, AssetVariantVideoAttributes, AssetVariantVideoLayoutAttributes,
 };
+pub use binary::PropertyValue;
 /// Re-exports the `AVPlayer` framework surface for this item.
 pub use content_key_session::{
     ContentKey, ContentKeyEvent, ContentKeyIdentifier, ContentKeyRequest, ContentKeyRequestOptions,

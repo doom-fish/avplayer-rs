@@ -2,13 +2,10 @@
 
 Safe Rust bindings for Apple's [AVFoundation playback stack](https://developer.apple.com/documentation/avfoundation) on macOS: `AVPlayer`, `AVPlayerItem`, `AVPlayerLayer`, `AVQueuePlayer`, `AVPlayerLooper`, `AVAsset`, `AVURLAsset`, and `AVAssetReader`.
 
-> **Status:** `0.8.0` is a soundness release. Observer, delegate and stream
-> callbacks keep their Rust context alive until the framework can no longer
-> call them, blocking helpers no longer write into the caller's memory after a
-> timeout, and documented Objective-C exception preconditions return errors
-> instead of aborting the process. Video and caption outputs now deliver the
-> actual `CVPixelBuffer`/`CMSampleBuffer` objects. See [`CHANGELOG.md`](CHANGELOG.md)
-> and [`COVERAGE.md`](COVERAGE.md).
+> **Status:** `0.10.0` replaces the JSON bridge with native C records.
+> The safe playback API stays the same.
+> Interstitial attributes use `PropertyValue`, and Rust serialization traits are removed.
+> See [`CHANGELOG.md`](CHANGELOG.md) and [`COVERAGE.md`](COVERAGE.md).
 
 Requires macOS 12.0 or later. Interstitial event creation, playback configuration options,
 and the default rate setter return an error before macOS 13.0. The displayed pixel buffer returns `None`.
@@ -41,7 +38,7 @@ Enable the `async` Cargo feature for executor-agnostic `Future` wrappers around
 `AVFoundation`'s `async throws` and completion-handler APIs:
 
 ```toml
-avplayer = { version = "0.8", features = ["async"] }
+avplayer = { version = "0.10", features = ["async"] }
 ```
 
 ```rust,no_run
@@ -82,6 +79,7 @@ callbacks while the process's main run loop is running. A command-line tool or
 test whose main thread blocks (for example in `join()`) sees players stay in
 `PlayerStatus::Unknown`. Run the main run loop (`CFRunLoopRun`, an app event
 loop) and drive the player from it or from another thread.
+The async example runs the main run loop while a worker waits for completion.
 
 Time observers registered without a queue label, and other observers that
 deliver on the main queue, fire on the main thread. Observers registered with a
@@ -102,6 +100,30 @@ queue label fire on a private serial queue.
 - Dropping an `AssetDownloadURLSession` calls `finishTasksAndInvalidate()`.
   Downloads already running continue in the background without delivering
   events; call `invalidate_and_cancel()` first to stop them.
+
+## Binary bridge
+
+`swift-bridge/Sources/AVPlayerABI/include/AVPlayerABI.h` and `src/ffi/value.rs` define the same C layout.
+Each Rust and Swift record maps its fields explicitly.
+Strings and byte buffers use a pointer and a length.
+Arrays use a pointer and an element count.
+Object handles stay opaque.
+The bridge uses no text format.
+
+Rust owns input buffers until the call returns.
+Swift owns each returned root and its nested buffers.
+Release a returned root once with `ffi::avp_value_free`.
+Observer callback buffers are borrowed until the callback returns.
+Rust copies observer fields and retains object handles before that return.
+Async completion results transfer ownership to Rust.
+
+Raw FFI symbols with an `_json` suffix now use `_value`.
+Raw string parameters and results also use `ffi::AVPValue`.
+The callback types are `ValueCallback`, `BoolValueCallback`, and `ValueObjectsCallback`.
+These raw ABI changes require both sides to use version `0.10`.
+
+`PropertyValue` supports null, booleans, signed integers, unsigned integers, real numbers, strings, byte buffers, arrays, and dictionaries.
+It replaces the generic value type in `PlayerInterstitialEventInfo`.
 
 ## Errors instead of Objective-C exceptions
 

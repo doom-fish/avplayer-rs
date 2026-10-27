@@ -1,9 +1,8 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -11,7 +10,7 @@ use crate::metadata::MetadataItem;
 use crate::player::PlayerItem;
 use crate::retained::retain_release_wrapper;
 use crate::util::{
-    deliver, json_cstring, json_payload, parse_json_and_free, Handler, Registration,
+    deliver, parse_value_and_free, value_buffer, value_payload, Handler, Registration,
 };
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerItemMediaDataCollectorKind`.
@@ -33,8 +32,7 @@ impl PlayerItemMediaDataCollectorKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PlayerItemMediaDataCollectorInfoPayload {
     kind: String,
 }
@@ -54,8 +52,7 @@ impl From<PlayerItemMediaDataCollectorInfoPayload> for PlayerItemMediaDataCollec
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct MetadataCollectorInfoPayload {
     identifiers: Option<Vec<String>>,
     classifying_labels: Option<Vec<String>>,
@@ -63,8 +60,7 @@ struct MetadataCollectorInfoPayload {
 }
 
 /// Mirrors the `AVPlayer` framework counterpart for `DateRangeMetadataGroup`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DateRangeMetadataGroup {
     /// Mirrors the `AVPlayer` framework property for `start_date`.
     pub start_date: String,
@@ -78,8 +74,7 @@ pub struct DateRangeMetadataGroup {
     pub items: Vec<MetadataItem>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct MetadataCollectorEventPayload {
     event: String,
     groups: Vec<DateRangeMetadataGroup>,
@@ -130,22 +125,22 @@ impl PlayerItemMetadataCollector {
         });
         let identifiers = identifiers
             .as_ref()
-            .map(|values| json_cstring(values, "metadata collector identifiers"))
+            .map(|values| value_buffer(values, "metadata collector identifiers"))
             .transpose()?;
         let classifying_labels = classifying_labels
             .as_ref()
-            .map(|values| json_cstring(values, "metadata collector classifying labels"))
+            .map(|values| value_buffer(values, "metadata collector classifying labels"))
             .transpose()?;
 
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_metadata_collector_create(
                 identifiers
                     .as_ref()
-                    .map_or(ptr::null(), |values| values.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 classifying_labels
                     .as_ref()
-                    .map_or(ptr::null(), |values| values.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -156,13 +151,13 @@ impl PlayerItemMetadataCollector {
     }
 
     fn info(&self) -> Result<MetadataCollectorInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_item_metadata_collector_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_player_item_metadata_collector_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `identifiers`.
@@ -201,7 +196,7 @@ impl PlayerItemMetadataCollector {
                     self.ptr,
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(metadata_collector_event_trampoline),
                     userdata,
                     drop_userdata,
@@ -230,7 +225,7 @@ impl PlayerItem {
         &self,
         collector: &PlayerItemMetadataCollector,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_item_add_media_data_collector(self.ptr, collector.ptr, &raw mut err)
         };
@@ -249,14 +244,14 @@ impl PlayerItem {
     pub fn media_data_collectors(
         &self,
     ) -> Result<Vec<PlayerItemMediaDataCollectorInfo>, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_item_media_data_collectors_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_player_item_media_data_collectors_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
         Ok(
-            parse_json_and_free::<Vec<PlayerItemMediaDataCollectorInfoPayload>>(json_ptr)?
+            parse_value_and_free::<Vec<PlayerItemMediaDataCollectorInfoPayload>>(value_ptr)?
                 .into_iter()
                 .map(PlayerItemMediaDataCollectorInfo::from)
                 .collect(),
@@ -266,9 +261,9 @@ impl PlayerItem {
 
 unsafe extern "C" fn metadata_collector_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
-    let Some(payload) = (unsafe { json_payload::<MetadataCollectorEventPayload>(payload_json) })
+    let Some(payload) = (unsafe { value_payload::<MetadataCollectorEventPayload>(payload_value) })
     else {
         return;
     };
@@ -285,4 +280,45 @@ unsafe extern "C" fn metadata_collector_event_trampoline(
     };
 
     unsafe { deliver(userdata, "metadata_collector_event_trampoline", event) };
+}
+
+impl crate::binary::FromValue for PlayerItemMediaDataCollectorInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            kind: value.field(0)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for MetadataCollectorInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            identifiers: value.field(0)?,
+            classifying_labels: value.field(1)?,
+            has_delegate: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for DateRangeMetadataGroup {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            start_date: value.field(0)?,
+            end_date: value.field(1)?,
+            classifying_label: value.field(2)?,
+            unique_id: value.field(3)?,
+            items: value.field(4)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for MetadataCollectorEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            groups: value.field(1)?,
+            new_indices: value.field(2)?,
+            modified_indices: value.field(3)?,
+        })
+    }
 }

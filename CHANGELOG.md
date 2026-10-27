@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-27
+
+### Changed
+
+- **BREAKING:** Replace every bridge payload with native C records, pointer-length buffers, and opaque object handles.
+- **BREAKING:** Replace generic interstitial attribute values with `PropertyValue`.
+- **BREAKING:** Remove Rust serialization trait implementations. Rename raw `_json` symbols to `_value`.
+- Preserve the safe playback API, callback lifetime rules, and native video buffers.
+
+### Fixed
+
+- Keep late playback-configuration results in Swift state after a timeout.
+- Run the main run loop in the async example before preroll.
+- Map async media-type names to the native AVFoundation identifiers.
+
+### Removed
+
+- Remove `serde` and `serde_json` from the crate and all Swift JSON coding from the bridge.
+
 ## [0.9.1] - 2026-10-26
 
 ### Fixed

@@ -1,10 +1,11 @@
+import AVPlayerABI
 import AVFoundation
 import AVPlayerObjCBridge
 import Foundation
 
 @_cdecl("av_queue_player_create")
 public func av_queue_player_create(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     Unmanaged.passRetained(AVQueuePlayer()).toOpaque()
 }
@@ -13,7 +14,7 @@ public func av_queue_player_create(
 public func av_queue_player_create_with_items(
     _ itemPtrs: UnsafePointer<UnsafeMutableRawPointer?>?,
     _ count: Int,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
         let items = try playerItemsFromPointers(itemPtrs, count: count)
@@ -80,7 +81,7 @@ public func av_queue_player_insert_item_after_item(
     _ playerPtr: UnsafeMutableRawPointer,
     _ itemPtr: UnsafeMutableRawPointer,
     _ afterItemPtr: UnsafeMutableRawPointer?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let player = Unmanaged<AVQueuePlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()

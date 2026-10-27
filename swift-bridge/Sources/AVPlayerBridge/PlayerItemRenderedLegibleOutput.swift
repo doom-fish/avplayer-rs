@@ -1,21 +1,22 @@
+import AVPlayerABI
 import AVFoundation
 import CoreVideo
 import Foundation
 
-struct RenderedLegibleOutputInfoPayload: Codable {
+struct RenderedLegibleOutputInfoPayload: AVPBridge {
     let suppressesPlayerRendering: Bool
     let advanceIntervalForDelegateInvocation: Double
     let videoDisplaySize: SizePayload
 }
 
-struct RenderedCaptionImagePayload: Codable {
+struct RenderedCaptionImagePayload: AVPBridge {
     let x: Double
     let y: Double
     let width: Int
     let height: Int
 }
 
-struct RenderedLegibleOutputEventPayload: Codable {
+struct RenderedLegibleOutputEventPayload: AVPBridge {
     let event: String
     let itemTime: TimePayload?
     let captionImages: [RenderedCaptionImagePayload]?
@@ -37,13 +38,13 @@ final class AVPPlayerItemRenderedLegibleOutputBox: AVPPlayerItemOutputBox {
 @available(macOS 15.0, *)
 final class RenderedLegibleOutputObserverBox: NSObject, AVPlayerItemRenderedLegibleOutputPushDelegate {
     private weak var output: AVPlayerItemRenderedLegibleOutput?
-    private let callback: AVPJsonObjectsCallback
+    private let callback: AVPValueObjectsCallback
     private let gate: AVPCallbackGate
 
     init(
         output: AVPlayerItemRenderedLegibleOutput,
         queue: DispatchQueue?,
-        callback: @escaping AVPJsonObjectsCallback,
+        callback: @escaping AVPValueObjectsCallback,
         gate: AVPCallbackGate
     ) {
         self.output = output
@@ -64,7 +65,7 @@ final class RenderedLegibleOutputObserverBox: NSObject, AVPlayerItemRenderedLegi
     }
 
     func outputSequenceWasFlushed(_ output: AVPlayerItemOutput) {
-        gate.deliverJSON(
+        gate.deliverValue(
             RenderedLegibleOutputEventPayload(event: "sequence_was_flushed", itemTime: nil, captionImages: nil),
             objects: [],
             to: callback
@@ -81,7 +82,7 @@ final class RenderedLegibleOutputObserverBox: NSObject, AVPlayerItemRenderedLegi
             itemTime: encodeTime(itemTime),
             captionImages: captionImages.map(encodeRenderedCaptionImage)
         )
-        gate.deliverJSON(payload, objects: captionImages.map { $0.pixelBuffer }, to: callback)
+        gate.deliverValue(payload, objects: captionImages.map { $0.pixelBuffer }, to: callback)
     }
 }
 
@@ -89,7 +90,7 @@ final class RenderedLegibleOutputObserverBox: NSObject, AVPlayerItemRenderedLegi
 public func av_player_item_rendered_legible_output_create(
     _ width: Double,
     _ height: Double,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 15.0, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerItemRenderedLegibleOutput requires macOS 15.0+")
@@ -104,11 +105,11 @@ public func av_player_item_rendered_legible_output_create(
     return Unmanaged.passRetained(AVPPlayerItemRenderedLegibleOutputBox(renderedOutput: output)).toOpaque()
 }
 
-@_cdecl("av_player_item_rendered_legible_output_info_json")
-public func av_player_item_rendered_legible_output_info_json(
+@_cdecl("av_player_item_rendered_legible_output_info_value")
+public func av_player_item_rendered_legible_output_info_value(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerItemRenderedLegibleOutput requires macOS 15.0+")
         return nil
@@ -120,7 +121,7 @@ public func av_player_item_rendered_legible_output_info_json(
         videoDisplaySize: encodeSize(box.renderedOutput.videoDisplaySize)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -152,11 +153,11 @@ public func av_player_item_rendered_legible_output_set_video_display_size(
 @_cdecl("av_player_item_rendered_legible_output_add_observer")
 public func av_player_item_rendered_legible_output_add_observer(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPJsonObjectsCallback?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
+    _ callback: AVPValueObjectsCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 15.0, *) else {
@@ -195,4 +196,60 @@ private func encodeRenderedCaptionImage(_ image: AVRenderedCaptionImage) -> Rend
         width: CVPixelBufferGetWidth(image.pixelBuffer),
         height: CVPixelBufferGetHeight(image.pixelBuffer)
     )
+}
+
+extension RenderedLegibleOutputInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            suppressesPlayerRendering.binaryValue,
+            advanceIntervalForDelegateInvocation.binaryValue,
+            videoDisplaySize.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            suppressesPlayerRendering: try binaryValue.field(0),
+            advanceIntervalForDelegateInvocation: try binaryValue.field(1),
+            videoDisplaySize: try binaryValue.field(2)
+        )
+    }
+}
+
+extension RenderedCaptionImagePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            x.binaryValue,
+            y.binaryValue,
+            width.binaryValue,
+            height.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            x: try binaryValue.field(0),
+            y: try binaryValue.field(1),
+            width: try binaryValue.field(2),
+            height: try binaryValue.field(3)
+        )
+    }
+}
+
+extension RenderedLegibleOutputEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            itemTime.binaryValue,
+            captionImages.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            itemTime: try binaryValue.field(1),
+            captionImages: try binaryValue.field(2)
+        )
+    }
 }

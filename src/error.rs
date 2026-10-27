@@ -1,5 +1,6 @@
 //! Errors produced by the `AVPlayer` / `AVAssetReader` bridge.
 
+use crate::ffi::AVPValue;
 use core::fmt;
 
 use crate::ffi;
@@ -45,15 +46,11 @@ impl fmt::Display for AVPlayerError {
 impl std::error::Error for AVPlayerError {}
 
 /// Calls the `AVPlayer` framework counterpart for `from_swift`.
-pub unsafe fn from_swift(status: i32, error_str: *mut core::ffi::c_char) -> AVPlayerError {
+pub unsafe fn from_swift(status: i32, error_str: *mut AVPValue) -> AVPlayerError {
     let message = if error_str.is_null() {
         String::new()
     } else {
-        let s = core::ffi::CStr::from_ptr(error_str)
-            .to_string_lossy()
-            .into_owned();
-        ffi::avp_string_free(error_str);
-        s
+        unsafe { crate::binary::take_string(error_str) }.unwrap_or_else(|error| error.to_string())
     };
 
     match status {

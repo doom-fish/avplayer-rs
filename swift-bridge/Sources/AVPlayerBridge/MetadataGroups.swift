@@ -1,21 +1,22 @@
+import AVPlayerABI
 import AVFoundation
 import CoreMedia
 import Foundation
 
-private struct AVPMetadataGroupPayload: Codable {
+private struct AVPMetadataGroupPayload: AVPBridge {
     let items: [MetadataItemPayload]
     let classifyingLabel: String?
     let uniqueId: String?
 }
 
-private struct AVPTimedMetadataGroupPayload: Codable {
+private struct AVPTimedMetadataGroupPayload: AVPBridge {
     let items: [MetadataItemPayload]
     let classifyingLabel: String?
     let uniqueId: String?
     let timeRange: TimeRangePayload
 }
 
-private struct AVPDateRangeMetadataGroupPayload: Codable {
+private struct AVPDateRangeMetadataGroupPayload: AVPBridge {
     let items: [MetadataItemPayload]
     let classifyingLabel: String?
     let uniqueId: String?
@@ -23,7 +24,7 @@ private struct AVPDateRangeMetadataGroupPayload: Codable {
     let endDate: String?
 }
 
-private struct AVPMutableMetadataItemPayload: Codable {
+private struct AVPMutableMetadataItemPayload: AVPBridge {
     let identifier: String?
     let extendedLanguageTag: String?
     let localeIdentifier: String?
@@ -68,31 +69,31 @@ private func encodeDateRangeMetadataGroupHandle(
 }
 
 private func decodeMetadataItems(
-    _ itemsJson: UnsafePointer<CChar>?
+    _ itemsValue: UnsafePointer<AVPValue>?
 ) throws -> [AVMetadataItem] {
-    let payloads = try avpDecodeJSON(itemsJson, as: [MetadataItemPayload].self)
+    let payloads = try avpDecodeValue(itemsValue, as: [MetadataItemPayload].self)
     return avpMetadataItems(from: payloads)
 }
 
 private func decodeDate(
-    _ value: UnsafePointer<CChar>?,
+    _ value: UnsafePointer<AVPValue>?,
     parameterName: String
 ) throws -> Date {
-    let raw = String(cString: value!)
+    let raw = String(bridge: value!)
     guard let date = avpDate(fromISO8601: raw) else {
         throw BridgeError.message("invalid ISO-8601 date for \(parameterName)")
     }
     return date
 }
 
-@_cdecl("av_metadata_group_info_json")
-public func av_metadata_group_info_json(
+@_cdecl("av_metadata_group_info_value")
+public func av_metadata_group_info_value(
     _ groupPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let group = Unmanaged<AVMetadataGroup>.fromOpaque(groupPtr).takeUnretainedValue()
     do {
-        return ffiString(try avpEncodeJSON(encodeMetadataGroup(group)))
+        return try avpEncodeValue(encodeMetadataGroup(group))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -101,18 +102,18 @@ public func av_metadata_group_info_json(
 
 @_cdecl("av_timed_metadata_group_create")
 public func av_timed_metadata_group_create(
-    _ itemsJson: UnsafePointer<CChar>,
+    _ itemsValue: UnsafePointer<AVPValue>,
     _ startValue: Int64,
     _ startTimescale: Int32,
     _ startKind: Int32,
     _ durationValue: Int64,
     _ durationTimescale: Int32,
     _ durationKind: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
         let group = AVTimedMetadataGroup(
-            items: try decodeMetadataItems(itemsJson),
+            items: try decodeMetadataItems(itemsValue),
             timeRange: CMTimeRange(
                 start: cmTime(value: startValue, timescale: startTimescale, kind: startKind),
                 duration: cmTime(value: durationValue, timescale: durationTimescale, kind: durationKind)
@@ -125,14 +126,14 @@ public func av_timed_metadata_group_create(
     }
 }
 
-@_cdecl("av_timed_metadata_group_info_json")
-public func av_timed_metadata_group_info_json(
+@_cdecl("av_timed_metadata_group_info_value")
+public func av_timed_metadata_group_info_value(
     _ groupPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let group = Unmanaged<AVTimedMetadataGroup>.fromOpaque(groupPtr).takeUnretainedValue()
     do {
-        return ffiString(try avpEncodeJSON(encodeTimedMetadataGroup(group)))
+        return try avpEncodeValue(encodeTimedMetadataGroup(group))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -141,18 +142,18 @@ public func av_timed_metadata_group_info_json(
 
 @_cdecl("av_mutable_timed_metadata_group_create")
 public func av_mutable_timed_metadata_group_create(
-    _ itemsJson: UnsafePointer<CChar>,
+    _ itemsValue: UnsafePointer<AVPValue>,
     _ startValue: Int64,
     _ startTimescale: Int32,
     _ startKind: Int32,
     _ durationValue: Int64,
     _ durationTimescale: Int32,
     _ durationKind: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
         let group = AVMutableTimedMetadataGroup(
-            items: try decodeMetadataItems(itemsJson),
+            items: try decodeMetadataItems(itemsValue),
             timeRange: CMTimeRange(
                 start: cmTime(value: startValue, timescale: startTimescale, kind: startKind),
                 duration: cmTime(value: durationValue, timescale: durationTimescale, kind: durationKind)
@@ -182,15 +183,15 @@ public func av_mutable_timed_metadata_group_set_time_range(
     )
 }
 
-@_cdecl("av_mutable_timed_metadata_group_set_items_json")
-public func av_mutable_timed_metadata_group_set_items_json(
+@_cdecl("av_mutable_timed_metadata_group_set_items_value")
+public func av_mutable_timed_metadata_group_set_items_value(
     _ groupPtr: UnsafeMutableRawPointer,
-    _ itemsJson: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ itemsValue: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let group = Unmanaged<AVMutableTimedMetadataGroup>.fromOpaque(groupPtr).takeUnretainedValue()
     do {
-        group.items = try decodeMetadataItems(itemsJson)
+        group.items = try decodeMetadataItems(itemsValue)
         return AVP_OK
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
@@ -200,16 +201,16 @@ public func av_mutable_timed_metadata_group_set_items_json(
 
 @_cdecl("av_date_range_metadata_group_create")
 public func av_date_range_metadata_group_create(
-    _ itemsJson: UnsafePointer<CChar>,
-    _ startDatePtr: UnsafePointer<CChar>,
-    _ endDatePtr: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ itemsValue: UnsafePointer<AVPValue>,
+    _ startDatePtr: UnsafePointer<AVPValue>,
+    _ endDatePtr: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
         let group = AVDateRangeMetadataGroup(
-            items: try decodeMetadataItems(itemsJson),
+            items: try decodeMetadataItems(itemsValue),
             start: try decodeDate(startDatePtr, parameterName: "startDate"),
-            end: avpDate(fromISO8601: endDatePtr.map(String.init(cString:)))
+            end: avpDate(fromISO8601: endDatePtr.map(String.init(bridge:)))
         )
         return avpRetained(group)
     } catch {
@@ -218,14 +219,14 @@ public func av_date_range_metadata_group_create(
     }
 }
 
-@_cdecl("av_date_range_metadata_group_info_json")
-public func av_date_range_metadata_group_info_json(
+@_cdecl("av_date_range_metadata_group_info_value")
+public func av_date_range_metadata_group_info_value(
     _ groupPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let group = Unmanaged<AVDateRangeMetadataGroup>.fromOpaque(groupPtr).takeUnretainedValue()
     do {
-        return ffiString(try avpEncodeJSON(encodeDateRangeMetadataGroupHandle(group)))
+        return try avpEncodeValue(encodeDateRangeMetadataGroupHandle(group))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -234,16 +235,16 @@ public func av_date_range_metadata_group_info_json(
 
 @_cdecl("av_mutable_date_range_metadata_group_create")
 public func av_mutable_date_range_metadata_group_create(
-    _ itemsJson: UnsafePointer<CChar>,
-    _ startDatePtr: UnsafePointer<CChar>,
-    _ endDatePtr: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ itemsValue: UnsafePointer<AVPValue>,
+    _ startDatePtr: UnsafePointer<AVPValue>,
+    _ endDatePtr: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
         let group = AVMutableDateRangeMetadataGroup(
-            items: try decodeMetadataItems(itemsJson),
+            items: try decodeMetadataItems(itemsValue),
             start: try decodeDate(startDatePtr, parameterName: "startDate"),
-            end: avpDate(fromISO8601: endDatePtr.map(String.init(cString:)))
+            end: avpDate(fromISO8601: endDatePtr.map(String.init(bridge:)))
         )
         return avpRetained(group)
     } catch {
@@ -257,11 +258,11 @@ public func av_mutable_metadata_item_create() -> UnsafeMutableRawPointer {
     avpRetained(AVMutableMetadataItem())
 }
 
-@_cdecl("av_mutable_metadata_item_info_json")
-public func av_mutable_metadata_item_info_json(
+@_cdecl("av_mutable_metadata_item_info_value")
+public func av_mutable_metadata_item_info_value(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let payload = AVPMutableMetadataItemPayload(
         identifier: item.identifier?.rawValue,
@@ -278,7 +279,7 @@ public func av_mutable_metadata_item_info_json(
         keyString: item.key.map(String.init(describing:))
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -288,28 +289,28 @@ public func av_mutable_metadata_item_info_json(
 @_cdecl("av_mutable_metadata_item_set_identifier")
 public func av_mutable_metadata_item_set_identifier(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ identifierPtr: UnsafePointer<CChar>?
+    _ identifierPtr: UnsafePointer<AVPValue>?
 ) {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    item.identifier = identifierPtr.map { AVMetadataIdentifier(rawValue: String(cString: $0)) }
+    item.identifier = identifierPtr.map { AVMetadataIdentifier(rawValue: String(bridge: $0)) }
 }
 
 @_cdecl("av_mutable_metadata_item_set_extended_language_tag")
 public func av_mutable_metadata_item_set_extended_language_tag(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ languageTagPtr: UnsafePointer<CChar>?
+    _ languageTagPtr: UnsafePointer<AVPValue>?
 ) {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    item.extendedLanguageTag = languageTagPtr.map { String(cString: $0) }
+    item.extendedLanguageTag = languageTagPtr.map { String(bridge: $0) }
 }
 
 @_cdecl("av_mutable_metadata_item_set_locale_identifier")
 public func av_mutable_metadata_item_set_locale_identifier(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ localeIdentifierPtr: UnsafePointer<CChar>?
+    _ localeIdentifierPtr: UnsafePointer<AVPValue>?
 ) {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    item.locale = localeIdentifierPtr.map { Locale(identifier: String(cString: $0)) }
+    item.locale = localeIdentifierPtr.map { Locale(identifier: String(bridge: $0)) }
 }
 
 @_cdecl("av_mutable_metadata_item_set_time")
@@ -337,19 +338,19 @@ public func av_mutable_metadata_item_set_duration(
 @_cdecl("av_mutable_metadata_item_set_data_type")
 public func av_mutable_metadata_item_set_data_type(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ dataTypePtr: UnsafePointer<CChar>?
+    _ dataTypePtr: UnsafePointer<AVPValue>?
 ) {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    item.dataType = dataTypePtr.map { String(cString: $0) }
+    item.dataType = dataTypePtr.map { String(bridge: $0) }
 }
 
 @_cdecl("av_mutable_metadata_item_set_string_value")
 public func av_mutable_metadata_item_set_string_value(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ valuePtr: UnsafePointer<CChar>?
+    _ valuePtr: UnsafePointer<AVPValue>?
 ) {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    item.value = valuePtr.map { String(cString: $0) as NSString }
+    item.value = valuePtr.map { String(bridge: $0) as NSString }
 }
 
 @_cdecl("av_mutable_metadata_item_set_number_value")
@@ -370,12 +371,12 @@ public func av_mutable_metadata_item_clear_value(_ itemPtr: UnsafeMutableRawPoin
 @_cdecl("av_mutable_metadata_item_set_start_date")
 public func av_mutable_metadata_item_set_start_date(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ startDatePtr: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ startDatePtr: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
     if let startDatePtr {
-        guard let date = avpDate(fromISO8601: String(cString: startDatePtr)) else {
+        guard let date = avpDate(fromISO8601: String(bridge: startDatePtr)) else {
             outErrorMessage?.pointee = ffiString("invalid ISO-8601 date for startDate")
             return AVP_OPERATION_FAILED
         }
@@ -389,19 +390,19 @@ public func av_mutable_metadata_item_set_start_date(
 @_cdecl("av_mutable_metadata_item_set_key_space")
 public func av_mutable_metadata_item_set_key_space(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ keySpacePtr: UnsafePointer<CChar>?
+    _ keySpacePtr: UnsafePointer<AVPValue>?
 ) {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    item.keySpace = keySpacePtr.map { AVMetadataKeySpace(rawValue: String(cString: $0)) }
+    item.keySpace = keySpacePtr.map { AVMetadataKeySpace(rawValue: String(bridge: $0)) }
 }
 
 @_cdecl("av_mutable_metadata_item_set_key_string")
 public func av_mutable_metadata_item_set_key_string(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ keyPtr: UnsafePointer<CChar>?
+    _ keyPtr: UnsafePointer<AVPValue>?
 ) {
     let item = Unmanaged<AVMutableMetadataItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    item.key = keyPtr.map { String(cString: $0) as NSString }
+    item.key = keyPtr.map { String(bridge: $0) as NSString }
 }
 
 @_cdecl("av_metadata_item_filter_create_for_sharing")
@@ -409,19 +410,115 @@ public func av_metadata_item_filter_create_for_sharing() -> UnsafeMutableRawPoin
     avpRetained(AVMetadataItemFilter.forSharing())
 }
 
-@_cdecl("av_metadata_item_filter_filter_json")
-public func av_metadata_item_filter_filter_json(
+@_cdecl("av_metadata_item_filter_filter_value")
+public func av_metadata_item_filter_filter_value(
     _ filterPtr: UnsafeMutableRawPointer,
-    _ itemsJson: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ itemsValue: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let filter = Unmanaged<AVMetadataItemFilter>.fromOpaque(filterPtr).takeUnretainedValue()
     do {
-        let items = try decodeMetadataItems(itemsJson)
+        let items = try decodeMetadataItems(itemsValue)
         let filtered = AVMetadataItem.metadataItems(from: items, filteredBy: filter)
-        return ffiString(try avpEncodeJSON(filtered.map(avpEncodeMetadataItem)))
+        return try avpEncodeValue(filtered.map(avpEncodeMetadataItem))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
+    }
+}
+
+extension AVPMetadataGroupPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            items.binaryValue,
+            classifyingLabel.binaryValue,
+            uniqueId.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            items: try binaryValue.field(0),
+            classifyingLabel: try binaryValue.field(1),
+            uniqueId: try binaryValue.field(2)
+        )
+    }
+}
+
+extension AVPTimedMetadataGroupPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            items.binaryValue,
+            classifyingLabel.binaryValue,
+            uniqueId.binaryValue,
+            timeRange.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            items: try binaryValue.field(0),
+            classifyingLabel: try binaryValue.field(1),
+            uniqueId: try binaryValue.field(2),
+            timeRange: try binaryValue.field(3)
+        )
+    }
+}
+
+extension AVPDateRangeMetadataGroupPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            items.binaryValue,
+            classifyingLabel.binaryValue,
+            uniqueId.binaryValue,
+            startDate.binaryValue,
+            endDate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            items: try binaryValue.field(0),
+            classifyingLabel: try binaryValue.field(1),
+            uniqueId: try binaryValue.field(2),
+            startDate: try binaryValue.field(3),
+            endDate: try binaryValue.field(4)
+        )
+    }
+}
+
+extension AVPMutableMetadataItemPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            identifier.binaryValue,
+            extendedLanguageTag.binaryValue,
+            localeIdentifier.binaryValue,
+            time.binaryValue,
+            duration.binaryValue,
+            dataType.binaryValue,
+            stringValue.binaryValue,
+            numberValue.binaryValue,
+            valueDescription.binaryValue,
+            startDate.binaryValue,
+            keySpace.binaryValue,
+            keyString.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            identifier: try binaryValue.field(0),
+            extendedLanguageTag: try binaryValue.field(1),
+            localeIdentifier: try binaryValue.field(2),
+            time: try binaryValue.field(3),
+            duration: try binaryValue.field(4),
+            dataType: try binaryValue.field(5),
+            stringValue: try binaryValue.field(6),
+            numberValue: try binaryValue.field(7),
+            valueDescription: try binaryValue.field(8),
+            startDate: try binaryValue.field(9),
+            keySpace: try binaryValue.field(10),
+            keyString: try binaryValue.field(11)
+        )
     }
 }

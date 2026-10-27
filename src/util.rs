@@ -1,13 +1,14 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::fmt;
 use core::ptr;
-use std::ffi::{CStr, CString};
 
+use crate::binary::FromValue;
+use crate::binary::ToValue;
 use doom_fish_utils::callback_context::CallbackContext;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -42,10 +43,10 @@ impl Registration {
     ) -> Result<Self, AVPlayerError>
     where
         T: Send + Sync + 'static,
-        F: FnOnce(*mut c_void, Option<ffi::DropCallback>, *mut *mut c_char) -> *mut c_void,
+        F: FnOnce(*mut c_void, Option<ffi::DropCallback>, *mut *mut AVPValue) -> *mut c_void,
     {
         let context = CallbackContext::new(value);
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let token = register(
             context.retained_ptr(),
             Some(CallbackContext::<T>::RELEASE),
@@ -96,12 +97,9 @@ pub unsafe fn deliver_bool<E: 'static>(userdata: *mut c_void, site: &str, event:
         .unwrap_or(false)
 }
 
-pub unsafe fn json_payload<T: DeserializeOwned>(payload_json: *const c_char) -> Option<T> {
-    if payload_json.is_null() {
-        return None;
-    }
-    let payload = unsafe { CStr::from_ptr(payload_json) }.to_str().ok()?;
-    serde_json::from_str(payload).ok()
+pub unsafe fn value_payload<T: FromValue>(payload_value: *const AVPValue) -> Option<T> {
+    let value = unsafe { crate::binary::read_value(payload_value) }.ok()?;
+    T::from_value(&value).ok()
 }
 
 pub unsafe fn borrowed_objects<T>(
@@ -171,41 +169,34 @@ pub fn validate_capacity(capacity: usize) -> Result<(), AVPlayerError> {
     Ok(())
 }
 
-/// Calls the `AVPlayer` framework counterpart for `parse_json_and_free`.
-pub fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, AVPlayerError> {
-    let json = unsafe { CStr::from_ptr(json_ptr) }
-        .to_string_lossy()
-        .into_owned();
-    unsafe { ffi::avp_string_free(json_ptr) };
-    serde_json::from_str::<T>(&json).map_err(|error| {
-        AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}"))
-    })
+/// Calls the `AVPlayer` framework counterpart for `parse_value_and_free`.
+pub fn parse_value_and_free<T: FromValue>(value_ptr: *mut AVPValue) -> Result<T, AVPlayerError> {
+    let value = unsafe { crate::binary::take_value(value_ptr)? };
+    T::from_value(&value)
 }
 
 /// Calls the `AVPlayer` framework counterpart for `to_cstring`.
-pub fn to_cstring(value: &str, what: &str) -> Result<CString, AVPlayerError> {
-    CString::new(value).map_err(|error| {
+pub fn to_cstring(value: &str, what: &str) -> Result<InputString, AVPlayerError> {
+    InputString::new(value).map_err(|error| {
         AVPlayerError::InvalidArgument(format!("{what} contains NUL byte: {error}"))
     })
 }
 
-/// Calls the `AVPlayer` framework counterpart for `json_cstring`.
-pub fn json_cstring<T: Serialize + ?Sized>(
+/// Calls the `AVPlayer` framework counterpart for `value_buffer`.
+pub fn value_buffer<T: ToValue + ?Sized>(
     value: &T,
     what: &str,
-) -> Result<CString, AVPlayerError> {
-    let json = serde_json::to_string(value).map_err(|error| {
-        AVPlayerError::InvalidArgument(format!("failed to encode {what}: {error}"))
-    })?;
-    to_cstring(&json, &format!("{what} JSON"))
+) -> Result<crate::binary::InputValue, AVPlayerError> {
+    crate::binary::InputValue::new(value)
+        .map_err(|error| AVPlayerError::InvalidArgument(format!("invalid {what}: {error}")))
 }
 
-/// Calls the `AVPlayer` framework counterpart for `maybe_json_cstring`.
-pub fn maybe_json_cstring<T: Serialize>(
+/// Calls the `AVPlayer` framework counterpart for `maybe_value_buffer`.
+pub fn maybe_value_buffer<T: ToValue>(
     value: Option<&T>,
     what: &str,
-) -> Result<Option<CString>, AVPlayerError> {
-    value.map(|value| json_cstring(value, what)).transpose()
+) -> Result<Option<crate::binary::InputValue>, AVPlayerError> {
+    value.map(|value| value_buffer(value, what)).transpose()
 }
 
 #[cfg(test)]
@@ -336,6 +327,9 @@ mod tests {
             })
         };
         assert_eq!(adopted, vec![NonNullToken::VALUE as usize]);
-        assert_eq!(unsafe { borrowed_objects(ptr::null(), 3, |_| Some(0_u8)) }, [] as [u8; 0]);
+        assert_eq!(
+            unsafe { borrowed_objects(ptr::null(), 3, |_| Some(0_u8)) },
+            [] as [u8; 0]
+        );
     }
 }

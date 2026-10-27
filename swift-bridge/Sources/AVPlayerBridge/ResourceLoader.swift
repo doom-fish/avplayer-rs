@@ -1,13 +1,14 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-private struct AssetResourceLoaderInfoPayload: Codable {
+private struct AssetResourceLoaderInfoPayload: AVPBridge {
     let hasDelegate: Bool
     let preloadsEligibleContentKeys: Bool
     let sendsCommonMediaClientDataAsHTTPHeaders: Bool?
 }
 
-private struct AssetResourceLoadingRequestPayload: Codable {
+private struct AssetResourceLoadingRequestPayload: AVPBridge {
     let requestURL: String?
     let requestMethod: String?
     let requestHeaders: [String: String]?
@@ -18,7 +19,7 @@ private struct AssetResourceLoadingRequestPayload: Codable {
     let hasRequestor: Bool
 }
 
-private struct AssetResourceLoadingContentInformationRequestPayload: Codable {
+private struct AssetResourceLoadingContentInformationRequestPayload: AVPBridge {
     let contentType: String?
     let allowedContentTypes: [String]?
     let contentLength: Int64
@@ -27,14 +28,14 @@ private struct AssetResourceLoadingContentInformationRequestPayload: Codable {
     let entireLengthAvailableOnDemand: Bool?
 }
 
-private struct AssetResourceLoadingDataRequestPayload: Codable {
+private struct AssetResourceLoadingDataRequestPayload: AVPBridge {
     let requestedOffset: Int64
     let requestedLength: Int64
     let requestsAllDataToEndOfResource: Bool?
     let currentOffset: Int64
 }
 
-private struct AssetResourceLoadingRequestorPayload: Codable {
+private struct AssetResourceLoadingRequestorPayload: AVPBridge {
     let providesExpiredSessionReports: Bool
 }
 
@@ -69,7 +70,7 @@ private final class AssetResourceLoaderDelegateBox: NSObject, AVAssetResourceLoa
     private func send(event: String, object: AnyObject) -> Bool {
         gate.run(false) { context in
             let objectPtr = Unmanaged.passRetained(object).toOpaque()
-            return event.withCString { callback(context, $0, objectPtr) }
+            return event.withBridgeString { callback(context, $0, objectPtr) }
         }
     }
 
@@ -104,11 +105,11 @@ public func av_url_asset_copy_resource_loader(
     return Unmanaged.passRetained(urlAsset.resourceLoader).toOpaque()
 }
 
-@_cdecl("av_asset_resource_loader_info_json")
-public func av_asset_resource_loader_info_json(
+@_cdecl("av_asset_resource_loader_info_value")
+public func av_asset_resource_loader_info_value(
     _ loaderPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let loader = Unmanaged<AVAssetResourceLoader>.fromOpaque(loaderPtr).takeUnretainedValue()
     let payload = AssetResourceLoaderInfoPayload(
         hasDelegate: loader.delegate != nil,
@@ -121,7 +122,7 @@ public func av_asset_resource_loader_info_json(
         }()
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -141,7 +142,7 @@ public func av_asset_resource_loader_set_preloads_eligible_content_keys(
 public func av_asset_resource_loader_set_sends_common_media_client_data_as_http_headers(
     _ loaderPtr: UnsafeMutableRawPointer,
     _ enabled: Bool,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 15.0, *) else {
         outErrorMessage?.pointee = ffiString("sendsCommonMediaClientDataAsHTTPHeaders requires macOS 15.0")
@@ -155,11 +156,11 @@ public func av_asset_resource_loader_set_sends_common_media_client_data_as_http_
 @_cdecl("av_asset_resource_loader_add_delegate")
 public func av_asset_resource_loader_add_delegate(
     _ loaderPtr: UnsafeMutableRawPointer,
-    _ queueLabel: UnsafePointer<CChar>?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
     _ callback: AVPBoolObjectCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -184,11 +185,11 @@ public func av_asset_resource_loader_delegate_release(_ observerPtr: UnsafeMutab
     observer.release()
 }
 
-@_cdecl("av_asset_resource_loading_request_info_json")
-public func av_asset_resource_loading_request_info_json(
+@_cdecl("av_asset_resource_loading_request_info_value")
+public func av_asset_resource_loading_request_info_value(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let request = Unmanaged<AVAssetResourceLoadingRequest>.fromOpaque(requestPtr).takeUnretainedValue()
     let payload = AssetResourceLoadingRequestPayload(
         requestURL: request.request.url?.absoluteString,
@@ -206,7 +207,7 @@ public func av_asset_resource_loading_request_info_json(
         }()
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -224,11 +225,11 @@ public func av_asset_resource_loading_request_finish_loading(
 @_cdecl("av_asset_resource_loading_request_finish_loading_with_error")
 public func av_asset_resource_loading_request_finish_loading_with_error(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ messagePtr: UnsafePointer<CChar>?
+    _ messagePtr: UnsafePointer<AVPValue>?
 ) {
     let request = Unmanaged<AVAssetResourceLoadingRequest>.fromOpaque(requestPtr).takeUnretainedValue()
     if let messagePtr {
-        let message = String(cString: messagePtr)
+        let message = String(bridge: messagePtr)
         let error = NSError(
             domain: "avplayer.resource-loader",
             code: -1,
@@ -267,11 +268,11 @@ public func av_asset_resource_loading_request_copy_requestor(
     return Unmanaged.passRetained(request.requestor).toOpaque()
 }
 
-@_cdecl("av_asset_resource_loading_content_information_request_info_json")
-public func av_asset_resource_loading_content_information_request_info_json(
+@_cdecl("av_asset_resource_loading_content_information_request_info_value")
+public func av_asset_resource_loading_content_information_request_info_value(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let request = Unmanaged<AVAssetResourceLoadingContentInformationRequest>.fromOpaque(requestPtr).takeUnretainedValue()
     let payload = AssetResourceLoadingContentInformationRequestPayload(
         contentType: request.contentType,
@@ -292,7 +293,7 @@ public func av_asset_resource_loading_content_information_request_info_json(
         }()
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -302,10 +303,10 @@ public func av_asset_resource_loading_content_information_request_info_json(
 @_cdecl("av_asset_resource_loading_content_information_request_set_content_type")
 public func av_asset_resource_loading_content_information_request_set_content_type(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ contentTypePtr: UnsafePointer<CChar>?
+    _ contentTypePtr: UnsafePointer<AVPValue>?
 ) {
     let request = Unmanaged<AVAssetResourceLoadingContentInformationRequest>.fromOpaque(requestPtr).takeUnretainedValue()
-    request.contentType = contentTypePtr.map { String(cString: $0) }
+    request.contentType = contentTypePtr.map { String(bridge: $0) }
 }
 
 @_cdecl("av_asset_resource_loading_content_information_request_set_content_length")
@@ -329,17 +330,17 @@ public func av_asset_resource_loading_content_information_request_set_byte_range
 @_cdecl("av_asset_resource_loading_content_information_request_set_renewal_date_iso8601")
 public func av_asset_resource_loading_content_information_request_set_renewal_date_iso8601(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ renewalDatePtr: UnsafePointer<CChar>?
+    _ renewalDatePtr: UnsafePointer<AVPValue>?
 ) {
     let request = Unmanaged<AVAssetResourceLoadingContentInformationRequest>.fromOpaque(requestPtr).takeUnretainedValue()
-    request.renewalDate = avpDate(fromISO8601: renewalDatePtr.map { String(cString: $0) })
+    request.renewalDate = avpDate(fromISO8601: renewalDatePtr.map { String(bridge: $0) })
 }
 
 @_cdecl("av_asset_resource_loading_content_information_request_set_entire_length_available_on_demand")
 public func av_asset_resource_loading_content_information_request_set_entire_length_available_on_demand(
     _ requestPtr: UnsafeMutableRawPointer,
     _ available: Bool,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 13.0, *) else {
         outErrorMessage?.pointee = ffiString("entireLengthAvailableOnDemand requires macOS 13.0")
@@ -350,11 +351,11 @@ public func av_asset_resource_loading_content_information_request_set_entire_len
     return AVP_OK
 }
 
-@_cdecl("av_asset_resource_loading_data_request_info_json")
-public func av_asset_resource_loading_data_request_info_json(
+@_cdecl("av_asset_resource_loading_data_request_info_value")
+public func av_asset_resource_loading_data_request_info_value(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let request = Unmanaged<AVAssetResourceLoadingDataRequest>.fromOpaque(requestPtr).takeUnretainedValue()
     let payload = AssetResourceLoadingDataRequestPayload(
         requestedOffset: request.requestedOffset,
@@ -368,7 +369,7 @@ public func av_asset_resource_loading_data_request_info_json(
         currentOffset: request.currentOffset
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -386,22 +387,124 @@ public func av_asset_resource_loading_data_request_respond_with_data(
     request.respond(with: data)
 }
 
-@_cdecl("av_asset_resource_loading_requestor_info_json")
-public func av_asset_resource_loading_requestor_info_json(
+@_cdecl("av_asset_resource_loading_requestor_info_value")
+public func av_asset_resource_loading_requestor_info_value(
     _ requestorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let requestor = Unmanaged<AVAssetResourceLoadingRequestor>.fromOpaque(requestorPtr).takeUnretainedValue()
     do {
-        return ffiString(
-            try avpEncodeJSON(
-                AssetResourceLoadingRequestorPayload(
-                    providesExpiredSessionReports: requestor.providesExpiredSessionReports
-                )
+        return try avpEncodeValue(
+            AssetResourceLoadingRequestorPayload(
+                providesExpiredSessionReports: requestor.providesExpiredSessionReports
             )
         )
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
+    }
+}
+
+extension AssetResourceLoaderInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            hasDelegate.binaryValue,
+            preloadsEligibleContentKeys.binaryValue,
+            sendsCommonMediaClientDataAsHTTPHeaders.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            hasDelegate: try binaryValue.field(0),
+            preloadsEligibleContentKeys: try binaryValue.field(1),
+            sendsCommonMediaClientDataAsHTTPHeaders: try binaryValue.field(2)
+        )
+    }
+}
+
+extension AssetResourceLoadingRequestPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            requestURL.binaryValue,
+            requestMethod.binaryValue,
+            requestHeaders.binaryValue,
+            finished.binaryValue,
+            cancelled.binaryValue,
+            hasContentInformationRequest.binaryValue,
+            hasDataRequest.binaryValue,
+            hasRequestor.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            requestURL: try binaryValue.field(0),
+            requestMethod: try binaryValue.field(1),
+            requestHeaders: try binaryValue.field(2),
+            finished: try binaryValue.field(3),
+            cancelled: try binaryValue.field(4),
+            hasContentInformationRequest: try binaryValue.field(5),
+            hasDataRequest: try binaryValue.field(6),
+            hasRequestor: try binaryValue.field(7)
+        )
+    }
+}
+
+extension AssetResourceLoadingContentInformationRequestPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            contentType.binaryValue,
+            allowedContentTypes.binaryValue,
+            contentLength.binaryValue,
+            byteRangeAccessSupported.binaryValue,
+            renewalDateISO8601.binaryValue,
+            entireLengthAvailableOnDemand.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            contentType: try binaryValue.field(0),
+            allowedContentTypes: try binaryValue.field(1),
+            contentLength: try binaryValue.field(2),
+            byteRangeAccessSupported: try binaryValue.field(3),
+            renewalDateISO8601: try binaryValue.field(4),
+            entireLengthAvailableOnDemand: try binaryValue.field(5)
+        )
+    }
+}
+
+extension AssetResourceLoadingDataRequestPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            requestedOffset.binaryValue,
+            requestedLength.binaryValue,
+            requestsAllDataToEndOfResource.binaryValue,
+            currentOffset.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            requestedOffset: try binaryValue.field(0),
+            requestedLength: try binaryValue.field(1),
+            requestsAllDataToEndOfResource: try binaryValue.field(2),
+            currentOffset: try binaryValue.field(3)
+        )
+    }
+}
+
+extension AssetResourceLoadingRequestorPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            providesExpiredSessionReports.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            providesExpiredSessionReports: try binaryValue.field(0)
+        )
     }
 }

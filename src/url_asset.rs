@@ -1,15 +1,13 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::c_char;
+use crate::ffi::AVPValue;
 use core::ptr;
 use std::path::Path;
-
-use serde::Serialize;
 
 use crate::asset::{Asset, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
-use crate::util::{json_cstring, to_cstring};
+use crate::util::{to_cstring, value_buffer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -27,8 +25,7 @@ impl UrlRequestAttribution {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UrlAssetHttpCookie {
     name: String,
     value: String,
@@ -61,8 +58,7 @@ impl UrlAssetHttpCookie {
 }
 
 /// Mirrors the `AVPlayer` framework counterpart for `UrlAssetOptions`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UrlAssetOptions {
     prefer_precise_duration_and_timing: bool,
     override_mime_type: Option<String>,
@@ -211,10 +207,10 @@ impl UrlAsset {
         options: &UrlAssetOptions,
     ) -> Result<Self, AVPlayerError> {
         let url = to_cstring(url, "URL")?;
-        let options = json_cstring(options, "URL asset options")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let options = value_buffer(options, "URL asset options")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
-            ffi::av_url_asset_create_with_options_json(
+            ffi::av_url_asset_create_with_options_value(
                 url.as_ptr(),
                 is_file_url,
                 options.as_ptr(),
@@ -227,6 +223,37 @@ impl UrlAsset {
         Ok(Self {
             asset: Asset { ptr },
         })
+    }
+}
+
+impl crate::binary::ToValue for UrlAssetHttpCookie {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.name),
+            crate::binary::ToValue::to_value(&self.value),
+            crate::binary::ToValue::to_value(&self.domain),
+            crate::binary::ToValue::to_value(&self.path),
+            crate::binary::ToValue::to_value(&self.secure),
+        ])
+    }
+}
+
+impl crate::binary::ToValue for UrlAssetOptions {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.prefer_precise_duration_and_timing),
+            crate::binary::ToValue::to_value(&self.override_mime_type),
+            crate::binary::ToValue::to_value(&self.reference_restrictions),
+            crate::binary::ToValue::to_value(&self.http_cookies),
+            crate::binary::ToValue::to_value(&self.allows_cellular_access),
+            crate::binary::ToValue::to_value(&self.allows_expensive_network_access),
+            crate::binary::ToValue::to_value(&self.allows_constrained_network_access),
+            crate::binary::ToValue::to_value(&self.should_support_alias_data_references),
+            crate::binary::ToValue::to_value(&self.url_request_attribution),
+            crate::binary::ToValue::to_value(&self.http_user_agent),
+            crate::binary::ToValue::to_value(&self.primary_session_identifier),
+            crate::binary::ToValue::to_value(&self.should_parse_external_spherical_tags),
+        ])
     }
 }
 

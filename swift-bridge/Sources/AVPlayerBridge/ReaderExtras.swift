@@ -1,26 +1,27 @@
+import AVPlayerABI
 import AVFoundation
 import AVPlayerObjCBridge
 import CoreMedia
 import Foundation
 
-private struct AVPCaptionGroupPayload: Codable {
+private struct AVPCaptionGroupPayload: AVPBridge {
     let timeRange: TimeRangePayload
     let captions: [String]
 }
 
-private struct AVPCaptionValidationEventPayload: Codable {
+private struct AVPCaptionValidationEventPayload: AVPBridge {
     let captionText: String
     let syntaxElements: [String]
 }
 
 final class CaptionValidationObserverBox: NSObject, AVAssetReaderCaptionValidationHandling {
     private weak var adaptor: AVAssetReaderOutputCaptionAdaptor?
-    private let callback: AVPJsonCallback
+    private let callback: AVPValueCallback
     private let gate: AVPCallbackGate
 
     init(
         adaptor: AVAssetReaderOutputCaptionAdaptor,
-        callback: @escaping AVPJsonCallback,
+        callback: @escaping AVPValueCallback,
         gate: AVPCallbackGate
     ) {
         self.adaptor = adaptor
@@ -45,7 +46,7 @@ final class CaptionValidationObserverBox: NSObject, AVAssetReaderCaptionValidati
         didVendCaption caption: AVCaption,
         skippingUnsupportedSourceSyntaxElements syntaxElements: [String]
     ) {
-        gate.deliverJSON(
+        gate.deliverValue(
             AVPCaptionValidationEventPayload(
                 captionText: caption.text,
                 syntaxElements: syntaxElements
@@ -68,7 +69,7 @@ public func av_reader_output_supports_random_access(_ outputPtr: UnsafeMutableRa
 public func av_reader_output_set_supports_random_access(
     _ outputPtr: UnsafeMutableRawPointer,
     _ supportsRandomAccess: Bool,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let output = Unmanaged<AVAssetReaderOutput>.fromOpaque(outputPtr).takeUnretainedValue()
     var reason: NSString?
@@ -103,11 +104,11 @@ func avpReadingTimeRangesError(_ ranges: [CMTimeRange]) -> String? {
     return nil
 }
 
-@_cdecl("av_reader_output_reset_for_time_ranges_json")
-public func av_reader_output_reset_for_time_ranges_json(
+@_cdecl("av_reader_output_reset_for_time_ranges_value")
+public func av_reader_output_reset_for_time_ranges_value(
     _ outputPtr: UnsafeMutableRawPointer,
-    _ timeRangesJson: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ timeRangesValue: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 10.10, *) else {
         outErrorMessage?.pointee = ffiString("reader random access requires macOS 10.10")
@@ -115,7 +116,7 @@ public func av_reader_output_reset_for_time_ranges_json(
     }
     let output = Unmanaged<AVAssetReaderOutput>.fromOpaque(outputPtr).takeUnretainedValue()
     do {
-        let payloads = try avpDecodeJSON(timeRangesJson, as: [TimeRangePayload].self)
+        let payloads = try avpDecodeValue(timeRangesValue, as: [TimeRangePayload].self)
         let ranges = payloads.map(cmTimeRange(from:))
         if let message = avpReadingTimeRangesError(ranges) {
             outErrorMessage?.pointee = ffiString(message)
@@ -150,7 +151,7 @@ public func av_reader_output_mark_configuration_as_final(_ outputPtr: UnsafeMuta
 @_cdecl("av_reader_sample_reference_output_create")
 public func av_reader_sample_reference_output_create(
     _ trackPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let track = Unmanaged<AVAssetTrack>.fromOpaque(trackPtr).takeUnretainedValue()
     if #available(macOS 10.10, *) {
@@ -172,7 +173,7 @@ public func av_reader_sample_reference_output_copy_track(
 @_cdecl("av_reader_output_metadata_adaptor_create")
 public func av_reader_output_metadata_adaptor_create(
     _ trackOutputPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 10.10, *) else {
         outErrorMessage?.pointee = ffiString("metadata adaptors require macOS 10.10")
@@ -199,7 +200,7 @@ public func av_reader_output_metadata_adaptor_copy_track_output(
 @_cdecl("av_reader_output_metadata_adaptor_copy_next_timed_metadata_group")
 public func av_reader_output_metadata_adaptor_copy_next_timed_metadata_group(
     _ adaptorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 10.10, *) else {
         outErrorMessage?.pointee = ffiString("metadata adaptors require macOS 10.10")
@@ -219,7 +220,7 @@ public func av_reader_output_metadata_adaptor_copy_next_timed_metadata_group(
 @_cdecl("av_reader_output_caption_adaptor_create")
 public func av_reader_output_caption_adaptor_create(
     _ trackOutputPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("caption adaptors require macOS 12.0")
@@ -243,11 +244,11 @@ public func av_reader_output_caption_adaptor_copy_track_output(
     return avpRetained(adaptor.assetReaderTrackOutput)
 }
 
-@_cdecl("av_reader_output_caption_adaptor_next_caption_group_json")
-public func av_reader_output_caption_adaptor_next_caption_group_json(
+@_cdecl("av_reader_output_caption_adaptor_next_caption_group_value")
+public func av_reader_output_caption_adaptor_next_caption_group_value(
     _ adaptorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("caption adaptors require macOS 12.0")
         return nil
@@ -265,7 +266,7 @@ public func av_reader_output_caption_adaptor_next_caption_group_json(
         captions: group.captions.map(\.text)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -275,10 +276,10 @@ public func av_reader_output_caption_adaptor_next_caption_group_json(
 @_cdecl("av_reader_output_caption_adaptor_add_validation_observer")
 public func av_reader_output_caption_adaptor_add_validation_observer(
     _ adaptorPtr: UnsafeMutableRawPointer,
-    _ callback: AVPJsonCallback?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 12.0, *) else {
@@ -307,4 +308,36 @@ public func av_reader_output_caption_validation_observer_release(
     let observer = Unmanaged<CaptionValidationObserverBox>.fromOpaque(observerPtr)
     observer.takeUnretainedValue().dispose()
     observer.release()
+}
+
+extension AVPCaptionGroupPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            timeRange.binaryValue,
+            captions.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            timeRange: try binaryValue.field(0),
+            captions: try binaryValue.field(1)
+        )
+    }
+}
+
+extension AVPCaptionValidationEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            captionText.binaryValue,
+            syntaxElements.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            captionText: try binaryValue.field(0),
+            syntaxElements: try binaryValue.field(1)
+        )
+    }
 }

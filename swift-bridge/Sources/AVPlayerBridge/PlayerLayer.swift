@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 import QuartzCore
@@ -16,11 +17,11 @@ public func av_player_layer_release(_ layerPtr: UnsafeMutableRawPointer?) {
     Unmanaged<AVPlayerLayer>.fromOpaque(layerPtr).release()
 }
 
-@_cdecl("av_player_layer_info_json")
-public func av_player_layer_info_json(
+@_cdecl("av_player_layer_info_value")
+public func av_player_layer_info_value(
     _ layerPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let layer = Unmanaged<AVPlayerLayer>.fromOpaque(layerPtr).takeUnretainedValue()
     let payload = PlayerLayerInfoPayload(
         hasPlayer: layer.player != nil,
@@ -29,7 +30,7 @@ public func av_player_layer_info_json(
         videoRect: encodeRect(layer.videoRect)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -48,10 +49,10 @@ public func av_player_layer_set_player(
 @_cdecl("av_player_layer_set_video_gravity")
 public func av_player_layer_set_video_gravity(
     _ layerPtr: UnsafeMutableRawPointer,
-    _ gravityPtr: UnsafePointer<CChar>
+    _ gravityPtr: UnsafePointer<AVPValue>
 ) {
     let layer = Unmanaged<AVPlayerLayer>.fromOpaque(layerPtr).takeUnretainedValue()
-    layer.videoGravity = avpVideoGravity(from: String(cString: gravityPtr))
+    layer.videoGravity = avpVideoGravity(from: String(bridge: gravityPtr))
 }
 
 @_cdecl("av_player_layer_copy_displayed_pixel_buffer")

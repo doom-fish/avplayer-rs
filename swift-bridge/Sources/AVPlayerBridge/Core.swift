@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import CoreGraphics
 import CoreMedia
@@ -14,13 +15,13 @@ let AVP_OBSERVER_FAILED: Int32 = -6
 let AVP_LOAD_FAILED: Int32 = -7
 let AVP_TIMED_OUT: Int32 = -8
 
-public typealias AVPJsonCallback = @convention(c) (
+public typealias AVPValueCallback = @convention(c) (
     UnsafeMutableRawPointer?,
-    UnsafePointer<CChar>?
+    UnsafePointer<AVPValue>?
 ) -> Void
-public typealias AVPBoolJsonCallback = @convention(c) (
+public typealias AVPBoolValueCallback = @convention(c) (
     UnsafeMutableRawPointer?,
-    UnsafePointer<CChar>?
+    UnsafePointer<AVPValue>?
 ) -> Bool
 public typealias AVPPeriodicTimeCallback = @convention(c) (
     UnsafeMutableRawPointer?,
@@ -31,25 +32,21 @@ public typealias AVPPeriodicTimeCallback = @convention(c) (
 public typealias AVPSimpleCallback = @convention(c) (UnsafeMutableRawPointer?) -> Void
 public typealias AVPBoolObjectCallback = @convention(c) (
     UnsafeMutableRawPointer?,
-    UnsafePointer<CChar>?,
+    UnsafePointer<AVPValue>?,
     UnsafeMutableRawPointer?
 ) -> Bool
 public typealias AVPDropCallback = @convention(c) (UnsafeMutableRawPointer?) -> Void
-public typealias AVPJsonObjectsCallback = @convention(c) (
+public typealias AVPValueObjectsCallback = @convention(c) (
     UnsafeMutableRawPointer?,
-    UnsafePointer<CChar>?,
+    UnsafePointer<AVPValue>?,
     UnsafePointer<UnsafeMutableRawPointer?>?,
     Int
 ) -> Void
 
-@_cdecl("avp_string_free")
-public func avp_string_free(_ str: UnsafeMutablePointer<CChar>?) {
-    guard let str else { return }
-    free(str)
-}
 
-func ffiString(_ string: String) -> UnsafeMutablePointer<CChar>? {
-    string.withCString { strdup($0) }
+
+func ffiString(_ string: String) -> UnsafeMutablePointer<AVPValue>? {
+    try? avpEncodeValue(string)
 }
 
 enum BridgeError: LocalizedError {
@@ -63,30 +60,30 @@ enum BridgeError: LocalizedError {
     }
 }
 
-struct TimePayload: Codable {
-    let kind: String
+struct TimePayload: AVPBridge {
+    let kind: Int32
     let value: Int64?
     let timescale: Int32?
 }
 
-struct TimeRangePayload: Codable {
+struct TimeRangePayload: AVPBridge {
     let start: TimePayload
     let duration: TimePayload
 }
 
-struct SizePayload: Codable {
+struct SizePayload: AVPBridge {
     let width: Double
     let height: Double
 }
 
-struct RectPayload: Codable {
+struct RectPayload: AVPBridge {
     let x: Double
     let y: Double
     let width: Double
     let height: Double
 }
 
-struct MetadataItemPayload: Codable {
+struct MetadataItemPayload: AVPBridge {
     let identifier: String?
     let keySpace: String?
     let commonKey: String?
@@ -96,27 +93,27 @@ struct MetadataItemPayload: Codable {
     let valueDescription: String?
 }
 
-struct AssetInfoPayload: Codable {
+struct AssetInfoPayload: AVPBridge {
     let url: String?
     let duration: TimePayload
     let metadata: [MetadataItemPayload]
 }
 
-struct TrackInfoPayload: Codable {
+struct TrackInfoPayload: AVPBridge {
     let trackId: Int32
     let mediaType: String
     let naturalSize: SizePayload
-    let nominalFrameRate: String
-    let estimatedDataRate: String
+    let nominalFrameRate: Float
+    let estimatedDataRate: Float
 }
 
-struct KeyLoadStatusPayload: Codable {
+struct KeyLoadStatusPayload: AVPBridge {
     let key: String
     let status: Int32
     let errorMessage: String?
 }
 
-struct PlayerInfoPayload: Codable {
+struct PlayerInfoPayload: AVPBridge {
     let status: Int32
     let errorMessage: String?
     let rate: Float
@@ -136,7 +133,7 @@ struct PlayerInfoPayload: Codable {
     let audioOutputDeviceUniqueId: String?
 }
 
-struct PlayerItemVideoCompositorPayload: Codable {
+struct PlayerItemVideoCompositorPayload: AVPBridge {
     let className: String
     let supportsWideColorSourceFrames: Bool?
     let supportsHdrSourceFrames: Bool?
@@ -144,7 +141,7 @@ struct PlayerItemVideoCompositorPayload: Codable {
     let canConformColorOfSourceFrames: Bool?
 }
 
-struct PlayerItemInfoPayload: Codable {
+struct PlayerItemInfoPayload: AVPBridge {
     let status: Int32
     let errorMessage: String?
     let duration: TimePayload
@@ -176,7 +173,7 @@ struct PlayerItemInfoPayload: Codable {
     let hasAudioMix: Bool
 }
 
-struct PlayerItemEventPayload: Codable {
+struct PlayerItemEventPayload: AVPBridge {
     let event: String
     let status: Int32?
     let errorMessage: String?
@@ -185,20 +182,20 @@ struct PlayerItemEventPayload: Codable {
     let recommendedTimeOffsetFromLive: TimePayload?
 }
 
-struct ReaderInfoPayload: Codable {
+struct ReaderInfoPayload: AVPBridge {
     let status: Int32
     let errorMessage: String?
     let timeRange: TimeRangePayload
     let outputCount: Int
 }
 
-struct VideoOutputSettingsPayload: Codable {
+struct VideoOutputSettingsPayload: AVPBridge {
     let pixelFormat: UInt32
     let width: Int?
     let height: Int?
 }
 
-struct AudioOutputSettingsPayload: Codable {
+struct AudioOutputSettingsPayload: AVPBridge {
     let sampleRate: Double?
     let channelCount: UInt32?
     let bitsPerChannel: UInt32
@@ -206,20 +203,20 @@ struct AudioOutputSettingsPayload: Codable {
     let isNonInterleaved: Bool
 }
 
-struct PlayerItemTrackInfoPayload: Codable {
+struct PlayerItemTrackInfoPayload: AVPBridge {
     let enabled: Bool
     let currentVideoFrameRate: Float
     let videoFieldMode: String?
     let hasAssetTrack: Bool
 }
 
-struct AccessLogPayload: Codable {
+struct AccessLogPayload: AVPBridge {
     let extendedLog: String?
     let extendedLogDataStringEncoding: UInt
     let events: [AccessLogEventPayload]
 }
 
-struct AccessLogEventPayload: Codable {
+struct AccessLogEventPayload: AVPBridge {
     let numberOfMediaRequests: Int
     let playbackStartDate: String?
     let uri: String?
@@ -246,13 +243,13 @@ struct AccessLogEventPayload: Codable {
     let switchBitrate: Double
 }
 
-struct ErrorLogPayload: Codable {
+struct ErrorLogPayload: AVPBridge {
     let extendedLog: String?
     let extendedLogDataStringEncoding: UInt
     let events: [ErrorLogEventPayload]
 }
 
-struct ErrorLogEventPayload: Codable {
+struct ErrorLogEventPayload: AVPBridge {
     let date: String?
     let uri: String?
     let serverAddress: String?
@@ -263,39 +260,39 @@ struct ErrorLogEventPayload: Codable {
     let allHttpResponseHeaderFields: [String: String]?
 }
 
-struct PlayerLayerInfoPayload: Codable {
+struct PlayerLayerInfoPayload: AVPBridge {
     let hasPlayer: Bool
     let videoGravity: String
     let readyForDisplay: Bool
     let videoRect: RectPayload
 }
 
-struct PlayerLooperInfoPayload: Codable {
+struct PlayerLooperInfoPayload: AVPBridge {
     let status: Int32
     let errorMessage: String?
     let loopCount: Int
     let loopingItemCount: Int
 }
 
-struct MediaSelectionCriteriaPayload: Codable {
+struct MediaSelectionCriteriaPayload: AVPBridge {
     let preferredLanguages: [String]?
     let preferredMediaCharacteristics: [String]?
     let principalMediaCharacteristics: [String]?
 }
 
-struct VideoOutputInfoPayload: Codable {
+struct VideoOutputInfoPayload: AVPBridge {
     let suppressesPlayerRendering: Bool
     let hasDelegate: Bool
 }
 
-struct MetadataOutputInfoPayload: Codable {
+struct MetadataOutputInfoPayload: AVPBridge {
     let suppressesPlayerRendering: Bool
     let advanceIntervalForDelegateInvocation: Double
     let identifiers: [String]?
     let hasDelegate: Bool
 }
 
-struct LegibleOutputInfoPayload: Codable {
+struct LegibleOutputInfoPayload: AVPBridge {
     let suppressesPlayerRendering: Bool
     let advanceIntervalForDelegateInvocation: Double
     let nativeRepresentationSubtypes: [UInt32]
@@ -303,24 +300,9 @@ struct LegibleOutputInfoPayload: Codable {
     let textStylingResolution: String
 }
 
-func avpEncodeJSON<T: Encodable>(_ value: T) throws -> String {
-    let data = try JSONEncoder().encode(value)
-    guard let string = String(data: data, encoding: .utf8) else {
-        throw BridgeError.message("failed to UTF-8 encode JSON payload")
-    }
-    return string
-}
 
-func avpDecodeJSON<T: Decodable>(_ ptr: UnsafePointer<CChar>?, as type: T.Type) throws -> T {
-    guard let ptr else {
-        throw BridgeError.message("missing JSON payload")
-    }
-    let string = String(cString: ptr)
-    guard let data = string.data(using: .utf8) else {
-        throw BridgeError.message("payload was not valid UTF-8")
-    }
-    return try JSONDecoder().decode(T.self, from: data)
-}
+
+
 
 struct AVPAwaitError: Error {
     let status: Int32
@@ -379,7 +361,7 @@ func avpAwait<T>(
 
 func avpWriteError(
     _ error: AVPAwaitError,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) {
     outErrorMessage?.pointee = ffiString(error.message)
 }
@@ -456,28 +438,28 @@ final class AVPCallbackGate: @unchecked Sendable {
         return body(context)
     }
 
-    func deliverJSON<T: Encodable>(_ payload: T, to callback: AVPJsonCallback) {
+    func deliverValue<T: AVPBridge>(_ payload: T, to callback: AVPValueCallback) {
         run(()) { context in
-            guard let json = try? avpEncodeJSON(payload) else {
+            guard let value = try? avpEncodeValue(payload) else {
                 callback(context, nil)
                 return
             }
-            json.withCString { callback(context, $0) }
+            defer { avp_value_free(value) }
+            callback(context, UnsafePointer(value))
         }
     }
 
-    func deliverJSON<T: Encodable>(_ payload: T, objects: [AnyObject], to callback: AVPJsonObjectsCallback) {
+    func deliverValue<T: AVPBridge>(_ payload: T, objects: [AnyObject], to callback: AVPValueObjectsCallback) {
         run(()) { context in
-            guard let json = try? avpEncodeJSON(payload) else {
+            guard let value = try? avpEncodeValue(payload) else {
                 callback(context, nil, nil, 0)
                 return
             }
+            defer { avp_value_free(value) }
             let pointers: [UnsafeMutableRawPointer?] = objects.map { Unmanaged.passUnretained($0).toOpaque() }
             withExtendedLifetime(objects) {
-                json.withCString { cJSON in
-                    pointers.withUnsafeBufferPointer { buffer in
-                        callback(context, cJSON, buffer.baseAddress, buffer.count)
-                    }
+                pointers.withUnsafeBufferPointer { buffer in
+                    callback(context, UnsafePointer(value), buffer.baseAddress, buffer.count)
                 }
             }
         }
@@ -567,15 +549,15 @@ public func avp_object_array_release(_ arrayPtr: UnsafeMutableRawPointer?) {
 
 func cmTime(from payload: TimePayload) -> CMTime {
     switch payload.kind {
-    case "numeric":
+    case 0:
         return CMTime(value: payload.value ?? 0, timescale: payload.timescale ?? 1)
-    case "invalid":
+    case 1:
         return .invalid
-    case "indefinite":
+    case 2:
         return .indefinite
-    case "positive_infinity":
+    case 3:
         return .positiveInfinity
-    case "negative_infinity":
+    case 4:
         return .negativeInfinity
     default:
         return .invalid
@@ -601,18 +583,18 @@ func cmTime(value: Int64, timescale: Int32, kind: Int32) -> CMTime {
 
 func encodeTime(_ time: CMTime) -> TimePayload {
     if time == .invalid {
-        return TimePayload(kind: "invalid", value: nil, timescale: nil)
+        return TimePayload(kind: 1, value: nil, timescale: nil)
     }
     if time == .indefinite {
-        return TimePayload(kind: "indefinite", value: nil, timescale: nil)
+        return TimePayload(kind: 2, value: nil, timescale: nil)
     }
     if time == .positiveInfinity {
-        return TimePayload(kind: "positive_infinity", value: nil, timescale: nil)
+        return TimePayload(kind: 3, value: nil, timescale: nil)
     }
     if time == .negativeInfinity {
-        return TimePayload(kind: "negative_infinity", value: nil, timescale: nil)
+        return TimePayload(kind: 4, value: nil, timescale: nil)
     }
-    return TimePayload(kind: "numeric", value: time.value, timescale: time.timescale)
+    return TimePayload(kind: 0, value: time.value, timescale: time.timescale)
 }
 
 func cmTimeRange(from payload: TimeRangePayload) -> CMTimeRange {
@@ -801,9 +783,645 @@ func avpString(from data: Data?, encoding: UInt) -> String? {
     return String(data: data, encoding: String.Encoding(rawValue: encoding))
 }
 
-func avpDispatchQueue(from labelPtr: UnsafePointer<CChar>?) -> DispatchQueue? {
+func avpDispatchQueue(from labelPtr: UnsafePointer<AVPValue>?) -> DispatchQueue? {
     guard let labelPtr else { return nil }
-    let queue = DispatchQueue(label: String(cString: labelPtr))
+    let queue = DispatchQueue(label: String(bridge: labelPtr))
     queue.setSpecific(key: avpQueueKey, value: AVPQueueToken())
     return queue
+}
+
+extension TimePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            kind.binaryValue,
+            value.binaryValue,
+            timescale.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            kind: try binaryValue.field(0),
+            value: try binaryValue.field(1),
+            timescale: try binaryValue.field(2)
+        )
+    }
+}
+
+extension TimeRangePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            start.binaryValue,
+            duration.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            start: try binaryValue.field(0),
+            duration: try binaryValue.field(1)
+        )
+    }
+}
+
+extension SizePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            width.binaryValue,
+            height.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            width: try binaryValue.field(0),
+            height: try binaryValue.field(1)
+        )
+    }
+}
+
+extension RectPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            x.binaryValue,
+            y.binaryValue,
+            width.binaryValue,
+            height.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            x: try binaryValue.field(0),
+            y: try binaryValue.field(1),
+            width: try binaryValue.field(2),
+            height: try binaryValue.field(3)
+        )
+    }
+}
+
+extension MetadataItemPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            identifier.binaryValue,
+            keySpace.binaryValue,
+            commonKey.binaryValue,
+            stringValue.binaryValue,
+            numberValue.binaryValue,
+            dataType.binaryValue,
+            valueDescription.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            identifier: try binaryValue.field(0),
+            keySpace: try binaryValue.field(1),
+            commonKey: try binaryValue.field(2),
+            stringValue: try binaryValue.field(3),
+            numberValue: try binaryValue.field(4),
+            dataType: try binaryValue.field(5),
+            valueDescription: try binaryValue.field(6)
+        )
+    }
+}
+
+extension AssetInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            url.binaryValue,
+            duration.binaryValue,
+            metadata.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            url: try binaryValue.field(0),
+            duration: try binaryValue.field(1),
+            metadata: try binaryValue.field(2)
+        )
+    }
+}
+
+extension TrackInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            trackId.binaryValue,
+            mediaType.binaryValue,
+            naturalSize.binaryValue,
+            nominalFrameRate.binaryValue,
+            estimatedDataRate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            trackId: try binaryValue.field(0),
+            mediaType: try binaryValue.field(1),
+            naturalSize: try binaryValue.field(2),
+            nominalFrameRate: try binaryValue.field(3),
+            estimatedDataRate: try binaryValue.field(4)
+        )
+    }
+}
+
+extension KeyLoadStatusPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            key.binaryValue,
+            status.binaryValue,
+            errorMessage.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            key: try binaryValue.field(0),
+            status: try binaryValue.field(1),
+            errorMessage: try binaryValue.field(2)
+        )
+    }
+}
+
+extension PlayerInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            status.binaryValue,
+            errorMessage.binaryValue,
+            rate.binaryValue,
+            currentTime.binaryValue,
+            duration.binaryValue,
+            timeControlStatus.binaryValue,
+            reasonForWaitingToPlay.binaryValue,
+            actionAtItemEnd.binaryValue,
+            volume.binaryValue,
+            muted.binaryValue,
+            automaticallyWaitsToMinimizeStalling.binaryValue,
+            appliesMediaSelectionCriteriaAutomatically.binaryValue,
+            eligibleForHdrPlayback.binaryValue,
+            audiovisualBackgroundPlaybackPolicy.binaryValue,
+            networkResourcePriority.binaryValue,
+            defaultRate.binaryValue,
+            audioOutputDeviceUniqueId.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            status: try binaryValue.field(0),
+            errorMessage: try binaryValue.field(1),
+            rate: try binaryValue.field(2),
+            currentTime: try binaryValue.field(3),
+            duration: try binaryValue.field(4),
+            timeControlStatus: try binaryValue.field(5),
+            reasonForWaitingToPlay: try binaryValue.field(6),
+            actionAtItemEnd: try binaryValue.field(7),
+            volume: try binaryValue.field(8),
+            muted: try binaryValue.field(9),
+            automaticallyWaitsToMinimizeStalling: try binaryValue.field(10),
+            appliesMediaSelectionCriteriaAutomatically: try binaryValue.field(11),
+            eligibleForHdrPlayback: try binaryValue.field(12),
+            audiovisualBackgroundPlaybackPolicy: try binaryValue.field(13),
+            networkResourcePriority: try binaryValue.field(14),
+            defaultRate: try binaryValue.field(15),
+            audioOutputDeviceUniqueId: try binaryValue.field(16)
+        )
+    }
+}
+
+extension PlayerItemVideoCompositorPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            className.binaryValue,
+            supportsWideColorSourceFrames.binaryValue,
+            supportsHdrSourceFrames.binaryValue,
+            supportsSourceTaggedBuffers.binaryValue,
+            canConformColorOfSourceFrames.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            className: try binaryValue.field(0),
+            supportsWideColorSourceFrames: try binaryValue.field(1),
+            supportsHdrSourceFrames: try binaryValue.field(2),
+            supportsSourceTaggedBuffers: try binaryValue.field(3),
+            canConformColorOfSourceFrames: try binaryValue.field(4)
+        )
+    }
+}
+
+extension PlayerItemInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            status.binaryValue,
+            errorMessage.binaryValue,
+            duration.binaryValue,
+            presentationSize.binaryValue,
+            metadata.binaryValue,
+            automaticallyLoadedAssetKeys.binaryValue,
+            seekableTimeRanges.binaryValue,
+            loadedTimeRanges.binaryValue,
+            canUseNetworkResourcesForLiveStreamingWhilePaused.binaryValue,
+            preferredForwardBufferDuration.binaryValue,
+            preferredPeakBitRate.binaryValue,
+            preferredPeakBitRateForExpensiveNetworks.binaryValue,
+            preferredMaximumResolution.binaryValue,
+            preferredMaximumResolutionForExpensiveNetworks.binaryValue,
+            audioTimePitchAlgorithm.binaryValue,
+            outputCount.binaryValue,
+            trackCount.binaryValue,
+            variantPreferences.binaryValue,
+            authorizationRequiredForPlayback.binaryValue,
+            applicationAuthorizedForPlayback.binaryValue,
+            contentAuthorizedForPlayback.binaryValue,
+            contentAuthorizationRequestStatus.binaryValue,
+            customVideoCompositor.binaryValue,
+            forwardPlaybackEndTime.binaryValue,
+            reversePlaybackEndTime.binaryValue,
+            canStepForward.binaryValue,
+            canStepBackward.binaryValue,
+            hasVideoComposition.binaryValue,
+            hasAudioMix.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            status: try binaryValue.field(0),
+            errorMessage: try binaryValue.field(1),
+            duration: try binaryValue.field(2),
+            presentationSize: try binaryValue.field(3),
+            metadata: try binaryValue.field(4),
+            automaticallyLoadedAssetKeys: try binaryValue.field(5),
+            seekableTimeRanges: try binaryValue.field(6),
+            loadedTimeRanges: try binaryValue.field(7),
+            canUseNetworkResourcesForLiveStreamingWhilePaused: try binaryValue.field(8),
+            preferredForwardBufferDuration: try binaryValue.field(9),
+            preferredPeakBitRate: try binaryValue.field(10),
+            preferredPeakBitRateForExpensiveNetworks: try binaryValue.field(11),
+            preferredMaximumResolution: try binaryValue.field(12),
+            preferredMaximumResolutionForExpensiveNetworks: try binaryValue.field(13),
+            audioTimePitchAlgorithm: try binaryValue.field(14),
+            outputCount: try binaryValue.field(15),
+            trackCount: try binaryValue.field(16),
+            variantPreferences: try binaryValue.field(17),
+            authorizationRequiredForPlayback: try binaryValue.field(18),
+            applicationAuthorizedForPlayback: try binaryValue.field(19),
+            contentAuthorizedForPlayback: try binaryValue.field(20),
+            contentAuthorizationRequestStatus: try binaryValue.field(21),
+            customVideoCompositor: try binaryValue.field(22),
+            forwardPlaybackEndTime: try binaryValue.field(23),
+            reversePlaybackEndTime: try binaryValue.field(24),
+            canStepForward: try binaryValue.field(25),
+            canStepBackward: try binaryValue.field(26),
+            hasVideoComposition: try binaryValue.field(27),
+            hasAudioMix: try binaryValue.field(28)
+        )
+    }
+}
+
+extension PlayerItemEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            status.binaryValue,
+            errorMessage.binaryValue,
+            presentationSize.binaryValue,
+            hasOriginatingParticipant.binaryValue,
+            recommendedTimeOffsetFromLive.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            status: try binaryValue.field(1),
+            errorMessage: try binaryValue.field(2),
+            presentationSize: try binaryValue.field(3),
+            hasOriginatingParticipant: try binaryValue.field(4),
+            recommendedTimeOffsetFromLive: try binaryValue.field(5)
+        )
+    }
+}
+
+extension ReaderInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            status.binaryValue,
+            errorMessage.binaryValue,
+            timeRange.binaryValue,
+            outputCount.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            status: try binaryValue.field(0),
+            errorMessage: try binaryValue.field(1),
+            timeRange: try binaryValue.field(2),
+            outputCount: try binaryValue.field(3)
+        )
+    }
+}
+
+extension VideoOutputSettingsPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            pixelFormat.binaryValue,
+            width.binaryValue,
+            height.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            pixelFormat: try binaryValue.field(0),
+            width: try binaryValue.field(1),
+            height: try binaryValue.field(2)
+        )
+    }
+}
+
+extension AudioOutputSettingsPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            sampleRate.binaryValue,
+            channelCount.binaryValue,
+            bitsPerChannel.binaryValue,
+            isFloat.binaryValue,
+            isNonInterleaved.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            sampleRate: try binaryValue.field(0),
+            channelCount: try binaryValue.field(1),
+            bitsPerChannel: try binaryValue.field(2),
+            isFloat: try binaryValue.field(3),
+            isNonInterleaved: try binaryValue.field(4)
+        )
+    }
+}
+
+extension PlayerItemTrackInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            enabled.binaryValue,
+            currentVideoFrameRate.binaryValue,
+            videoFieldMode.binaryValue,
+            hasAssetTrack.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            enabled: try binaryValue.field(0),
+            currentVideoFrameRate: try binaryValue.field(1),
+            videoFieldMode: try binaryValue.field(2),
+            hasAssetTrack: try binaryValue.field(3)
+        )
+    }
+}
+
+extension AccessLogPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            extendedLog.binaryValue,
+            extendedLogDataStringEncoding.binaryValue,
+            events.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            extendedLog: try binaryValue.field(0),
+            extendedLogDataStringEncoding: try binaryValue.field(1),
+            events: try binaryValue.field(2)
+        )
+    }
+}
+
+extension AccessLogEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            numberOfMediaRequests.binaryValue,
+            playbackStartDate.binaryValue,
+            uri.binaryValue,
+            serverAddress.binaryValue,
+            numberOfServerAddressChanges.binaryValue,
+            playbackSessionId.binaryValue,
+            playbackStartOffset.binaryValue,
+            segmentsDownloadedDuration.binaryValue,
+            durationWatched.binaryValue,
+            numberOfStalls.binaryValue,
+            numberOfBytesTransferred.binaryValue,
+            transferDuration.binaryValue,
+            observedBitrate.binaryValue,
+            indicatedBitrate.binaryValue,
+            indicatedAverageBitrate.binaryValue,
+            averageVideoBitrate.binaryValue,
+            averageAudioBitrate.binaryValue,
+            numberOfDroppedVideoFrames.binaryValue,
+            startupTime.binaryValue,
+            downloadOverdue.binaryValue,
+            observedBitrateStandardDeviation.binaryValue,
+            playbackType.binaryValue,
+            mediaRequestsWwan.binaryValue,
+            switchBitrate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            numberOfMediaRequests: try binaryValue.field(0),
+            playbackStartDate: try binaryValue.field(1),
+            uri: try binaryValue.field(2),
+            serverAddress: try binaryValue.field(3),
+            numberOfServerAddressChanges: try binaryValue.field(4),
+            playbackSessionId: try binaryValue.field(5),
+            playbackStartOffset: try binaryValue.field(6),
+            segmentsDownloadedDuration: try binaryValue.field(7),
+            durationWatched: try binaryValue.field(8),
+            numberOfStalls: try binaryValue.field(9),
+            numberOfBytesTransferred: try binaryValue.field(10),
+            transferDuration: try binaryValue.field(11),
+            observedBitrate: try binaryValue.field(12),
+            indicatedBitrate: try binaryValue.field(13),
+            indicatedAverageBitrate: try binaryValue.field(14),
+            averageVideoBitrate: try binaryValue.field(15),
+            averageAudioBitrate: try binaryValue.field(16),
+            numberOfDroppedVideoFrames: try binaryValue.field(17),
+            startupTime: try binaryValue.field(18),
+            downloadOverdue: try binaryValue.field(19),
+            observedBitrateStandardDeviation: try binaryValue.field(20),
+            playbackType: try binaryValue.field(21),
+            mediaRequestsWwan: try binaryValue.field(22),
+            switchBitrate: try binaryValue.field(23)
+        )
+    }
+}
+
+extension ErrorLogPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            extendedLog.binaryValue,
+            extendedLogDataStringEncoding.binaryValue,
+            events.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            extendedLog: try binaryValue.field(0),
+            extendedLogDataStringEncoding: try binaryValue.field(1),
+            events: try binaryValue.field(2)
+        )
+    }
+}
+
+extension ErrorLogEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            date.binaryValue,
+            uri.binaryValue,
+            serverAddress.binaryValue,
+            playbackSessionId.binaryValue,
+            errorStatusCode.binaryValue,
+            errorDomain.binaryValue,
+            errorComment.binaryValue,
+            allHttpResponseHeaderFields.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            date: try binaryValue.field(0),
+            uri: try binaryValue.field(1),
+            serverAddress: try binaryValue.field(2),
+            playbackSessionId: try binaryValue.field(3),
+            errorStatusCode: try binaryValue.field(4),
+            errorDomain: try binaryValue.field(5),
+            errorComment: try binaryValue.field(6),
+            allHttpResponseHeaderFields: try binaryValue.field(7)
+        )
+    }
+}
+
+extension PlayerLayerInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            hasPlayer.binaryValue,
+            videoGravity.binaryValue,
+            readyForDisplay.binaryValue,
+            videoRect.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            hasPlayer: try binaryValue.field(0),
+            videoGravity: try binaryValue.field(1),
+            readyForDisplay: try binaryValue.field(2),
+            videoRect: try binaryValue.field(3)
+        )
+    }
+}
+
+extension PlayerLooperInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            status.binaryValue,
+            errorMessage.binaryValue,
+            loopCount.binaryValue,
+            loopingItemCount.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            status: try binaryValue.field(0),
+            errorMessage: try binaryValue.field(1),
+            loopCount: try binaryValue.field(2),
+            loopingItemCount: try binaryValue.field(3)
+        )
+    }
+}
+
+extension MediaSelectionCriteriaPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            preferredLanguages.binaryValue,
+            preferredMediaCharacteristics.binaryValue,
+            principalMediaCharacteristics.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            preferredLanguages: try binaryValue.field(0),
+            preferredMediaCharacteristics: try binaryValue.field(1),
+            principalMediaCharacteristics: try binaryValue.field(2)
+        )
+    }
+}
+
+extension VideoOutputInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            suppressesPlayerRendering.binaryValue,
+            hasDelegate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            suppressesPlayerRendering: try binaryValue.field(0),
+            hasDelegate: try binaryValue.field(1)
+        )
+    }
+}
+
+extension MetadataOutputInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            suppressesPlayerRendering.binaryValue,
+            advanceIntervalForDelegateInvocation.binaryValue,
+            identifiers.binaryValue,
+            hasDelegate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            suppressesPlayerRendering: try binaryValue.field(0),
+            advanceIntervalForDelegateInvocation: try binaryValue.field(1),
+            identifiers: try binaryValue.field(2),
+            hasDelegate: try binaryValue.field(3)
+        )
+    }
+}
+
+extension LegibleOutputInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            suppressesPlayerRendering.binaryValue,
+            advanceIntervalForDelegateInvocation.binaryValue,
+            nativeRepresentationSubtypes.binaryValue,
+            hasDelegate.binaryValue,
+            textStylingResolution.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            suppressesPlayerRendering: try binaryValue.field(0),
+            advanceIntervalForDelegateInvocation: try binaryValue.field(1),
+            nativeRepresentationSubtypes: try binaryValue.field(2),
+            hasDelegate: try binaryValue.field(3),
+            textStylingResolution: try binaryValue.field(4)
+        )
+    }
 }

@@ -1,27 +1,28 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-private struct ContentKeySessionInfoPayload: Codable {
+private struct ContentKeySessionInfoPayload: AVPBridge {
     let keySystem: String
     let storageURL: String?
     let contentProtectionSessionIdentifierBase64: String?
     let recipientCount: Int
 }
 
-private struct ContentKeyIdentifierPayload: Codable {
+private struct ContentKeyIdentifierPayload: AVPBridge {
     let kind: String
     let value: String?
     let bytes: [UInt8]?
     let numberValue: Int64?
 }
 
-private struct ContentKeyRequestOptionsPayload: Codable {
+private struct ContentKeyRequestOptionsPayload: AVPBridge {
     let protocolVersions: [Int]?
     let shouldRandomizeDeviceIdentifier: Bool?
     let randomDeviceIdentifierSeed: [UInt8]?
 }
 
-private struct ContentKeyRequestInfoPayload: Codable {
+private struct ContentKeyRequestInfoPayload: AVPBridge {
     let status: Int32
     let errorMessage: String?
     let identifier: ContentKeyIdentifierPayload?
@@ -33,25 +34,25 @@ private struct ContentKeyRequestInfoPayload: Codable {
     let hasContentKey: Bool
 }
 
-private struct ContentKeySpecifierInfoPayload: Codable {
+private struct ContentKeySpecifierInfoPayload: AVPBridge {
     let keySystem: String
     let identifier: ContentKeyIdentifierPayload?
     let options: ContentKeyRequestOptionsPayload?
 }
 
-private struct ContentKeyInfoPayload: Codable {
+private struct ContentKeyInfoPayload: AVPBridge {
     let externalContentProtectionStatus: Int32?
 }
 
-private struct ContentKeyBytesPayload: Codable {
+private struct ContentKeyBytesPayload: AVPBridge {
     let bytes: [UInt8]?
 }
 
-private struct ContentKeySessionEventPayload: Codable {
+private struct ContentKeySessionEventPayload: AVPBridge {
     let event: String
-    let requestPtr: UInt64?
-    let keyRequestPtrs: [UInt64]?
-    let contentKeyPtr: UInt64?
+    let requestPtr: AVPObjectHandle?
+    let keyRequestPtrs: [AVPObjectHandle]?
+    let contentKeyPtr: AVPObjectHandle?
     let initializationData: [UInt8]?
     let persistableContentKey: [UInt8]?
     let keyIdentifier: ContentKeyIdentifierPayload?
@@ -230,19 +231,19 @@ private func avpContentKeyRequestRetryReasonString(
     }
 }
 
-private func avpBorrowedPointerValue(_ object: AnyObject) -> UInt64 {
-    UInt64(UInt(bitPattern: Unmanaged.passUnretained(object).toOpaque()))
+private func avpBorrowedPointerValue(_ object: AnyObject) -> AVPObjectHandle {
+    AVPObjectHandle(pointer: Unmanaged.passUnretained(object).toOpaque())
 }
 
 private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionDelegate {
     private weak var session: AVContentKeySession?
-    private let callback: AVPBoolJsonCallback
+    private let callback: AVPBoolValueCallback
     private let gate: AVPCallbackGate
 
     init(
         session: AVContentKeySession,
         queue: DispatchQueue?,
-        callback: @escaping AVPBoolJsonCallback,
+        callback: @escaping AVPBoolValueCallback,
         gate: AVPCallbackGate
     ) {
         self.session = session
@@ -264,10 +265,11 @@ private final class ContentKeySessionObserverBox: NSObject, AVContentKeySessionD
 
     private func send(_ payload: ContentKeySessionEventPayload) -> Bool {
         gate.run(false) { context in
-            guard let json = try? avpEncodeJSON(payload) else {
+            guard let value = try? avpEncodeValue(payload) else {
                 return false
             }
-            return json.withCString { callback(context, $0) }
+            defer { avp_value_free(value) }
+            return callback(context, UnsafePointer(value))
         }
     }
 
@@ -491,39 +493,39 @@ public func av_url_asset_may_require_content_keys_for_media_data_processing(
 
 @_cdecl("av_content_key_session_create")
 public func av_content_key_session_create(
-    _ keySystemPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ keySystemPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 10.13, *) else {
         outErrorMessage?.pointee = ffiString("AVContentKeySession requires macOS 10.13")
         return nil
     }
-    let keySystem = avpContentKeySystem(from: String(cString: keySystemPtr))
+    let keySystem = avpContentKeySystem(from: String(bridge: keySystemPtr))
     return Unmanaged.passRetained(AVContentKeySession(keySystem: keySystem)).toOpaque()
 }
 
 @_cdecl("av_content_key_session_create_with_storage_directory")
 public func av_content_key_session_create_with_storage_directory(
-    _ keySystemPtr: UnsafePointer<CChar>,
-    _ pathPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ keySystemPtr: UnsafePointer<AVPValue>,
+    _ pathPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 10.13, *) else {
         outErrorMessage?.pointee = ffiString("AVContentKeySession requires macOS 10.13")
         return nil
     }
-    let keySystem = avpContentKeySystem(from: String(cString: keySystemPtr))
-    let path = String(cString: pathPtr)
+    let keySystem = avpContentKeySystem(from: String(bridge: keySystemPtr))
+    let path = String(bridge: pathPtr)
     return Unmanaged.passRetained(
         AVContentKeySession(keySystem: keySystem, storageDirectoryAt: URL(fileURLWithPath: path))
     ).toOpaque()
 }
 
-@_cdecl("av_content_key_session_info_json")
-public func av_content_key_session_info_json(
+@_cdecl("av_content_key_session_info_value")
+public func av_content_key_session_info_value(
     _ sessionPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 10.13, *) else {
         outErrorMessage?.pointee = ffiString("AVContentKeySession requires macOS 10.13")
         return nil
@@ -536,7 +538,7 @@ public func av_content_key_session_info_json(
         recipientCount: session.contentKeyRecipients.count
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -546,11 +548,11 @@ public func av_content_key_session_info_json(
 @_cdecl("av_content_key_session_add_observer")
 public func av_content_key_session_add_observer(
     _ sessionPtr: UnsafeMutableRawPointer,
-    _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPBoolJsonCallback?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
+    _ callback: AVPBoolValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -578,17 +580,17 @@ public func av_content_key_session_observer_release(_ observerPtr: UnsafeMutable
 @_cdecl("av_content_key_session_process_content_key_request")
 public func av_content_key_session_process_content_key_request(
     _ sessionPtr: UnsafeMutableRawPointer,
-    _ identifierJson: UnsafePointer<CChar>?,
+    _ identifierValue: UnsafePointer<AVPValue>?,
     _ initializationDataBytes: UnsafePointer<UInt8>?,
     _ initializationDataCount: Int,
-    _ optionsJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ optionsValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let session = Unmanaged<AVContentKeySession>.fromOpaque(sessionPtr).takeUnretainedValue()
     do {
         let identifier: Any?
-        if let identifierJson {
-            let payload = try avpDecodeJSON(identifierJson, as: ContentKeyIdentifierPayload.self)
+        if let identifierValue {
+            let payload = try avpDecodeValue(identifierValue, as: ContentKeyIdentifierPayload.self)
             identifier = try avpContentKeyIdentifier(from: payload)
         } else {
             identifier = nil
@@ -599,8 +601,8 @@ public func av_content_key_session_process_content_key_request(
         if identifier == nil, initializationData == nil {
             throw BridgeError.message("content-key requests require an identifier, initialization data, or both")
         }
-        let optionsPayload = try optionsJson.map {
-            try avpDecodeJSON($0, as: ContentKeyRequestOptionsPayload.self)
+        let optionsPayload = try optionsValue.map {
+            try avpDecodeValue($0, as: ContentKeyRequestOptionsPayload.self)
         }
         let options = try avpContentKeyRequestOptions(from: optionsPayload)
         session.processContentKeyRequest(
@@ -619,7 +621,7 @@ public func av_content_key_session_process_content_key_request(
 public func av_content_key_session_renew_expiring_response_data_for_request(
     _ sessionPtr: UnsafeMutableRawPointer,
     _ requestPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let session = Unmanaged<AVContentKeySession>.fromOpaque(sessionPtr).takeUnretainedValue()
     let request = Unmanaged<AVContentKeyRequest>.fromOpaque(requestPtr).takeUnretainedValue()
@@ -631,11 +633,11 @@ public func av_content_key_session_renew_expiring_response_data_for_request(
     return AVP_OK
 }
 
-@_cdecl("av_content_key_request_info_json")
-public func av_content_key_request_info_json(
+@_cdecl("av_content_key_request_info_value")
+public func av_content_key_request_info_value(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let request = Unmanaged<AVContentKeyRequest>.fromOpaque(requestPtr).takeUnretainedValue()
     let payload = ContentKeyRequestInfoPayload(
         status: Int32(request.status.rawValue),
@@ -664,7 +666,7 @@ public func av_content_key_request_info_json(
         }()
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -690,22 +692,22 @@ public func av_content_key_request_copy_content_key(
     return Unmanaged.passRetained(contentKey).toOpaque()
 }
 
-@_cdecl("av_content_key_request_make_streaming_content_key_request_data_json")
-public func av_content_key_request_make_streaming_content_key_request_data_json(
+@_cdecl("av_content_key_request_make_streaming_content_key_request_data_value")
+public func av_content_key_request_make_streaming_content_key_request_data_value(
     _ requestPtr: UnsafeMutableRawPointer,
     _ appIdentifierBytes: UnsafePointer<UInt8>?,
     _ appIdentifierCount: Int,
     _ contentIdentifierBytes: UnsafePointer<UInt8>?,
     _ contentIdentifierCount: Int,
-    _ optionsJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ optionsValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let request = Unmanaged<AVContentKeyRequest>.fromOpaque(requestPtr).takeUnretainedValue()
     let appIdentifier = appIdentifierBytes.map { Data(bytes: $0, count: appIdentifierCount) } ?? Data()
     let contentIdentifier = contentIdentifierBytes.map { Data(bytes: $0, count: contentIdentifierCount) }
     do {
-        let optionsPayload = try optionsJson.map {
-            try avpDecodeJSON($0, as: ContentKeyRequestOptionsPayload.self)
+        let optionsPayload = try optionsValue.map {
+            try avpDecodeValue($0, as: ContentKeyRequestOptionsPayload.self)
         }
         let options = try avpContentKeyRequestOptions(from: optionsPayload)
         let semaphore = DispatchSemaphore(value: 0)
@@ -726,10 +728,8 @@ public func av_content_key_request_make_streaming_content_key_request_data_json(
         if let returnedError {
             throw returnedError
         }
-        return ffiString(
-            try avpEncodeJSON(
-                ContentKeyBytesPayload(bytes: returnedData.map([UInt8].init))
-            )
+        return try avpEncodeValue(
+            ContentKeyBytesPayload(bytes: returnedData.map([UInt8].init))
         )
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
@@ -741,7 +741,7 @@ public func av_content_key_request_make_streaming_content_key_request_data_json(
 public func av_content_key_request_process_content_key_response(
     _ requestPtr: UnsafeMutableRawPointer,
     _ responsePtr: UnsafeMutableRawPointer?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard let responsePtr else {
         outErrorMessage?.pointee = ffiString("missing content-key response")
@@ -756,11 +756,11 @@ public func av_content_key_request_process_content_key_response(
 @_cdecl("av_content_key_request_process_content_key_response_error")
 public func av_content_key_request_process_content_key_response_error(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ messagePtr: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ messagePtr: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let request = Unmanaged<AVContentKeyRequest>.fromOpaque(requestPtr).takeUnretainedValue()
-    let message = messagePtr.map { String(cString: $0) } ?? "content-key response failed"
+    let message = messagePtr.map { String(bridge: $0) } ?? "content-key response failed"
     let error = NSError(
         domain: "avplayer.content-key-session",
         code: -1,
@@ -774,7 +774,7 @@ public func av_content_key_request_process_content_key_response_error(
 @_cdecl("av_content_key_request_request_persistable_content_key")
 public func av_content_key_request_request_persistable_content_key(
     _ requestPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("persistable content keys require macOS 10.15")
@@ -790,14 +790,14 @@ public func av_content_key_request_request_persistable_content_key(
     }
 }
 
-@_cdecl("av_persistable_content_key_request_persistable_content_key_json")
-public func av_persistable_content_key_request_persistable_content_key_json(
+@_cdecl("av_persistable_content_key_request_persistable_content_key_value")
+public func av_persistable_content_key_request_persistable_content_key_value(
     _ requestPtr: UnsafeMutableRawPointer,
     _ keyVendorResponseBytes: UnsafePointer<UInt8>?,
     _ keyVendorResponseCount: Int,
-    _ optionsJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ optionsValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("persistable content keys require macOS 10.15")
         return nil
@@ -807,18 +807,16 @@ public func av_persistable_content_key_request_persistable_content_key_json(
         Data(bytes: $0, count: keyVendorResponseCount)
     } ?? Data()
     do {
-        let optionsPayload = try optionsJson.map {
-            try avpDecodeJSON($0, as: ContentKeyRequestOptionsPayload.self)
+        let optionsPayload = try optionsValue.map {
+            try avpDecodeValue($0, as: ContentKeyRequestOptionsPayload.self)
         }
         let options = try avpContentKeyRequestOptions(from: optionsPayload)
         let persistableContentKey = try request.persistableContentKey(
             fromKeyVendorResponse: keyVendorResponse,
             options: options
         )
-        return ffiString(
-            try avpEncodeJSON(
-                ContentKeyBytesPayload(bytes: [UInt8](persistableContentKey))
-            )
+        return try avpEncodeValue(
+            ContentKeyBytesPayload(bytes: [UInt8](persistableContentKey))
         )
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
@@ -830,7 +828,7 @@ public func av_persistable_content_key_request_persistable_content_key_json(
 public func av_content_key_response_create_fair_play_streaming(
     _ bytes: UnsafePointer<UInt8>?,
     _ count: Int,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let data = bytes.map { Data(bytes: $0, count: count) } ?? Data()
     _ = outErrorMessage
@@ -845,7 +843,7 @@ public func av_content_key_response_create_clear_key(
     _ keyDataCount: Int,
     _ initializationVectorBytes: UnsafePointer<UInt8>?,
     _ initializationVectorCount: Int,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 10.13, *) else {
         outErrorMessage?.pointee = ffiString("clear-key content responses require macOS 10.13")
@@ -864,7 +862,7 @@ public func av_content_key_response_create_clear_key(
 public func av_content_key_response_create_authorization_token(
     _ bytes: UnsafePointer<UInt8>?,
     _ count: Int,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("authorization-token content responses require macOS 10.15")
@@ -878,17 +876,17 @@ public func av_content_key_response_create_authorization_token(
 
 @_cdecl("av_content_key_specifier_create")
 public func av_content_key_specifier_create(
-    _ keySystemPtr: UnsafePointer<CChar>,
-    _ identifierJson: UnsafePointer<CChar>,
-    _ optionsJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ keySystemPtr: UnsafePointer<AVPValue>,
+    _ identifierValue: UnsafePointer<AVPValue>,
+    _ optionsValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
-    let keySystem = avpContentKeySystem(from: String(cString: keySystemPtr))
+    let keySystem = avpContentKeySystem(from: String(bridge: keySystemPtr))
     do {
-        let identifierPayload = try avpDecodeJSON(identifierJson, as: ContentKeyIdentifierPayload.self)
+        let identifierPayload = try avpDecodeValue(identifierValue, as: ContentKeyIdentifierPayload.self)
         let identifier = try avpContentKeyIdentifier(from: identifierPayload)
-        let optionsPayload = try optionsJson.map {
-            try avpDecodeJSON($0, as: ContentKeyRequestOptionsPayload.self)
+        let optionsPayload = try optionsValue.map {
+            try avpDecodeValue($0, as: ContentKeyRequestOptionsPayload.self)
         }
         let options = try avpContentKeyRequestOptions(from: optionsPayload) ?? [:]
         return Unmanaged.passRetained(
@@ -900,11 +898,11 @@ public func av_content_key_specifier_create(
     }
 }
 
-@_cdecl("av_content_key_specifier_info_json")
-public func av_content_key_specifier_info_json(
+@_cdecl("av_content_key_specifier_info_value")
+public func av_content_key_specifier_info_value(
     _ specifierPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let specifier = Unmanaged<AVContentKeySpecifier>.fromOpaque(specifierPtr).takeUnretainedValue()
     let payload = ContentKeySpecifierInfoPayload(
         keySystem: avpContentKeySystemString(specifier.keySystem),
@@ -912,18 +910,18 @@ public func av_content_key_specifier_info_json(
         options: avpContentKeyRequestOptionsPayload(from: specifier.options)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
     }
 }
 
-@_cdecl("av_content_key_info_json")
-public func av_content_key_info_json(
+@_cdecl("av_content_key_info_value")
+public func av_content_key_info_value(
     _ contentKeyPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let contentKey = Unmanaged<AVContentKey>.fromOpaque(contentKeyPtr).takeUnretainedValue()
     let payload = ContentKeyInfoPayload(
         externalContentProtectionStatus: {
@@ -934,7 +932,7 @@ public func av_content_key_info_json(
         }()
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -952,7 +950,7 @@ public func av_content_key_copy_content_key_specifier(
 @_cdecl("av_content_key_revoke")
 public func av_content_key_revoke(
     _ contentKeyPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 14.4, *) else {
         outErrorMessage?.pointee = ffiString("revoking content keys requires macOS 14.4")
@@ -994,4 +992,168 @@ public func av_content_key_session_expire(_ sessionPtr: UnsafeMutableRawPointer)
     guard #available(macOS 10.13, *) else { return }
     let session = Unmanaged<AVContentKeySession>.fromOpaque(sessionPtr).takeUnretainedValue()
     session.expire()
+}
+
+extension ContentKeySessionInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            keySystem.binaryValue,
+            storageURL.binaryValue,
+            contentProtectionSessionIdentifierBase64.binaryValue,
+            recipientCount.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            keySystem: try binaryValue.field(0),
+            storageURL: try binaryValue.field(1),
+            contentProtectionSessionIdentifierBase64: try binaryValue.field(2),
+            recipientCount: try binaryValue.field(3)
+        )
+    }
+}
+
+extension ContentKeyIdentifierPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            kind.binaryValue,
+            value.binaryValue,
+            bytes.binaryValue,
+            numberValue.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            kind: try binaryValue.field(0),
+            value: try binaryValue.field(1),
+            bytes: try binaryValue.field(2),
+            numberValue: try binaryValue.field(3)
+        )
+    }
+}
+
+extension ContentKeyRequestOptionsPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            protocolVersions.binaryValue,
+            shouldRandomizeDeviceIdentifier.binaryValue,
+            randomDeviceIdentifierSeed.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            protocolVersions: try binaryValue.field(0),
+            shouldRandomizeDeviceIdentifier: try binaryValue.field(1),
+            randomDeviceIdentifierSeed: try binaryValue.field(2)
+        )
+    }
+}
+
+extension ContentKeyRequestInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            status.binaryValue,
+            errorMessage.binaryValue,
+            identifier.binaryValue,
+            initializationData.binaryValue,
+            options.binaryValue,
+            canProvidePersistableContentKey.binaryValue,
+            renewsExpiringResponseData.binaryValue,
+            hasContentKeySpecifier.binaryValue,
+            hasContentKey.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            status: try binaryValue.field(0),
+            errorMessage: try binaryValue.field(1),
+            identifier: try binaryValue.field(2),
+            initializationData: try binaryValue.field(3),
+            options: try binaryValue.field(4),
+            canProvidePersistableContentKey: try binaryValue.field(5),
+            renewsExpiringResponseData: try binaryValue.field(6),
+            hasContentKeySpecifier: try binaryValue.field(7),
+            hasContentKey: try binaryValue.field(8)
+        )
+    }
+}
+
+extension ContentKeySpecifierInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            keySystem.binaryValue,
+            identifier.binaryValue,
+            options.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            keySystem: try binaryValue.field(0),
+            identifier: try binaryValue.field(1),
+            options: try binaryValue.field(2)
+        )
+    }
+}
+
+extension ContentKeyInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            externalContentProtectionStatus.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            externalContentProtectionStatus: try binaryValue.field(0)
+        )
+    }
+}
+
+extension ContentKeyBytesPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            bytes.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            bytes: try binaryValue.field(0)
+        )
+    }
+}
+
+extension ContentKeySessionEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            requestPtr.binaryValue,
+            keyRequestPtrs.binaryValue,
+            contentKeyPtr.binaryValue,
+            initializationData.binaryValue,
+            persistableContentKey.binaryValue,
+            keyIdentifier.binaryValue,
+            errorMessage.binaryValue,
+            retryReason.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            requestPtr: try binaryValue.field(1),
+            keyRequestPtrs: try binaryValue.field(2),
+            contentKeyPtr: try binaryValue.field(3),
+            initializationData: try binaryValue.field(4),
+            persistableContentKey: try binaryValue.field(5),
+            keyIdentifier: try binaryValue.field(6),
+            errorMessage: try binaryValue.field(7),
+            retryReason: try binaryValue.field(8)
+        )
+    }
 }

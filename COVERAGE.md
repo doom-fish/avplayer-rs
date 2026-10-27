@@ -1,6 +1,16 @@
 # AVPlayer coverage
 
-This matrix lists the AVFoundation families the crate wraps. Rows were last revised for 0.8.0. A row means the listed members are wrapped; it doesn't mean every member of the class is. "Not wrapped" at the end lists the notable gaps.
+This matrix lists the AVFoundation families that the crate wraps.
+Rows were last revised for 0.10.0.
+A row identifies the listed members, not every member of the class.
+"Not wrapped" lists the notable gaps.
+
+Version 0.10.0 changes the transport for every family to a shared binary C ABI.
+The native API coverage does not change.
+Each Rust and Swift payload has an explicit field map.
+Strings, arrays, callback payloads, errors, and interstitial attributes use native buffers rather than a text format.
+`PropertyValue` supplies typed interstitial attributes.
+The existing tests, examples, and doc tests cover the same public APIs.
 
 | Area | Swift bridge | Rust module | Example | Test | Notes |
 | --- | --- | --- | --- | --- | --- |

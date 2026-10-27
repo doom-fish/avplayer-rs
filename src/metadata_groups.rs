@@ -1,28 +1,25 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::marker::PhantomData;
 use core::ptr;
-
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata::MetadataItem;
 use crate::retained::retain_release_wrapper;
 use crate::time::{Time, TimeRange};
-use crate::util::{json_cstring, parse_json_and_free, to_cstring};
+use crate::util::{parse_value_and_free, to_cstring, value_buffer};
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct MetadataGroupPayload {
     items: Vec<MetadataItem>,
     classifying_label: Option<String>,
     unique_id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct TimedMetadataGroupPayload {
     items: Vec<MetadataItem>,
     classifying_label: Option<String>,
@@ -30,8 +27,7 @@ struct TimedMetadataGroupPayload {
     time_range: TimeRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct DateRangeMetadataGroupPayload {
     items: Vec<MetadataItem>,
     classifying_label: Option<String>,
@@ -40,8 +36,7 @@ struct DateRangeMetadataGroupPayload {
     end_date: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct MutableMetadataItemPayload {
     identifier: Option<String>,
     extended_language_tag: Option<String>,
@@ -73,12 +68,12 @@ impl MetadataGroup<'_> {
     }
 
     fn info(&self) -> Result<MetadataGroupPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_metadata_group_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_metadata_group_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn items(&self) -> Result<Vec<MetadataItem>, AVPlayerError> {
@@ -111,10 +106,10 @@ impl TimedMetadataGroupHandle {
     }
 
     pub fn new(items: &[MetadataItem], time_range: TimeRange) -> Result<Self, AVPlayerError> {
-        let items = json_cstring(items, "timed metadata items")?;
+        let items = value_buffer(items, "timed metadata items")?;
         let (start_value, start_timescale, start_kind) = time_range.start.to_raw();
         let (duration_value, duration_timescale, duration_kind) = time_range.duration.to_raw();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_timed_metadata_group_create(
                 items.as_ptr(),
@@ -134,12 +129,12 @@ impl TimedMetadataGroupHandle {
     }
 
     fn info(&self) -> Result<TimedMetadataGroupPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_timed_metadata_group_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_timed_metadata_group_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub const fn as_metadata_group(&self) -> MetadataGroup<'_> {
@@ -176,10 +171,10 @@ retain_release_wrapper!(
 
 impl MutableTimedMetadataGroup {
     pub fn new(items: &[MetadataItem], time_range: TimeRange) -> Result<Self, AVPlayerError> {
-        let items = json_cstring(items, "mutable timed metadata items")?;
+        let items = value_buffer(items, "mutable timed metadata items")?;
         let (start_value, start_timescale, start_kind) = time_range.start.to_raw();
         let (duration_value, duration_timescale, duration_kind) = time_range.duration.to_raw();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_mutable_timed_metadata_group_create(
                 items.as_ptr(),
@@ -199,12 +194,12 @@ impl MutableTimedMetadataGroup {
     }
 
     fn info(&self) -> Result<TimedMetadataGroupPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_timed_metadata_group_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_timed_metadata_group_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub const fn as_metadata_group(&self) -> MetadataGroup<'_> {
@@ -244,10 +239,10 @@ impl MutableTimedMetadataGroup {
     }
 
     pub fn set_items(&self, items: &[MetadataItem]) -> Result<(), AVPlayerError> {
-        let items = json_cstring(items, "mutable timed metadata items")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let items = value_buffer(items, "mutable timed metadata items")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
-            ffi::av_mutable_timed_metadata_group_set_items_json(
+            ffi::av_mutable_timed_metadata_group_set_items_value(
                 self.ptr,
                 items.as_ptr(),
                 &raw mut err,
@@ -277,19 +272,19 @@ impl DateRangeMetadataGroupHandle {
         start_date: &str,
         end_date: Option<&str>,
     ) -> Result<Self, AVPlayerError> {
-        let items = json_cstring(items, "date-range metadata items")?;
+        let items = value_buffer(items, "date-range metadata items")?;
         let start_date = to_cstring(start_date, "date-range start date")?;
         let end_date = end_date
             .map(|value| to_cstring(value, "date-range end date"))
             .transpose()?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_date_range_metadata_group_create(
                 items.as_ptr(),
                 start_date.as_ptr(),
                 end_date
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
                 &raw mut err,
             )
         };
@@ -300,13 +295,13 @@ impl DateRangeMetadataGroupHandle {
     }
 
     fn info(&self) -> Result<DateRangeMetadataGroupPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_date_range_metadata_group_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_date_range_metadata_group_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub const fn as_metadata_group(&self) -> MetadataGroup<'_> {
@@ -351,19 +346,19 @@ impl MutableDateRangeMetadataGroup {
         start_date: &str,
         end_date: Option<&str>,
     ) -> Result<Self, AVPlayerError> {
-        let items = json_cstring(items, "mutable date-range metadata items")?;
+        let items = value_buffer(items, "mutable date-range metadata items")?;
         let start_date = to_cstring(start_date, "mutable date-range start date")?;
         let end_date = end_date
             .map(|value| to_cstring(value, "mutable date-range end date"))
             .transpose()?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_mutable_date_range_metadata_group_create(
                 items.as_ptr(),
                 start_date.as_ptr(),
                 end_date
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
                 &raw mut err,
             )
         };
@@ -397,13 +392,13 @@ impl MutableDateRangeMetadataGroup {
     }
 
     fn info(&self) -> Result<DateRangeMetadataGroupPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_date_range_metadata_group_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_date_range_metadata_group_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub const fn as_metadata_group(&self) -> MetadataGroup<'_> {
@@ -466,12 +461,12 @@ impl MutableMetadataItem {
     }
 
     fn info(&self) -> Result<MutableMetadataItemPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_mutable_metadata_item_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_mutable_metadata_item_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn identifier(&self) -> Result<Option<String>, AVPlayerError> {
@@ -531,7 +526,7 @@ impl MutableMetadataItem {
                 self.ptr,
                 identifier
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         };
         Ok(())
@@ -549,7 +544,7 @@ impl MutableMetadataItem {
                 self.ptr,
                 language_tag
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         };
         Ok(())
@@ -567,7 +562,7 @@ impl MutableMetadataItem {
                 self.ptr,
                 locale_identifier
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         };
         Ok(())
@@ -592,7 +587,7 @@ impl MutableMetadataItem {
                 self.ptr,
                 data_type
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         };
         Ok(())
@@ -605,7 +600,9 @@ impl MutableMetadataItem {
         unsafe {
             ffi::av_mutable_metadata_item_set_string_value(
                 self.ptr,
-                value.as_ref().map_or(ptr::null(), |raw| raw.as_ptr()),
+                value
+                    .as_ref()
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         };
         Ok(())
@@ -623,13 +620,13 @@ impl MutableMetadataItem {
         let start_date = start_date
             .map(|value| to_cstring(value, "metadata start date"))
             .transpose()?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_mutable_metadata_item_set_start_date(
                 self.ptr,
                 start_date
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
                 &raw mut err,
             )
         };
@@ -648,7 +645,7 @@ impl MutableMetadataItem {
                 self.ptr,
                 key_space
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         };
         Ok(())
@@ -661,7 +658,8 @@ impl MutableMetadataItem {
         unsafe {
             ffi::av_mutable_metadata_item_set_key_string(
                 self.ptr,
-                key.as_ref().map_or(ptr::null(), |value| value.as_ptr()),
+                key.as_ref()
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         };
         Ok(())
@@ -688,15 +686,15 @@ impl MetadataItemFilter {
     }
 
     pub fn filter(&self, items: &[MetadataItem]) -> Result<Vec<MetadataItem>, AVPlayerError> {
-        let items = json_cstring(items, "metadata items to filter")?;
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_metadata_item_filter_filter_json(self.ptr, items.as_ptr(), &raw mut err)
+        let items = value_buffer(items, "metadata items to filter")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_metadata_item_filter_filter_value(self.ptr, items.as_ptr(), &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 }
 
@@ -708,3 +706,55 @@ unsafe impl Send for DateRangeMetadataGroupHandle {}
 unsafe impl Send for MutableDateRangeMetadataGroup {}
 unsafe impl Send for MutableMetadataItem {}
 unsafe impl Send for MetadataItemFilter {}
+
+impl crate::binary::FromValue for MetadataGroupPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            items: value.field(0)?,
+            classifying_label: value.field(1)?,
+            unique_id: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for TimedMetadataGroupPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            items: value.field(0)?,
+            classifying_label: value.field(1)?,
+            unique_id: value.field(2)?,
+            time_range: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for DateRangeMetadataGroupPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            items: value.field(0)?,
+            classifying_label: value.field(1)?,
+            unique_id: value.field(2)?,
+            start_date: value.field(3)?,
+            end_date: value.field(4)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for MutableMetadataItemPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            identifier: value.field(0)?,
+            extended_language_tag: value.field(1)?,
+            locale_identifier: value.field(2)?,
+            time: value.field(3)?,
+            duration: value.field(4)?,
+            data_type: value.field(5)?,
+            string_value: value.field(6)?,
+            number_value: value.field(7)?,
+            value_description: value.field(8)?,
+            start_date: value.field(9)?,
+            key_space: value.field(10)?,
+            key_string: value.field(11)?,
+        })
+    }
+}

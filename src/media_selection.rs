@@ -1,10 +1,8 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CStr;
-
-use serde::Deserialize;
 
 use crate::asset::{Asset, MediaType, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
@@ -12,10 +10,9 @@ use crate::ffi;
 use crate::metadata::MetadataItem;
 use crate::player_media_selection_criteria::MediaCharacteristic;
 use crate::retained::retain_release_wrapper;
-use crate::util::{parse_json_and_free, to_cstring};
+use crate::util::{parse_value_and_free, to_cstring};
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct MediaSelectionOptionPayload {
     media_type: String,
     media_sub_types: Vec<u32>,
@@ -56,7 +53,7 @@ impl MediaSelection {
     }
 
     pub fn mutable_copy(&self) -> Result<MutableMediaSelection, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe { ffi::av_media_selection_mutable_copy(self.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -156,7 +153,7 @@ impl MediaSelectionGroup {
     pub fn custom_media_selection_scheme(
         &self,
     ) -> Result<Option<CustomMediaSelectionScheme>, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_media_selection_group_copy_custom_media_selection_scheme(self.ptr, &raw mut err)
         };
@@ -180,12 +177,13 @@ retain_release_wrapper!(MediaSelectionOption, release = ffi::av_ns_object_releas
 
 impl MediaSelectionOption {
     fn info(&self) -> Result<MediaSelectionOptionPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_media_selection_option_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_media_selection_option_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn media_type(&self) -> Result<MediaType, AVPlayerError> {
@@ -251,7 +249,7 @@ impl MediaSelectionOption {
         locale_identifier: &str,
     ) -> Result<String, AVPlayerError> {
         let locale_identifier = to_cstring(locale_identifier, "media-selection locale identifier")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_media_selection_option_display_name_for_locale_identifier(
                 self.ptr,
@@ -262,10 +260,8 @@ impl MediaSelectionOption {
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        let value = unsafe { CStr::from_ptr(ptr) }
-            .to_string_lossy()
-            .into_owned();
-        unsafe { ffi::avp_string_free(ptr) };
+        let value = unsafe { crate::binary::read_string(ptr) }.unwrap_or_default();
+        unsafe { ffi::avp_value_free(ptr) };
         Ok(value)
     }
 }
@@ -283,7 +279,7 @@ retain_release_wrapper!(
 
 impl CustomMediaSelectionScheme {
     pub fn should_offer_language_selection(&self) -> Result<bool, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let value = unsafe {
             ffi::av_custom_media_selection_scheme_should_offer_language_selection(
                 self.ptr,
@@ -297,14 +293,14 @@ impl CustomMediaSelectionScheme {
     }
 
     pub fn available_languages(&self) -> Result<Vec<String>, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_custom_media_selection_scheme_available_languages_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_custom_media_selection_scheme_available_languages_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn selectors(&self) -> Result<Vec<MediaPresentationSelector>, AVPlayerError> {
@@ -314,7 +310,7 @@ impl CustomMediaSelectionScheme {
         )?;
         let mut selectors = Vec::with_capacity(count);
         for index in 0..count {
-            let mut err: *mut c_char = ptr::null_mut();
+            let mut err: *mut AVPValue = ptr::null_mut();
             let ptr = unsafe {
                 ffi::av_custom_media_selection_scheme_copy_selector_at_index(
                     self.ptr,
@@ -364,7 +360,7 @@ impl MediaPresentationSelector {
         let count = count_with_error(ffi::av_media_presentation_selector_setting_count, self.ptr)?;
         let mut settings = Vec::with_capacity(count);
         for index in 0..count {
-            let mut err: *mut c_char = ptr::null_mut();
+            let mut err: *mut AVPValue = ptr::null_mut();
             let ptr = unsafe {
                 ffi::av_media_presentation_selector_copy_setting_at_index(
                     self.ptr,
@@ -419,14 +415,14 @@ impl Asset {
     pub fn available_media_characteristics_with_media_selection_options(
         &self,
     ) -> Result<Vec<MediaCharacteristic>, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_asset_available_media_selection_characteristics_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_asset_available_media_selection_characteristics_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        Ok(parse_json_and_free::<Vec<String>>(json_ptr)?
+        Ok(parse_value_and_free::<Vec<String>>(value_ptr)?
             .into_iter()
             .map(|raw| MediaCharacteristic::from_raw(&raw))
             .collect())
@@ -440,7 +436,7 @@ impl Asset {
             media_characteristic.as_raw(),
             "media-selection characteristic",
         )?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_asset_copy_media_selection_group_for_characteristic(
                 self.ptr,
@@ -458,7 +454,7 @@ impl Asset {
     }
 
     pub fn preferred_media_selection(&self) -> Result<MediaSelection, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe { ffi::av_asset_copy_preferred_media_selection(self.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -516,10 +512,10 @@ impl UrlAsset {
 }
 
 fn count_with_error(
-    func: unsafe extern "C" fn(*mut c_void, *mut *mut c_char) -> i32,
+    func: unsafe extern "C" fn(*mut c_void, *mut *mut AVPValue) -> i32,
     ptr: *mut c_void,
 ) -> Result<usize, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let count = unsafe { func(ptr, &raw mut err) };
     if !err.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -529,35 +525,31 @@ fn count_with_error(
 }
 
 fn string_with_error(
-    func: unsafe extern "C" fn(*mut c_void, *mut *mut c_char) -> *mut c_char,
+    func: unsafe extern "C" fn(*mut c_void, *mut *mut AVPValue) -> *mut AVPValue,
     ptr: *mut c_void,
 ) -> Result<String, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let value_ptr = unsafe { func(ptr, &raw mut err) };
     if value_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
-    let value = unsafe { CStr::from_ptr(value_ptr) }
-        .to_string_lossy()
-        .into_owned();
-    unsafe { ffi::avp_string_free(value_ptr) };
+    let value = unsafe { crate::binary::read_string(value_ptr) }.unwrap_or_default();
+    unsafe { ffi::avp_value_free(value_ptr) };
     Ok(value)
 }
 
 fn string_with_input(
-    func: unsafe extern "C" fn(*mut c_void, *const c_char, *mut *mut c_char) -> *mut c_char,
+    func: unsafe extern "C" fn(*mut c_void, *const AVPValue, *mut *mut AVPValue) -> *mut AVPValue,
     ptr: *mut c_void,
-    input: *const c_char,
+    input: *const AVPValue,
 ) -> Result<String, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let value = unsafe { func(ptr, input, &raw mut err) };
     if value.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
-    let value_string = unsafe { CStr::from_ptr(value) }
-        .to_string_lossy()
-        .into_owned();
-    unsafe { ffi::avp_string_free(value) };
+    let value_string = unsafe { crate::binary::read_string(value) }.unwrap_or_default();
+    unsafe { ffi::avp_value_free(value) };
     Ok(value_string)
 }
 
@@ -570,3 +562,18 @@ unsafe impl Send for MediaSelectionOption {}
 unsafe impl Send for CustomMediaSelectionScheme {}
 unsafe impl Send for MediaPresentationSelector {}
 unsafe impl Send for MediaPresentationSetting {}
+
+impl crate::binary::FromValue for MediaSelectionOptionPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            media_type: value.field(0)?,
+            media_sub_types: value.field(1)?,
+            playable: value.field(2)?,
+            extended_language_tag: value.field(3)?,
+            locale_identifier: value.field(4)?,
+            display_name: value.field(5)?,
+            common_metadata: value.field(6)?,
+            available_metadata_formats: value.field(7)?,
+        })
+    }
+}

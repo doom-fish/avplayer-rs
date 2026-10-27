@@ -1,9 +1,8 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -11,10 +10,9 @@ use crate::player::{PlayerItem, PlayerStatus};
 use crate::player_media_selection_criteria::PlayerActionAtItemEnd;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct QueuePlayerInfoPayload {
     status: i32,
     error_message: Option<String>,
@@ -39,7 +37,7 @@ unsafe impl Send for QueuePlayer {}
 impl QueuePlayer {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new() -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe { ffi::av_queue_player_create(&raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::PLAYER_CREATE_FAILED, err) });
@@ -50,7 +48,7 @@ impl QueuePlayer {
     /// Calls the `AVPlayer` framework counterpart for `with_items`.
     pub fn with_items(items: &[&PlayerItem]) -> Result<Self, AVPlayerError> {
         let items = items.iter().map(|item| item.ptr).collect::<Vec<_>>();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_queue_player_create_with_items(items.as_ptr(), items.len(), &raw mut err)
         };
@@ -61,12 +59,12 @@ impl QueuePlayer {
     }
 
     fn info(&self) -> Result<QueuePlayerInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_player_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `status`.
@@ -106,7 +104,7 @@ impl QueuePlayer {
         &self,
         action: PlayerActionAtItemEnd,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_set_action_at_item_end(self.ptr, action.as_raw(), &raw mut err)
         };
@@ -203,7 +201,7 @@ impl QueuePlayer {
         item: &PlayerItem,
         after_item: Option<&PlayerItem>,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_queue_player_insert_item_after_item(
                 self.ptr,
@@ -226,5 +224,18 @@ impl QueuePlayer {
     /// Calls the `AVPlayer` framework counterpart for `remove_all_items`.
     pub fn remove_all_items(&self) {
         unsafe { ffi::av_queue_player_remove_all_items(self.ptr) };
+    }
+}
+
+impl crate::binary::FromValue for QueuePlayerInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            status: value.field(0)?,
+            error_message: value.field(1)?,
+            rate: value.field(2)?,
+            current_time: value.field(3)?,
+            duration: value.field(4)?,
+            action_at_item_end: value.field(7)?,
+        })
     }
 }

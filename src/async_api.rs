@@ -38,15 +38,15 @@
 
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use std::ffi::{c_void, CStr};
+use std::ffi::c_void;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use doom_fish_utils::completion::{error_from_cstr, AsyncCompletion, AsyncCompletionFuture};
-use serde::Deserialize;
+use doom_fish_utils::completion::{AsyncCompletion, AsyncCompletionFuture};
 
 use crate::asset::{Asset, MediaType, Size};
+use crate::binary::{FromValue, Value};
 use crate::error::AVPlayerError;
 use crate::ffi;
 use crate::metadata::MetadataItem;
@@ -54,10 +54,9 @@ use crate::player::{Player, PlayerItem, PlayerStatus};
 use crate::time::Time;
 use crate::util::{to_cstring, validate_seek_time, validate_tolerance};
 
-// ── JSON payloads (private) ───────────────────────────────────────────────────
+// ── binary payloads (private) ───────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 struct AsyncAssetPropertiesPayload {
     duration: Time,
     metadata: Vec<MetadataItem>,
@@ -67,14 +66,13 @@ struct AsyncAssetPropertiesPayload {
     preferred_rate: f32,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 struct TrackInfoPayload {
     track_id: i32,
     media_type: String,
     natural_size: Size,
-    nominal_frame_rate: String,
-    estimated_data_rate: String,
+    nominal_frame_rate: f32,
+    estimated_data_rate: f32,
 }
 
 // ── Public result structs ─────────────────────────────────────────────────────
@@ -119,8 +117,8 @@ impl TrackProperties {
             track_id: p.track_id,
             media_type: MediaType::from_raw(&p.media_type),
             natural_size: p.natural_size,
-            nominal_frame_rate: p.nominal_frame_rate.parse().ok(),
-            estimated_data_rate: p.estimated_data_rate.parse().ok(),
+            nominal_frame_rate: Some(p.nominal_frame_rate),
+            estimated_data_rate: Some(p.estimated_data_rate),
         }
     }
 }
@@ -159,38 +157,28 @@ where
 
 // ── AssetProperties future ────────────────────────────────────────────────────
 
-extern "C" fn asset_properties_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
-    if !error.is_null() {
-        // SAFETY: `error` is a non-null, NUL-terminated error string provided by
-        // the bridge for the duration of this callback.
-        let msg = unsafe { error_from_cstr(error) };
-        // SAFETY: `ctx` is the raw context pointer vended by
-        // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
-        // this callback exactly once.
-        unsafe { AsyncCompletion::<String>::complete_err(ctx, msg) };
-    } else if !result.is_null() {
-        // SAFETY: `result` is a non-null, NUL-terminated C string returned by the
-        // bridge; it remains valid until freed with `avp_string_free`.
-        let s = unsafe { CStr::from_ptr(result.cast()).to_string_lossy().into_owned() };
-        // SAFETY: `result` was returned by the FFI and has not been freed yet.
-        unsafe { ffi::avp_string_free(result as *mut _) };
-        // SAFETY: `ctx` is the raw context pointer vended by
-        // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
-        // this callback exactly once.
-        unsafe { AsyncCompletion::complete_ok(ctx, s) };
+extern "C" fn asset_properties_cb(
+    result: *mut ffi::AVPValue,
+    error: *const ffi::AVPValue,
+    ctx: *mut c_void,
+) {
+    if error.is_null() {
+        match unsafe { crate::binary::take_value(result) } {
+            Ok(value) => unsafe { AsyncCompletion::complete_ok(ctx, value) },
+            Err(error) => unsafe {
+                AsyncCompletion::<Value>::complete_err(ctx, error.to_string());
+            },
+        }
     } else {
-        // SAFETY: `ctx` is the raw context pointer vended by
-        // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
-        // this callback exactly once.
-        unsafe {
-            AsyncCompletion::<String>::complete_err(ctx, "bridge returned null result".into());
-        };
+        let message =
+            unsafe { crate::binary::read_string(error) }.unwrap_or_else(|error| error.to_string());
+        unsafe { AsyncCompletion::<Value>::complete_err(ctx, message) };
     }
 }
 
 /// Future returned by [`AsyncAsset::load_properties`].
 pub struct AssetPropertiesFuture {
-    inner: AsyncCompletionFuture<String>,
+    inner: AsyncCompletionFuture<Value>,
 }
 
 impl std::fmt::Debug for AssetPropertiesFuture {
@@ -205,10 +193,8 @@ impl Future for AssetPropertiesFuture {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         Pin::new(&mut self.inner).poll(cx).map(|r| {
-            let json = r.map_err(bridge_err)?;
-            let p = serde_json::from_str::<AsyncAssetPropertiesPayload>(&json).map_err(|e| {
-                AVPlayerError::OperationFailed(format!("async bridge JSON decode failed: {e}"))
-            })?;
+            let value = r.map_err(bridge_err)?;
+            let p = AsyncAssetPropertiesPayload::from_value(&value)?;
             Ok(AssetProperties {
                 duration: p.duration,
                 metadata: p.metadata,
@@ -223,13 +209,9 @@ impl Future for AssetPropertiesFuture {
 
 // ── Tracks future ─────────────────────────────────────────────────────────────
 
-extern "C" fn asset_tracks_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
-    asset_properties_cb(result, error, ctx); // same JSON-string pattern
-}
-
 /// Future returned by [`AsyncAsset::load_tracks`] and [`AsyncAsset::load_tracks_with_media_type`].
 pub struct AssetTracksFuture {
-    inner: Pending<String>,
+    inner: Pending<Value>,
 }
 
 impl std::fmt::Debug for AssetTracksFuture {
@@ -243,10 +225,8 @@ impl Future for AssetTracksFuture {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.inner.poll_bridge(cx).map(|r| {
-            let json = r?;
-            let payloads = serde_json::from_str::<Vec<TrackInfoPayload>>(&json).map_err(|e| {
-                AVPlayerError::OperationFailed(format!("async bridge JSON decode failed: {e}"))
-            })?;
+            let value = r?;
+            let payloads = Vec::<TrackInfoPayload>::from_value(&value)?;
             Ok(payloads
                 .into_iter()
                 .map(|p| TrackProperties::from_payload(&p))
@@ -257,13 +237,9 @@ impl Future for AssetTracksFuture {
 
 // ── TrackById future ──────────────────────────────────────────────────────────
 
-extern "C" fn asset_track_by_id_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
-    asset_properties_cb(result, error, ctx); // same JSON-string pattern
-}
-
 /// Future returned by [`AsyncAsset::load_track_with_id`].
 pub struct AssetTrackByIdFuture {
-    inner: AsyncCompletionFuture<String>,
+    inner: AsyncCompletionFuture<Value>,
 }
 
 impl std::fmt::Debug for AssetTrackByIdFuture {
@@ -278,32 +254,35 @@ impl Future for AssetTrackByIdFuture {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         Pin::new(&mut self.inner).poll(cx).map(|r| {
-            let json = r.map_err(bridge_err)?;
-            if json.trim() == "null" {
-                return Ok(None);
-            }
-            let payload = serde_json::from_str::<TrackInfoPayload>(&json).map_err(|e| {
-                AVPlayerError::OperationFailed(format!("async bridge JSON decode failed: {e}"))
-            })?;
-            Ok(Some(TrackProperties::from_payload(&payload)))
+            let value = r.map_err(bridge_err)?;
+            let payload = Option::<TrackInfoPayload>::from_value(&value)?;
+            Ok(payload.as_ref().map(TrackProperties::from_payload))
         })
     }
 }
 
 // ── Bool (seek / preroll) future ──────────────────────────────────────────────
 
-extern "C" fn bool_completion_cb(result: *const c_void, error: *const i8, ctx: *mut c_void) {
+extern "C" fn bool_completion_cb(
+    result: *mut ffi::AVPValue,
+    error: *const ffi::AVPValue,
+    ctx: *mut c_void,
+) {
     if error.is_null() {
-        // result is UnsafeRawPointer(bitPattern: 1) for true, nil for false
-        let finished = !result.is_null();
         // SAFETY: `ctx` is the raw context pointer vended by
         // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
         // this callback exactly once.
-        unsafe { AsyncCompletion::complete_ok(ctx, finished) };
+        match unsafe { crate::binary::take_value(result) }
+            .and_then(|value| bool::from_value(&value))
+        {
+            Ok(finished) => unsafe { AsyncCompletion::complete_ok(ctx, finished) },
+            Err(error) => unsafe {
+                AsyncCompletion::<bool>::complete_err(ctx, error.to_string());
+            },
+        }
     } else {
-        // SAFETY: `error` is a non-null, NUL-terminated error string provided by
-        // the bridge for the duration of this callback.
-        let msg = unsafe { error_from_cstr(error) };
+        let msg =
+            unsafe { crate::binary::read_string(error) }.unwrap_or_else(|error| error.to_string());
         // SAFETY: `ctx` is the raw context pointer vended by
         // `AsyncCompletion::create()` and has not been consumed yet; Swift fires
         // this callback exactly once.
@@ -411,7 +390,7 @@ impl<'a> AsyncAsset<'a> {
         let (future, ctx) = AsyncCompletion::create();
         // SAFETY: `self.asset.ptr` is a valid borrowed AVAsset handle and `ctx` is
         // the raw completion context returned by `AsyncCompletion::create()`.
-        unsafe { ffi::avp_asset_load_tracks_async(self.asset.ptr, asset_tracks_cb, ctx) };
+        unsafe { ffi::avp_asset_load_tracks_async(self.asset.ptr, asset_properties_cb, ctx) };
         AssetTracksFuture {
             inner: Pending::Waiting(future),
         }
@@ -430,14 +409,11 @@ impl<'a> AsyncAsset<'a> {
             }
         };
         let (future, ctx) = AsyncCompletion::create();
-        // SAFETY: `self.asset.ptr` is a valid borrowed AVAsset handle, `mt` is a
-        // NUL-terminated string owned by this frame, and `ctx` is the raw
-        // completion context returned by `AsyncCompletion::create()`.
         unsafe {
             ffi::avp_asset_load_tracks_with_media_type_async(
                 self.asset.ptr,
                 mt.as_ptr(),
-                asset_tracks_cb,
+                asset_properties_cb,
                 ctx,
             );
         };
@@ -458,7 +434,7 @@ impl<'a> AsyncAsset<'a> {
             ffi::avp_asset_load_track_with_id_async(
                 self.asset.ptr,
                 track_id,
-                asset_track_by_id_cb,
+                asset_properties_cb,
                 ctx,
             );
         };
@@ -670,4 +646,29 @@ fn validate_seek_arguments(
     validate_seek_time(time, "seek time")?;
     validate_tolerance(tolerance_before, "tolerance before")?;
     validate_tolerance(tolerance_after, "tolerance after")
+}
+
+impl crate::binary::FromValue for AsyncAssetPropertiesPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            duration: value.field(0)?,
+            metadata: value.field(1)?,
+            is_playable: value.field(2)?,
+            is_exportable: value.field(3)?,
+            has_protected_content: value.field(4)?,
+            preferred_rate: value.field(5)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for TrackInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            track_id: value.field(0)?,
+            media_type: value.field(1)?,
+            natural_size: value.field(2)?,
+            nominal_frame_rate: value.field(3)?,
+            estimated_data_rate: value.field(4)?,
+        })
+    }
 }

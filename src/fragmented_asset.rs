@@ -1,27 +1,24 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CString;
 use std::path::Path;
-
-use serde::Deserialize;
 
 use crate::asset::{Asset, AssetTrack, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::retained::retain_release_wrapper;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct FragmentedAssetMinderPayload {
     minding_interval: f64,
     asset_count: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct MediaExtensionPropertiesPayload {
     containing_bundle_name: Option<String>,
     containing_bundle_url: Option<String>,
@@ -67,15 +64,15 @@ impl MediaExtensionProperties {
     }
 
     pub fn info(&self) -> Result<MediaExtensionPropertiesInfo, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_media_extension_properties_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_media_extension_properties_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        Ok(MediaExtensionPropertiesInfo::from(parse_json_and_free::<
+        Ok(MediaExtensionPropertiesInfo::from(parse_value_and_free::<
             MediaExtensionPropertiesPayload,
-        >(json_ptr)?))
+        >(value_ptr)?))
     }
 
     pub fn containing_bundle_name(&self) -> Result<Option<String>, AVPlayerError> {
@@ -118,10 +115,10 @@ impl FragmentedAsset {
     }
 
     fn from_raw_url(url: &str, is_file_url: bool) -> Result<Self, AVPlayerError> {
-        let url = CString::new(url).map_err(|error| {
+        let url = InputString::new(url).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
         })?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr =
             unsafe { ffi::av_fragmented_asset_create(url.as_ptr(), is_file_url, &raw mut err) };
         if ptr.is_null() {
@@ -189,7 +186,7 @@ impl FragmentedAsset {
     pub fn is_playable_extended_mime_type(
         mime_type: impl AsRef<str>,
     ) -> Result<bool, AVPlayerError> {
-        let mime_type = CString::new(mime_type.as_ref()).map_err(|error| {
+        let mime_type = InputString::new(mime_type.as_ref()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("MIME type contains NUL byte: {error}"))
         })?;
         Ok(unsafe { ffi::av_fragmented_asset_is_playable_extended_mime_type(mime_type.as_ptr()) })
@@ -256,7 +253,7 @@ retain_release_wrapper!(FragmentedAssetMinder, release = ffi::av_ns_object_relea
 
 impl FragmentedAssetMinder {
     pub fn new(asset: &FragmentedAsset, minding_interval: f64) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_fragmented_asset_minder_create(asset.asset.ptr, minding_interval, &raw mut err)
         };
@@ -267,12 +264,13 @@ impl FragmentedAssetMinder {
     }
 
     fn info(&self) -> Result<FragmentedAssetMinderPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_fragmented_asset_minder_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_fragmented_asset_minder_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn minding_interval(&self) -> Result<f64, AVPlayerError> {
@@ -321,3 +319,24 @@ unsafe impl Send for MediaExtensionProperties {}
 unsafe impl Send for FragmentedAsset {}
 unsafe impl Send for FragmentedAssetTrack {}
 unsafe impl Send for FragmentedAssetMinder {}
+
+impl crate::binary::FromValue for FragmentedAssetMinderPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            minding_interval: value.field(0)?,
+            asset_count: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for MediaExtensionPropertiesPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            containing_bundle_name: value.field(0)?,
+            containing_bundle_url: value.field(1)?,
+            extension_identifier: value.field(2)?,
+            extension_name: value.field(3)?,
+            extension_url: value.field(4)?,
+        })
+    }
+}

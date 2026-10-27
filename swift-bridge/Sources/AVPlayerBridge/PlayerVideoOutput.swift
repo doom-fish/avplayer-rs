@@ -1,13 +1,14 @@
+import AVPlayerABI
 import AVFoundation
 import CoreMedia
 import CoreVideo
 import Foundation
 
-struct PlayerVideoOutputTagCollectionPayload: Codable {
+struct PlayerVideoOutputTagCollectionPayload: AVPBridge {
     let tags: [String]
 }
 
-struct AffineTransformPayload: Codable {
+struct AffineTransformPayload: AVPBridge {
     let a: Double
     let b: Double
     let c: Double
@@ -16,21 +17,21 @@ struct AffineTransformPayload: Codable {
     let ty: Double
 }
 
-struct PlayerVideoOutputConfigurationPayload: Codable {
+struct PlayerVideoOutputConfigurationPayload: AVPBridge {
     let hasSourcePlayerItem: Bool
     let dataChannelDescriptions: [[String]]
     let preferredTransform: AffineTransformPayload?
     let activationTime: TimePayload
 }
 
-struct PlayerVideoTaggedBufferPayload: Codable {
+struct PlayerVideoTaggedBufferPayload: AVPBridge {
     let tags: [String]
     let bufferKind: String
     let pixelBufferWidth: Int?
     let pixelBufferHeight: Int?
 }
 
-struct PlayerVideoOutputSamplePayload: Codable {
+struct PlayerVideoOutputSamplePayload: AVPBridge {
     let taggedBuffers: [PlayerVideoTaggedBufferPayload]
     let presentationTime: TimePayload
     let activeConfiguration: PlayerVideoOutputConfigurationPayload
@@ -66,7 +67,7 @@ final class AVPPlayerVideoOutputBox: NSObject {
 @_cdecl("av_player_video_output_tag_collection_create_with_preset")
 public func av_player_video_output_tag_collection_create_with_preset(
     _ presetRaw: UInt32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 14.2, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerVideoOutput tag collections require macOS 14.2+")
@@ -95,11 +96,11 @@ public func av_player_video_output_tag_collection_release(_ tagCollectionPtr: Un
     }
 }
 
-@_cdecl("av_player_video_output_tag_collection_info_json")
-public func av_player_video_output_tag_collection_info_json(
+@_cdecl("av_player_video_output_tag_collection_info_value")
+public func av_player_video_output_tag_collection_info_value(
     _ tagCollectionPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 14.0, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerVideoOutput tag collections require macOS 14.0+")
         return nil
@@ -108,7 +109,7 @@ public func av_player_video_output_tag_collection_info_json(
     let box = Unmanaged<AVPPlayerVideoOutputTagCollectionBox>.fromOpaque(tagCollectionPtr).takeUnretainedValue()
     let payload = PlayerVideoOutputTagCollectionPayload(tags: box.tags.map(\.description))
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -119,7 +120,7 @@ public func av_player_video_output_tag_collection_info_json(
 public func av_video_output_specification_create(
     _ tagCollectionPtrs: UnsafePointer<UnsafeMutableRawPointer?>?,
     _ count: Int,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 14.2, *) else {
         outErrorMessage?.pointee = ffiString("AVVideoOutputSpecification requires macOS 14.2+")
@@ -152,11 +153,11 @@ public func av_video_output_specification_release(_ specificationPtr: UnsafeMuta
     }
 }
 
-@_cdecl("av_video_output_specification_info_json")
-public func av_video_output_specification_info_json(
+@_cdecl("av_video_output_specification_info_value")
+public func av_video_output_specification_info_value(
     _ specificationPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 14.2, *) else {
         outErrorMessage?.pointee = ffiString("AVVideoOutputSpecification requires macOS 14.2+")
         return nil
@@ -167,7 +168,7 @@ public func av_video_output_specification_info_json(
         PlayerVideoOutputTagCollectionPayload(tags: $0.map(\.description))
     }
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -177,8 +178,8 @@ public func av_video_output_specification_info_json(
 @_cdecl("av_video_output_specification_set_default_output_settings")
 public func av_video_output_specification_set_default_output_settings(
     _ specificationPtr: UnsafeMutableRawPointer,
-    _ settingsJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ settingsValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 14.2, *) else {
         outErrorMessage?.pointee = ffiString("AVVideoOutputSpecification requires macOS 14.2+")
@@ -191,8 +192,8 @@ public func av_video_output_specification_set_default_output_settings(
 
     let box = Unmanaged<AVPVideoOutputSpecificationBox>.fromOpaque(specificationPtr).takeUnretainedValue()
     do {
-        let settings = try settingsJson.map {
-            try videoOutputSettingsDictionary(avpDecodeJSON($0, as: VideoOutputSettingsPayload.self))
+        let settings = try settingsValue.map {
+            try videoOutputSettingsDictionary(avpDecodeValue($0, as: VideoOutputSettingsPayload.self))
         }
         box.specification.defaultOutputSettings = settings
         return AVP_OK
@@ -205,9 +206,9 @@ public func av_video_output_specification_set_default_output_settings(
 @_cdecl("av_video_output_specification_set_output_settings_for_tag_collection")
 public func av_video_output_specification_set_output_settings_for_tag_collection(
     _ specificationPtr: UnsafeMutableRawPointer,
-    _ settingsJson: UnsafePointer<CChar>?,
+    _ settingsValue: UnsafePointer<AVPValue>?,
     _ tagCollectionPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 14.2, *) else {
         outErrorMessage?.pointee = ffiString("AVVideoOutputSpecification requires macOS 14.2+")
@@ -221,8 +222,8 @@ public func av_video_output_specification_set_output_settings_for_tag_collection
     let box = Unmanaged<AVPVideoOutputSpecificationBox>.fromOpaque(specificationPtr).takeUnretainedValue()
     let tagCollectionBox = Unmanaged<AVPPlayerVideoOutputTagCollectionBox>.fromOpaque(tagCollectionPtr).takeUnretainedValue()
     do {
-        let settings = try settingsJson.map {
-            try videoOutputSettingsDictionary(avpDecodeJSON($0, as: VideoOutputSettingsPayload.self))
+        let settings = try settingsValue.map {
+            try videoOutputSettingsDictionary(avpDecodeValue($0, as: VideoOutputSettingsPayload.self))
         }
         box.specification.setOutputSettings(settings, for: tagCollectionBox.tags)
         return AVP_OK
@@ -235,7 +236,7 @@ public func av_video_output_specification_set_output_settings_for_tag_collection
 @_cdecl("av_player_video_output_create")
 public func av_player_video_output_create(
     _ specificationPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 14.2, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerVideoOutput requires macOS 14.2+")
@@ -255,15 +256,15 @@ public func av_player_video_output_release(_ outputPtr: UnsafeMutableRawPointer?
     }
 }
 
-@_cdecl("av_player_video_output_sample_json")
-public func av_player_video_output_sample_json(
+@_cdecl("av_player_video_output_sample_value")
+public func av_player_video_output_sample_value(
     _ outputPtr: UnsafeMutableRawPointer,
     _ hostTimeValue: Int64,
     _ hostTimeTimescale: Int32,
     _ hostTimeKind: Int32,
     _ outBuffers: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 14.2, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerVideoOutput requires macOS 14.2+")
         return nil
@@ -280,15 +281,12 @@ public func av_player_video_output_sample_json(
         )
     }
     do {
-        guard let json = ffiString(try avpEncodeJSON(sample)) else {
-            outErrorMessage?.pointee = ffiString("failed to allocate AVPlayerVideoOutput sample JSON")
-            return nil
-        }
+        let value = try avpEncodeValue(sample)
         if let taggedSample {
             let buffers = taggedSample.taggedBufferGroup.map(avpTaggedBufferObject)
             outBuffers?.pointee = Unmanaged.passRetained(AVPObjectArrayBox(objects: buffers)).toOpaque()
         }
-        return json
+        return value
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -388,4 +386,100 @@ private func videoOutputSettingsDictionary(_ payload: VideoOutputSettingsPayload
         settings[kCVPixelBufferHeightKey as String] = height
     }
     return settings
+}
+
+extension PlayerVideoOutputTagCollectionPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            tags.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            tags: try binaryValue.field(0)
+        )
+    }
+}
+
+extension AffineTransformPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            a.binaryValue,
+            b.binaryValue,
+            c.binaryValue,
+            d.binaryValue,
+            tx.binaryValue,
+            ty.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            a: try binaryValue.field(0),
+            b: try binaryValue.field(1),
+            c: try binaryValue.field(2),
+            d: try binaryValue.field(3),
+            tx: try binaryValue.field(4),
+            ty: try binaryValue.field(5)
+        )
+    }
+}
+
+extension PlayerVideoOutputConfigurationPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            hasSourcePlayerItem.binaryValue,
+            dataChannelDescriptions.binaryValue,
+            preferredTransform.binaryValue,
+            activationTime.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            hasSourcePlayerItem: try binaryValue.field(0),
+            dataChannelDescriptions: try binaryValue.field(1),
+            preferredTransform: try binaryValue.field(2),
+            activationTime: try binaryValue.field(3)
+        )
+    }
+}
+
+extension PlayerVideoTaggedBufferPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            tags.binaryValue,
+            bufferKind.binaryValue,
+            pixelBufferWidth.binaryValue,
+            pixelBufferHeight.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            tags: try binaryValue.field(0),
+            bufferKind: try binaryValue.field(1),
+            pixelBufferWidth: try binaryValue.field(2),
+            pixelBufferHeight: try binaryValue.field(3)
+        )
+    }
+}
+
+extension PlayerVideoOutputSamplePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            taggedBuffers.binaryValue,
+            presentationTime.binaryValue,
+            activeConfiguration.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            taggedBuffers: try binaryValue.field(0),
+            presentationTime: try binaryValue.field(1),
+            activeConfiguration: try binaryValue.field(2)
+        )
+    }
 }

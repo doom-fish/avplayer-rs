@@ -1,10 +1,10 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
 
 use apple_cf::cm::CMSampleBuffer;
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -13,12 +13,11 @@ use crate::player_item_output::PlayerItemOutput;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::{
-    borrowed_objects, deliver, json_cstring, json_payload, parse_json_and_free, to_cstring,
+    borrowed_objects, deliver, parse_value_and_free, to_cstring, value_buffer, value_payload,
     Handler, Registration,
 };
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct LegibleOutputInfoPayload {
     suppresses_player_rendering: bool,
     advance_interval_for_delegate_invocation: f64,
@@ -57,8 +56,7 @@ impl PlayerItemLegibleOutputTextStylingResolution {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct LegibleOutputEventPayload {
     event: String,
     item_time: Option<Time>,
@@ -95,14 +93,14 @@ impl PlayerItemLegibleOutput {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(native_representation_subtypes: Option<&[u32]>) -> Result<Self, AVPlayerError> {
         let native_representation_subtypes = native_representation_subtypes
-            .map(|subtypes| json_cstring(subtypes, "native legible output subtypes"))
+            .map(|subtypes| value_buffer(subtypes, "native legible output subtypes"))
             .transpose()?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_legible_output_create(
                 native_representation_subtypes
                     .as_ref()
-                    .map_or(ptr::null(), |subtypes| subtypes.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -113,13 +111,13 @@ impl PlayerItemLegibleOutput {
     }
 
     fn info(&self) -> Result<LegibleOutputInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_item_legible_output_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_player_item_legible_output_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
@@ -163,7 +161,7 @@ impl PlayerItemLegibleOutput {
                     self.ptr,
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(legible_output_event_trampoline),
                     userdata,
                     drop_userdata,
@@ -207,7 +205,7 @@ impl PlayerItemLegibleOutput {
             resolution.as_raw(),
             "legible output text styling resolution",
         )?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_item_legible_output_set_text_styling_resolution(
                 self.ptr,
@@ -239,7 +237,7 @@ impl PlayerItem {
         &self,
         output: &PlayerItemLegibleOutput,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -255,11 +253,12 @@ impl PlayerItem {
 
 unsafe extern "C" fn legible_output_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
     objects: *const *mut c_void,
     count: usize,
 ) {
-    let Some(payload) = (unsafe { json_payload::<LegibleOutputEventPayload>(payload_json) }) else {
+    let Some(payload) = (unsafe { value_payload::<LegibleOutputEventPayload>(payload_value) })
+    else {
         return;
     };
 
@@ -282,4 +281,27 @@ unsafe extern "C" fn legible_output_event_trampoline(
     };
 
     unsafe { deliver(userdata, "legible_output_event_trampoline", event) };
+}
+
+impl crate::binary::FromValue for LegibleOutputInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            suppresses_player_rendering: value.field(0)?,
+            advance_interval_for_delegate_invocation: value.field(1)?,
+            native_representation_subtypes: value.field(2)?,
+            has_delegate: value.field(3)?,
+            text_styling_resolution: value.field(4)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for LegibleOutputEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            item_time: value.field(1)?,
+            strings: value.field(2)?,
+            native_sample_buffer_count: value.field(3)?,
+        })
+    }
 }

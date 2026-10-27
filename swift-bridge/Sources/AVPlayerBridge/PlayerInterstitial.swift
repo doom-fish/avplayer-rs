@@ -1,7 +1,8 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-struct PlayerInterstitialEventInfoPayload: Codable {
+struct PlayerInterstitialEventInfoPayload: AVPBridge {
     let identifier: String
     let time: TimePayload
     let date: String?
@@ -13,22 +14,22 @@ struct PlayerInterstitialEventInfoPayload: Codable {
     let alignsResumptionWithPrimarySegmentBoundary: Bool
     let cue: String?
     let willPlayOnce: Bool
-    let userDefinedAttributesJSON: String?
-    let assetListResponseJSON: String?
+    let userDefinedAttributesValue: AVPBinaryValue?
+    let assetListResponseValue: AVPBinaryValue?
     let timelineOccupancyRaw: Int?
     let supplementsPrimaryContent: Bool?
     let contentMayVary: Bool?
     let hasPrimaryItem: Bool
 }
 
-struct PlayerInterstitialMonitorStatePayload: Codable {
+struct PlayerInterstitialMonitorStatePayload: AVPBridge {
     let events: [PlayerInterstitialEventInfoPayload]
     let currentEvent: PlayerInterstitialEventInfoPayload?
     let currentEventSkippableStateRaw: Int?
     let currentEventSkipControlLabel: String?
 }
 
-struct PlayerInterstitialMonitorEventPayload: Codable {
+struct PlayerInterstitialMonitorEventPayload: AVPBridge {
     let event: String
     let interstitialEvent: PlayerInterstitialEventInfoPayload?
     let assetListResponseStatusRaw: Int?
@@ -66,13 +67,13 @@ final class AVPPlayerInterstitialEventControllerBox: AVPPlayerInterstitialEventM
 
 final class InterstitialEventMonitorObserverBox: NSObject {
     private weak var monitor: AVPlayerInterstitialEventMonitor?
-    private let callback: AVPJsonCallback
+    private let callback: AVPValueCallback
     private let gate: AVPCallbackGate
     private var observers: [NSObjectProtocol] = []
 
     init(
         monitor: AVPlayerInterstitialEventMonitor,
-        callback: @escaping AVPJsonCallback,
+        callback: @escaping AVPValueCallback,
         gate: AVPCallbackGate
     ) {
         self.monitor = monitor
@@ -246,7 +247,7 @@ final class InterstitialEventMonitorObserverBox: NSObject {
     }
 
     private func send(_ payload: PlayerInterstitialMonitorEventPayload) {
-        gate.deliverJSON(payload, to: callback)
+        gate.deliverValue(payload, to: callback)
     }
 }
 
@@ -256,7 +257,7 @@ public func av_player_interstitial_event_create_with_time(
     _ value: Int64,
     _ timescale: Int32,
     _ kind: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 13.0, *) else {
         outErrorMessage?.pointee = ffiString("interstitial events require macOS 13.0 or later")
@@ -273,14 +274,14 @@ public func av_player_interstitial_event_release(_ eventPtr: UnsafeMutableRawPoi
     Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).release()
 }
 
-@_cdecl("av_player_interstitial_event_info_json")
-public func av_player_interstitial_event_info_json(
+@_cdecl("av_player_interstitial_event_info_value")
+public func av_player_interstitial_event_info_value(
     _ eventPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
     do {
-        return ffiString(try avpEncodeJSON(encodeInterstitialEventSummary(event)))
+        return try avpEncodeValue(encodeInterstitialEventSummary(event))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -290,11 +291,11 @@ public func av_player_interstitial_event_info_json(
 @_cdecl("av_player_interstitial_event_set_identifier")
 public func av_player_interstitial_event_set_identifier(
     _ eventPtr: UnsafeMutableRawPointer,
-    _ identifierPtr: UnsafePointer<CChar>
+    _ identifierPtr: UnsafePointer<AVPValue>
 ) {
     guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
-    event.identifier = String(cString: identifierPtr)
+    event.identifier = String(bridge: identifierPtr)
 }
 
 @_cdecl("av_player_interstitial_event_set_restrictions")
@@ -354,11 +355,11 @@ public func av_player_interstitial_event_set_aligns_resumption_with_primary_segm
 @_cdecl("av_player_interstitial_event_set_cue")
 public func av_player_interstitial_event_set_cue(
     _ eventPtr: UnsafeMutableRawPointer,
-    _ cuePtr: UnsafePointer<CChar>
+    _ cuePtr: UnsafePointer<AVPValue>
 ) {
     guard #available(macOS 13.0, *) else { return }
     let event = Unmanaged<AVPPlayerInterstitialEventBox>.fromOpaque(eventPtr).takeUnretainedValue().event
-    event.cue = interstitialCue(from: String(cString: cuePtr))
+    event.cue = interstitialCue(from: String(bridge: cuePtr))
 }
 
 @_cdecl("av_player_interstitial_event_set_will_play_once")
@@ -404,7 +405,7 @@ public func av_player_interstitial_event_set_content_may_vary(
 @_cdecl("av_player_interstitial_event_monitor_create")
 public func av_player_interstitial_event_monitor_create(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let monitor = AVPlayerInterstitialEventMonitor(primaryPlayer: player)
@@ -417,14 +418,14 @@ public func av_player_interstitial_event_monitor_release(_ monitorPtr: UnsafeMut
     Unmanaged<AVPPlayerInterstitialEventMonitorBox>.fromOpaque(monitorPtr).release()
 }
 
-@_cdecl("av_player_interstitial_event_monitor_info_json")
-public func av_player_interstitial_event_monitor_info_json(
+@_cdecl("av_player_interstitial_event_monitor_info_value")
+public func av_player_interstitial_event_monitor_info_value(
     _ monitorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let monitor = Unmanaged<AVPPlayerInterstitialEventMonitorBox>.fromOpaque(monitorPtr).takeUnretainedValue().monitor
     do {
-        return ffiString(try avpEncodeJSON(encodeInterstitialMonitorState(monitor)))
+        return try avpEncodeValue(encodeInterstitialMonitorState(monitor))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -434,10 +435,10 @@ public func av_player_interstitial_event_monitor_info_json(
 @_cdecl("av_player_interstitial_event_monitor_add_observer")
 public func av_player_interstitial_event_monitor_add_observer(
     _ monitorPtr: UnsafeMutableRawPointer,
-    _ callback: AVPJsonCallback?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -464,7 +465,7 @@ public func av_player_interstitial_event_monitor_observer_release(_ observerPtr:
 @_cdecl("av_player_interstitial_event_controller_create")
 public func av_player_interstitial_event_controller_create(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let controller = AVPlayerInterstitialEventController(primaryPlayer: player)
@@ -477,14 +478,14 @@ public func av_player_interstitial_event_controller_release(_ controllerPtr: Uns
     Unmanaged<AVPPlayerInterstitialEventControllerBox>.fromOpaque(controllerPtr).release()
 }
 
-@_cdecl("av_player_interstitial_event_controller_info_json")
-public func av_player_interstitial_event_controller_info_json(
+@_cdecl("av_player_interstitial_event_controller_info_value")
+public func av_player_interstitial_event_controller_info_value(
     _ controllerPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let controller = Unmanaged<AVPPlayerInterstitialEventControllerBox>.fromOpaque(controllerPtr).takeUnretainedValue().controller
     do {
-        return ffiString(try avpEncodeJSON(encodeInterstitialMonitorState(controller)))
+        return try avpEncodeValue(encodeInterstitialMonitorState(controller))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -496,7 +497,7 @@ public func av_player_interstitial_event_controller_set_events(
     _ controllerPtr: UnsafeMutableRawPointer,
     _ eventPtrs: UnsafePointer<UnsafeMutableRawPointer?>?,
     _ count: Int,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let controller = Unmanaged<AVPPlayerInterstitialEventControllerBox>.fromOpaque(controllerPtr).takeUnretainedValue().controller
     let events = (0..<count).compactMap { index -> AVPlayerInterstitialEvent? in
@@ -532,10 +533,10 @@ public func av_player_interstitial_event_controller_skip_current_event(_ control
 
 @_cdecl("av_player_waiting_during_interstitial_event_reason")
 public func av_player_waiting_during_interstitial_event_reason(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     do {
-        return ffiString(try avpEncodeJSON(AVPlayer.WaitingReason.interstitialEvent.rawValue))
+        return try avpEncodeValue(AVPlayer.WaitingReason.interstitialEvent.rawValue)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -575,10 +576,10 @@ func encodeInterstitialEventSummary(_ event: AVPlayerInterstitialEvent) -> Playe
             }
             return false
         }(),
-        userDefinedAttributesJSON: jsonString(fromJSONObject: event.userDefinedAttributes),
-        assetListResponseJSON: {
+        userDefinedAttributesValue: avpPropertyValue(event.userDefinedAttributes),
+        assetListResponseValue: {
             if #available(macOS 13.3, *) {
-                return jsonString(fromJSONObject: event.assetListResponse)
+                return avpPropertyValue(event.assetListResponse)
             }
             return nil
         }(),
@@ -651,9 +652,96 @@ private func interstitialCue(from raw: String) -> AVPlayerInterstitialEvent.Cue 
     }
 }
 
-private func jsonString(fromJSONObject object: Any?) -> String? {
-    guard let object else { return nil }
-    guard JSONSerialization.isValidJSONObject(object) else { return nil }
-    guard let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
-    return String(data: data, encoding: .utf8)
+extension PlayerInterstitialEventInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            identifier.binaryValue,
+            time.binaryValue,
+            date.binaryValue,
+            templateItemCount.binaryValue,
+            restrictions.binaryValue,
+            resumptionOffset.binaryValue,
+            playoutLimit.binaryValue,
+            alignsStartWithPrimarySegmentBoundary.binaryValue,
+            alignsResumptionWithPrimarySegmentBoundary.binaryValue,
+            cue.binaryValue,
+            willPlayOnce.binaryValue,
+            userDefinedAttributesValue.binaryValue,
+            assetListResponseValue.binaryValue,
+            timelineOccupancyRaw.binaryValue,
+            supplementsPrimaryContent.binaryValue,
+            contentMayVary.binaryValue,
+            hasPrimaryItem.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            identifier: try binaryValue.field(0),
+            time: try binaryValue.field(1),
+            date: try binaryValue.field(2),
+            templateItemCount: try binaryValue.field(3),
+            restrictions: try binaryValue.field(4),
+            resumptionOffset: try binaryValue.field(5),
+            playoutLimit: try binaryValue.field(6),
+            alignsStartWithPrimarySegmentBoundary: try binaryValue.field(7),
+            alignsResumptionWithPrimarySegmentBoundary: try binaryValue.field(8),
+            cue: try binaryValue.field(9),
+            willPlayOnce: try binaryValue.field(10),
+            userDefinedAttributesValue: try binaryValue.field(11),
+            assetListResponseValue: try binaryValue.field(12),
+            timelineOccupancyRaw: try binaryValue.field(13),
+            supplementsPrimaryContent: try binaryValue.field(14),
+            contentMayVary: try binaryValue.field(15),
+            hasPrimaryItem: try binaryValue.field(16)
+        )
+    }
+}
+
+extension PlayerInterstitialMonitorStatePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            events.binaryValue,
+            currentEvent.binaryValue,
+            currentEventSkippableStateRaw.binaryValue,
+            currentEventSkipControlLabel.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            events: try binaryValue.field(0),
+            currentEvent: try binaryValue.field(1),
+            currentEventSkippableStateRaw: try binaryValue.field(2),
+            currentEventSkipControlLabel: try binaryValue.field(3)
+        )
+    }
+}
+
+extension PlayerInterstitialMonitorEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            interstitialEvent.binaryValue,
+            assetListResponseStatusRaw.binaryValue,
+            skippableStateRaw.binaryValue,
+            skipControlLabel.binaryValue,
+            errorMessage.binaryValue,
+            playoutTime.binaryValue,
+            didPlayEntireEvent.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            interstitialEvent: try binaryValue.field(1),
+            assetListResponseStatusRaw: try binaryValue.field(2),
+            skippableStateRaw: try binaryValue.field(3),
+            skipControlLabel: try binaryValue.field(4),
+            errorMessage: try binaryValue.field(5),
+            playoutTime: try binaryValue.field(6),
+            didPlayEntireEvent: try binaryValue.field(7)
+        )
+    }
 }

@@ -1,20 +1,20 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CString;
 
 use apple_cf::cv::CVPixelBuffer;
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::Player;
 use crate::retained::retain_release_wrapper;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
 /// Mirrors the `AVPlayer` framework counterpart for `Rect`.
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
     /// Mirrors the `AVPlayer` framework property for `x`.
     pub x: f64,
@@ -26,8 +26,7 @@ pub struct Rect {
     pub height: f64,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerLayerInfoPayload {
     has_player: bool,
     video_gravity: String,
@@ -96,12 +95,12 @@ impl PlayerLayer {
     }
 
     fn info(&self) -> Result<PlayerLayerInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_layer_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_player_layer_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `has_player`.
@@ -126,7 +125,7 @@ impl PlayerLayer {
 
     /// Calls the `AVPlayer` framework counterpart for `set_video_gravity`.
     pub fn set_video_gravity(&self, video_gravity: VideoGravity) -> Result<(), AVPlayerError> {
-        let video_gravity = CString::new(video_gravity.as_raw()).map_err(|error| {
+        let video_gravity = InputString::new(video_gravity.as_raw()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("video gravity contains NUL byte: {error}"))
         })?;
         unsafe { ffi::av_player_layer_set_video_gravity(self.ptr, video_gravity.as_ptr()) };
@@ -151,5 +150,27 @@ impl PlayerLayer {
 
     pub const fn as_ptr(&self) -> *mut c_void {
         self.ptr
+    }
+}
+
+impl crate::binary::FromValue for Rect {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            x: value.field(0)?,
+            y: value.field(1)?,
+            width: value.field(2)?,
+            height: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerLayerInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            has_player: value.field(0)?,
+            video_gravity: value.field(1)?,
+            ready_for_display: value.field(2)?,
+            video_rect: value.field(3)?,
+        })
     }
 }

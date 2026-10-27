@@ -1,13 +1,14 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
 
 use crate::asset::{Asset, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::retained::retain_release_wrapper;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -42,7 +43,7 @@ retain_release_wrapper!(AssetPlaybackAssistant, release = ffi::av_ns_object_rele
 
 impl Asset {
     pub fn playback_assistant(&self) -> Result<AssetPlaybackAssistant, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe { ffi::av_asset_playback_assistant_create(self.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -61,13 +62,13 @@ impl AssetPlaybackAssistant {
     pub fn playback_configuration_options(
         &self,
     ) -> Result<Vec<AssetPlaybackConfigurationOption>, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_asset_playback_assistant_copy_options_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_asset_playback_assistant_copy_options_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        let raw: Vec<String> = parse_json_and_free(json_ptr)?;
+        let raw: Vec<String> = parse_value_and_free(value_ptr)?;
         Ok(raw
             .into_iter()
             .map(|value| AssetPlaybackConfigurationOption::from_raw(&value))

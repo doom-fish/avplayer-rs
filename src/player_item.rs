@@ -4,22 +4,19 @@
     clippy::struct_excessive_bools
 )]
 
-use core::ffi::c_char;
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
 use core::ops::{BitOr, BitOrAssign};
 use core::ptr;
-use std::ffi::CString;
-
-use serde::{Deserialize, Serialize};
 
 use crate::asset::{Asset, Size};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
 use crate::time::{Time, TimeRange};
-use crate::util::{json_cstring, parse_json_and_free};
+use crate::util::{parse_value_and_free, value_buffer};
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct ExtendedPlayerItemInfoPayload {
     automatically_loaded_asset_keys: Vec<String>,
     seekable_time_ranges: Vec<TimeRange>,
@@ -47,8 +44,7 @@ struct ExtendedPlayerItemInfoPayload {
     has_audio_mix: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioMixTrackVolume {
     pub track_id: i32,
     pub volume: f32,
@@ -181,8 +177,7 @@ impl ContentAuthorizationStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerItemVideoCompositorPayload {
     class_name: String,
     supports_wide_color_source_frames: Option<bool>,
@@ -220,12 +215,12 @@ impl From<PlayerItemVideoCompositorPayload> for PlayerItemVideoCompositorInfo {
 
 impl PlayerItem {
     fn extended_info(&self) -> Result<ExtendedPlayerItemInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_player_item_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `automatically_loaded_asset_keys`.
@@ -343,7 +338,7 @@ impl PlayerItem {
         &self,
         algorithm: &AudioTimePitchAlgorithm,
     ) -> Result<(), AVPlayerError> {
-        let algorithm = CString::new(algorithm.as_raw()).map_err(|error| {
+        let algorithm = InputString::new(algorithm.as_raw()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!(
                 "audio time pitch algorithm contains NUL byte: {error}"
             ))
@@ -376,7 +371,7 @@ impl PlayerItem {
         &self,
         preferences: VariantPreferences,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_item_set_variant_preferences(self.ptr, preferences.bits(), &raw mut err)
         };
@@ -459,7 +454,7 @@ impl PlayerItem {
     }
 
     pub fn set_video_composition_from_asset(&self, asset: &Asset) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_item_set_video_composition_from_asset(self.ptr, asset.ptr, &raw mut err)
         };
@@ -490,10 +485,14 @@ impl PlayerItem {
                 volume.track_id
             )));
         }
-        let volumes = json_cstring(volumes, "audio mix volumes")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let volumes = value_buffer(volumes, "audio mix volumes")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
-            ffi::av_player_item_set_audio_mix_volumes_json(self.ptr, volumes.as_ptr(), &raw mut err)
+            ffi::av_player_item_set_audio_mix_volumes_value(
+                self.ptr,
+                volumes.as_ptr(),
+                &raw mut err,
+            )
         };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -508,4 +507,56 @@ impl PlayerItem {
 
 fn availability_error(symbol: &str, macos_version: &str) -> AVPlayerError {
     AVPlayerError::OperationFailed(format!("{symbol} requires macOS {macos_version}+"))
+}
+
+impl crate::binary::FromValue for ExtendedPlayerItemInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            automatically_loaded_asset_keys: value.field(5)?,
+            seekable_time_ranges: value.field(6)?,
+            loaded_time_ranges: value.field(7)?,
+            can_use_network_resources_for_live_streaming_while_paused: value.field(8)?,
+            preferred_forward_buffer_duration: value.field(9)?,
+            preferred_peak_bit_rate: value.field(10)?,
+            preferred_peak_bit_rate_for_expensive_networks: value.field(11)?,
+            preferred_maximum_resolution: value.field(12)?,
+            preferred_maximum_resolution_for_expensive_networks: value.field(13)?,
+            audio_time_pitch_algorithm: value.field(14)?,
+            output_count: value.field(15)?,
+            track_count: value.field(16)?,
+            variant_preferences: value.field(17)?,
+            authorization_required_for_playback: value.field(18)?,
+            application_authorized_for_playback: value.field(19)?,
+            content_authorized_for_playback: value.field(20)?,
+            content_authorization_request_status: value.field(21)?,
+            custom_video_compositor: value.field(22)?,
+            forward_playback_end_time: value.field(23)?,
+            reverse_playback_end_time: value.field(24)?,
+            can_step_forward: value.field(25)?,
+            can_step_backward: value.field(26)?,
+            has_video_composition: value.field(27)?,
+            has_audio_mix: value.field(28)?,
+        })
+    }
+}
+
+impl crate::binary::ToValue for AudioMixTrackVolume {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.track_id),
+            crate::binary::ToValue::to_value(&self.volume),
+        ])
+    }
+}
+
+impl crate::binary::FromValue for PlayerItemVideoCompositorPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            class_name: value.field(0)?,
+            supports_wide_color_source_frames: value.field(1)?,
+            supports_hdr_source_frames: value.field(2)?,
+            supports_source_tagged_buffers: value.field(3)?,
+            can_conform_color_of_source_frames: value.field(4)?,
+        })
+    }
 }

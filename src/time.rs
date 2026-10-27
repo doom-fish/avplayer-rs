@@ -1,8 +1,5 @@
-use serde::{Deserialize, Serialize};
-
-/// Serializable representation of `CMTime`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+/// Native representation of `CMTime`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Time {
     /// Numeric time represented as `value / timescale` seconds.
@@ -88,8 +85,42 @@ impl From<(i64, i32)> for Time {
     }
 }
 
-/// Serializable representation of `CMTimeRange`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+impl crate::binary::FromValue for Time {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, crate::error::AVPlayerError> {
+        let kind: i32 = value.field(0)?;
+        match kind {
+            0 => Ok(Self::Numeric {
+                value: value.field(1)?,
+                timescale: value.field(2)?,
+            }),
+            1 => Ok(Self::Invalid),
+            2 => Ok(Self::Indefinite),
+            3 => Ok(Self::PositiveInfinity),
+            4 => Ok(Self::NegativeInfinity),
+            _ => Err(crate::binary::invalid_value()),
+        }
+    }
+}
+
+impl crate::binary::ToValue for Time {
+    fn to_value(&self) -> crate::binary::Value {
+        use crate::binary::Value;
+
+        let (kind, value, timescale) = match *self {
+            Self::Numeric { value, timescale } => {
+                (0, Value::Signed(value), Value::Signed(i64::from(timescale)))
+            }
+            Self::Invalid => (1, Value::Null, Value::Null),
+            Self::Indefinite => (2, Value::Null, Value::Null),
+            Self::PositiveInfinity => (3, Value::Null, Value::Null),
+            Self::NegativeInfinity => (4, Value::Null, Value::Null),
+        };
+        Value::Array(vec![Value::Signed(kind), value, timescale])
+    }
+}
+
+/// Native representation of `CMTimeRange`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TimeRange {
     /// Range start.
     pub start: Time,
@@ -102,6 +133,26 @@ impl TimeRange {
     #[must_use]
     pub const fn new(start: Time, duration: Time) -> Self {
         Self { start, duration }
+    }
+}
+
+use crate::error::AVPlayerError;
+
+impl crate::binary::FromValue for TimeRange {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            start: value.field(0)?,
+            duration: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::ToValue for TimeRange {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.start),
+            crate::binary::ToValue::to_value(&self.duration),
+        ])
     }
 }
 

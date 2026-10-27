@@ -1,19 +1,17 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-
-use serde::Deserialize;
 
 use crate::asset::UrlAsset;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::media_selection::{MediaSelectionGroup, MediaSelectionOption};
 use crate::retained::retain_release_wrapper;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetCacheInfoPayload {
     playable_offline: bool,
 }
@@ -38,12 +36,12 @@ impl UrlAsset {
 
 impl AssetCache {
     fn info(&self) -> Result<AssetCacheInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_cache_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_cache_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn is_playable_offline(&self) -> Result<bool, AVPlayerError> {
@@ -83,5 +81,13 @@ impl AssetCache {
             options.push(MediaSelectionOption { ptr });
         }
         Ok(options)
+    }
+}
+
+impl crate::binary::FromValue for AssetCacheInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            playable_offline: value.field(0)?,
+        })
     }
 }

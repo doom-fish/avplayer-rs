@@ -1,8 +1,8 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::marker::PhantomData;
-use std::ffi::CStr;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -26,15 +26,13 @@ impl PlayerItemMediaDataCollector<'_> {
     }
 
     pub fn kind(&self) -> Result<PlayerItemMediaDataCollectorKind, AVPlayerError> {
-        let mut err: *mut c_char = core::ptr::null_mut();
+        let mut err: *mut AVPValue = core::ptr::null_mut();
         let raw = unsafe { ffi::av_player_item_media_data_collector_kind(self.ptr, &raw mut err) };
         if raw.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        let value = unsafe { CStr::from_ptr(raw) }
-            .to_string_lossy()
-            .into_owned();
-        unsafe { ffi::avp_string_free(raw) };
+        let value = unsafe { crate::binary::read_string(raw) }.unwrap_or_default();
+        unsafe { ffi::avp_value_free(raw) };
         Ok(PlayerItemMediaDataCollectorKind::from_raw(&value))
     }
 }

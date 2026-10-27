@@ -10,8 +10,25 @@
 //! in `target/example-artifacts/test.aiff`.  If that file does not exist the
 //! example exits 0 with a notice (headless CI safe).
 
+use std::thread;
+use std::time::{Duration, Instant};
+
+use apple_cf::cf::CFRunLoop;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    pollster::block_on(async_main())
+    let worker =
+        thread::spawn(|| pollster::block_on(async_main()).map_err(|error| error.to_string()));
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !worker.is_finished() {
+        if Instant::now() >= deadline {
+            return Err("the async example did not finish within 30 seconds".into());
+        }
+        let _ = CFRunLoop::run_in_default_mode(Duration::from_millis(10), false);
+    }
+    worker
+        .join()
+        .map_err(|_| "the async example worker panicked")?
+        .map_err(Into::into)
 }
 
 async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
@@ -19,7 +36,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     use avplayer::Time;
     use avplayer::{
         async_api::{AsyncAsset, AsyncPlayer, AsyncPlayerItem},
-        Player, PlayerItem, UrlAsset,
+        Player, PlayerItem, PlayerStatus, UrlAsset,
     };
 
     let path = "target/example-artifacts/test.aiff";
@@ -94,6 +111,10 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Player preroll ────────────────────────────────────────────────────────
     println!("=== AsyncPlayer::preroll ===");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while player.status()? == PlayerStatus::Unknown && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
     let finished = AsyncPlayer::new(&player).preroll(1.0).await?;
     println!("  preroll finished: {finished}");
 

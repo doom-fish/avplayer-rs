@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
@@ -7,11 +8,11 @@ public func av_player_item_access_log_release(_ logPtr: UnsafeMutableRawPointer?
     Unmanaged<AVPlayerItemAccessLog>.fromOpaque(logPtr).release()
 }
 
-@_cdecl("av_player_item_access_log_info_json")
-public func av_player_item_access_log_info_json(
+@_cdecl("av_player_item_access_log_info_value")
+public func av_player_item_access_log_info_value(
     _ logPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let log = Unmanaged<AVPlayerItemAccessLog>.fromOpaque(logPtr).takeUnretainedValue()
     let payload = AccessLogPayload(
         extendedLog: avpString(from: log.extendedLogData(), encoding: log.extendedLogDataStringEncoding),
@@ -19,7 +20,7 @@ public func av_player_item_access_log_info_json(
         events: log.events.map(encodeAccessLogEvent)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -32,11 +33,11 @@ public func av_player_item_error_log_release(_ logPtr: UnsafeMutableRawPointer?)
     Unmanaged<AVPlayerItemErrorLog>.fromOpaque(logPtr).release()
 }
 
-@_cdecl("av_player_item_error_log_info_json")
-public func av_player_item_error_log_info_json(
+@_cdecl("av_player_item_error_log_info_value")
+public func av_player_item_error_log_info_value(
     _ logPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let log = Unmanaged<AVPlayerItemErrorLog>.fromOpaque(logPtr).takeUnretainedValue()
     let payload = ErrorLogPayload(
         extendedLog: avpString(from: log.extendedLogData(), encoding: log.extendedLogDataStringEncoding),
@@ -44,7 +45,7 @@ public func av_player_item_error_log_info_json(
         events: log.events.map(encodeErrorLogEvent)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil

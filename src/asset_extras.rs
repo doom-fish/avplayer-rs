@@ -1,20 +1,17 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::c_char;
+use crate::ffi::AVPValue;
 use core::ptr;
-
-use serde::Deserialize;
 
 use crate::asset::{Asset, AssetTrack, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::metadata::MetadataItem;
 use crate::time::{Time, TimeRange};
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetExtraInfoPayload {
     preferred_rate: f32,
     preferred_volume: f32,
@@ -35,8 +32,7 @@ struct AssetExtraInfoPayload {
 }
 
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetTrackExtraInfoPayload {
     time_range: TimeRange,
     language_code: Option<String>,
@@ -60,12 +56,12 @@ struct AssetTrackExtraInfoPayload {
 
 impl Asset {
     fn extra_info(&self) -> Result<AssetExtraInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_extra_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_extra_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn cancel_loading(&self) {
@@ -209,12 +205,12 @@ impl UrlAsset {
 
 impl AssetTrack {
     fn extra_info(&self) -> Result<AssetTrackExtraInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_track_extra_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_track_extra_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn time_range(&self) -> Result<TimeRange, AVPlayerError> {
@@ -287,5 +283,53 @@ impl AssetTrack {
 
     pub fn is_legible(&self) -> Result<bool, AVPlayerError> {
         Ok(self.extra_info()?.legible)
+    }
+}
+
+impl crate::binary::FromValue for AssetExtraInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            preferred_rate: value.field(0)?,
+            preferred_volume: value.field(1)?,
+            overall_duration_hint: value.field(2)?,
+            available_metadata_formats: value.field(3)?,
+            available_chapter_locales: value.field(4)?,
+            common_metadata: value.field(5)?,
+            creation_date: value.field(6)?,
+            lyrics: value.field(7)?,
+            has_protected_content: value.field(8)?,
+            can_contain_fragments: value.field(9)?,
+            contains_fragments: value.field(10)?,
+            playable: value.field(11)?,
+            exportable: value.field(12)?,
+            readable: value.field(13)?,
+            composable: value.field(14)?,
+            compatible_with_air_play_video: value.field(15)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetTrackExtraInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            time_range: value.field(0)?,
+            language_code: value.field(1)?,
+            extended_language_tag: value.field(2)?,
+            natural_time_scale: value.field(3)?,
+            preferred_volume: value.field(4)?,
+            enabled: value.field(5)?,
+            playable: value.field(6)?,
+            decodable: value.field(7)?,
+            self_contained: value.field(8)?,
+            total_sample_data_length: value.field(9)?,
+            available_metadata_formats: value.field(10)?,
+            available_track_association_types: value.field(11)?,
+            can_provide_sample_cursors: value.field(12)?,
+            min_frame_duration: value.field(13)?,
+            requires_frame_reordering: value.field(14)?,
+            audible: value.field(15)?,
+            visual: value.field(16)?,
+            legible: value.field(17)?,
+        })
     }
 }

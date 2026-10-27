@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
@@ -28,7 +29,7 @@ private func avpAssetPlaybackConfigurationOptionString(
 @_cdecl("av_asset_playback_assistant_create")
 public func av_asset_playback_assistant_create(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 13.0, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetPlaybackAssistant requires macOS 13.0")
@@ -38,26 +39,32 @@ public func av_asset_playback_assistant_create(
     return Unmanaged.passRetained(AVAssetPlaybackAssistant(asset: asset)).toOpaque()
 }
 
-@_cdecl("av_asset_playback_assistant_copy_options_json")
-public func av_asset_playback_assistant_copy_options_json(
+@_cdecl("av_asset_playback_assistant_copy_options_value")
+public func av_asset_playback_assistant_copy_options_value(
     _ assistantPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 13.0, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetPlaybackAssistant requires macOS 13.0")
         return nil
     }
     let assistant = Unmanaged<AVAssetPlaybackAssistant>.fromOpaque(assistantPtr).takeUnretainedValue()
-    let semaphore = DispatchSemaphore(value: 0)
-    var encoded: UnsafeMutablePointer<CChar>?
-    assistant.loadPlaybackConfigurationOptions { options in
-        defer { semaphore.signal() }
-        let values = options.map(avpAssetPlaybackConfigurationOptionString)
-        encoded = ffiString((try? avpEncodeJSON(values)) ?? "[]")
-    }
-    if semaphore.wait(timeout: .now() + .seconds(30)) == .timedOut {
-        outErrorMessage?.pointee = ffiString("timed out waiting for playback configuration options")
+    switch avpAwait(label: "playback configuration options", work: {
+        await withCheckedContinuation { (continuation: CheckedContinuation<[String], Never>) in
+            assistant.loadPlaybackConfigurationOptions { options in
+                continuation.resume(returning: options.map(avpAssetPlaybackConfigurationOptionString))
+            }
+        }
+    }) {
+    case .success(let values):
+        do {
+            return try avpEncodeValue(values)
+        } catch {
+            outErrorMessage?.pointee = ffiString(error.localizedDescription)
+            return nil
+        }
+    case .failure(let error):
+        avpWriteError(error, outErrorMessage)
         return nil
     }
-    return encoded
 }

@@ -1,12 +1,12 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CString;
 use std::path::Path;
 
 use doom_fish_utils::stream::{BoundedAsyncStream, NextItem};
-use serde::Deserialize;
 
 use crate::asset::UrlAsset;
 use crate::asset_variant::AssetVariantQualifier;
@@ -16,7 +16,7 @@ use crate::media_selection::MediaSelection;
 use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
 use crate::util::{
-    deliver, json_payload, parse_json_and_free, to_cstring, validate_capacity, Handler,
+    deliver, parse_value_and_free, to_cstring, validate_capacity, value_payload, Handler,
     Registration,
 };
 
@@ -46,22 +46,19 @@ impl AssetDownloadedAssetEvictionPriority {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetDownloadStorageManagementPolicyPayload {
     priority: String,
     expiration_date_iso8601: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetDownloadConfigurationPayload {
     optimizes_auxiliary_content_configurations: bool,
     downloads_interstitial_assets: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct AssetDownloadContentConfigurationPayload {
     variant_qualifier_count: usize,
     media_selection_count: usize,
@@ -123,7 +120,7 @@ impl AssetDownloadStorageManager {
             .to_str()
             .ok_or_else(|| AVPlayerError::InvalidArgument("path is not valid UTF-8".into()))?;
         let path = to_cstring(path, "download storage path")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_asset_download_storage_manager_set_policy_for_file_path(
                 self.ptr,
@@ -147,7 +144,7 @@ impl AssetDownloadStorageManager {
             .to_str()
             .ok_or_else(|| AVPlayerError::InvalidArgument("path is not valid UTF-8".into()))?;
         let path = to_cstring(path, "download storage path")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_asset_download_storage_manager_copy_policy_for_file_path(
                 self.ptr,
@@ -172,14 +169,14 @@ impl AssetDownloadStorageManagementPolicy {
     }
 
     fn info(&self) -> Result<AssetDownloadStorageManagementPolicyPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_asset_download_storage_management_policy_info_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_asset_download_storage_management_policy_info_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn priority(&self) -> Result<AssetDownloadedAssetEvictionPriority, AVPlayerError> {
@@ -196,12 +193,12 @@ impl AssetDownloadStorageManagementPolicy {
         &self,
         priority: &AssetDownloadedAssetEvictionPriority,
     ) -> Result<(), AVPlayerError> {
-        let priority = CString::new(priority.as_raw()).map_err(|error| {
+        let priority = InputString::new(priority.as_raw()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!(
                 "download storage priority contains NUL byte: {error}"
             ))
         })?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_asset_download_storage_management_policy_set_priority(
                 self.ptr,
@@ -217,7 +214,7 @@ impl AssetDownloadStorageManagementPolicy {
 
     pub fn set_expiration_date_iso8601(&self, value: &str) -> Result<(), AVPlayerError> {
         let value = to_cstring(value, "download storage expiration date")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_asset_download_storage_management_policy_set_expiration_date_iso8601(
                 self.ptr,
@@ -238,7 +235,7 @@ impl UrlAsset {
         title: &str,
     ) -> Result<AssetDownloadConfiguration, AVPlayerError> {
         let title = to_cstring(title, "download title")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_asset_download_configuration_create(
                 self.asset.ptr,
@@ -255,13 +252,13 @@ impl UrlAsset {
 
 impl AssetDownloadConfiguration {
     fn info(&self) -> Result<AssetDownloadConfigurationPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_asset_download_configuration_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_asset_download_configuration_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn optimizes_auxiliary_content_configurations(&self) -> Result<bool, AVPlayerError> {
@@ -281,7 +278,7 @@ impl AssetDownloadConfiguration {
     }
 
     pub fn set_downloads_interstitial_assets(&self, enabled: bool) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_asset_download_configuration_set_downloads_interstitial_assets(
                 self.ptr,
@@ -374,14 +371,14 @@ impl AssetDownloadContentConfiguration {
     }
 
     fn info(&self) -> Result<AssetDownloadContentConfigurationPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_asset_download_content_configuration_info_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_asset_download_content_configuration_info_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn variant_qualifier_count(&self) -> Result<usize, AVPlayerError> {
@@ -452,18 +449,15 @@ impl AssetDownloadContentConfiguration {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetDownloadTaskInfoPayload {
     task_identifier: usize,
     url_asset_url: Option<String>,
     state: i32,
-    #[serde(default)]
     loaded_time_ranges: Vec<TimeRange>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetDownloadDelegateEventPayload {
     event: String,
     task_identifier: usize,
@@ -659,7 +653,7 @@ impl AssetDownloadURLSession {
                     identifier.as_ptr(),
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(asset_download_delegate_event_trampoline),
                     userdata,
                     drop_userdata,
@@ -674,7 +668,7 @@ impl AssetDownloadURLSession {
         &self,
         configuration: &AssetDownloadConfiguration,
     ) -> Result<AssetDownloadTask, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_asset_download_url_session_create_task_with_configuration(
                 self.session.as_ptr(),
@@ -702,7 +696,7 @@ impl AssetDownloadURLSession {
         let title = to_cstring(title, "aggregate-download title")?;
         let (artwork_ptr, artwork_len) =
             artwork_data.map_or((ptr::null(), 0), |data| (data.as_ptr(), data.len()));
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_asset_download_url_session_create_aggregate_task(
                 self.session.as_ptr(),
@@ -734,12 +728,12 @@ impl AssetDownloadURLSession {
 
 impl AssetDownloadTask {
     fn info(&self) -> Result<AssetDownloadTaskInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_download_task_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_download_task_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn task_identifier(&self) -> Result<usize, AVPlayerError> {
@@ -773,13 +767,13 @@ impl AssetDownloadTask {
 
 impl AggregateAssetDownloadTask {
     fn info(&self) -> Result<AssetDownloadTaskInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_aggregate_asset_download_task_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_aggregate_asset_download_task_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn task_identifier(&self) -> Result<usize, AVPlayerError> {
@@ -809,10 +803,10 @@ impl AggregateAssetDownloadTask {
 
 unsafe extern "C" fn asset_download_delegate_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
     let Some(payload) =
-        (unsafe { json_payload::<AssetDownloadDelegateEventPayload>(payload_json) })
+        (unsafe { value_payload::<AssetDownloadDelegateEventPayload>(payload_value) })
     else {
         return;
     };
@@ -890,4 +884,57 @@ unsafe extern "C" fn asset_download_delegate_event_trampoline(
     };
 
     unsafe { deliver(userdata, "asset_download_delegate_event_trampoline", event) };
+}
+
+impl crate::binary::FromValue for AssetDownloadStorageManagementPolicyPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            priority: value.field(0)?,
+            expiration_date_iso8601: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetDownloadConfigurationPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            optimizes_auxiliary_content_configurations: value.field(0)?,
+            downloads_interstitial_assets: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetDownloadContentConfigurationPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            variant_qualifier_count: value.field(0)?,
+            media_selection_count: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetDownloadTaskInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            task_identifier: value.field(0)?,
+            url_asset_url: value.field(1)?,
+            state: value.field(2)?,
+            loaded_time_ranges: value.field_or_default(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetDownloadDelegateEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            task_identifier: value.field(1)?,
+            location: value.field(2)?,
+            loaded_time_range: value.field(3)?,
+            total_time_ranges_loaded: value.field(4)?,
+            time_range_expected_to_load: value.field(5)?,
+            variant_count: value.field(6)?,
+            metric_event_class_name: value.field(7)?,
+        })
+    }
 }

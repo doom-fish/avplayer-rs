@@ -5,19 +5,21 @@
     clippy::struct_excessive_bools
 )]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ops::{BitOr, BitOrAssign};
 use core::ptr;
 
-use serde::Deserialize;
-use serde_json::Value;
+use crate::binary::PropertyValue;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::{Player, PlayerItem};
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
-use crate::util::{deliver, json_payload, parse_json_and_free, to_cstring, Handler, Registration};
+use crate::util::{
+    deliver, parse_value_and_free, to_cstring, value_payload, Handler, Registration,
+};
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventRestrictions`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -180,8 +182,7 @@ impl PlayerInterstitialEventSkippableEventState {
 }
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerInterstitialEventInfoPayload`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlayerInterstitialEventInfoPayload {
     identifier: String,
     time: Time,
@@ -194,8 +195,8 @@ pub struct PlayerInterstitialEventInfoPayload {
     aligns_resumption_with_primary_segment_boundary: bool,
     cue: Option<String>,
     will_play_once: bool,
-    user_defined_attributes_json: Option<String>,
-    asset_list_response_json: Option<String>,
+    user_defined_attributes_value: Option<PropertyValue>,
+    asset_list_response_value: Option<PropertyValue>,
     timeline_occupancy_raw: Option<i32>,
     supplements_primary_content: Option<bool>,
     content_may_vary: Option<bool>,
@@ -228,9 +229,9 @@ pub struct PlayerInterstitialEventInfo {
     /// Mirrors the `AVPlayer` framework property for `will_play_once`.
     pub will_play_once: bool,
     /// Mirrors the `AVPlayer` framework property for `user_defined_attributes`.
-    pub user_defined_attributes: Option<Value>,
+    pub user_defined_attributes: Option<PropertyValue>,
     /// Mirrors the `AVPlayer` framework property for `asset_list_response`.
-    pub asset_list_response: Option<Value>,
+    pub asset_list_response: Option<PropertyValue>,
     /// Mirrors the `AVPlayer` framework property for `timeline_occupancy`.
     pub timeline_occupancy: Option<PlayerInterstitialEventTimelineOccupancy>,
     /// Mirrors the `AVPlayer` framework property for `supplements_primary_content`.
@@ -262,8 +263,8 @@ impl TryFrom<PlayerInterstitialEventInfoPayload> for PlayerInterstitialEventInfo
                 .as_deref()
                 .map(PlayerInterstitialEventCue::from_raw),
             will_play_once: payload.will_play_once,
-            user_defined_attributes: parse_json_value(payload.user_defined_attributes_json)?,
-            asset_list_response: parse_json_value(payload.asset_list_response_json)?,
+            user_defined_attributes: payload.user_defined_attributes_value,
+            asset_list_response: payload.asset_list_response_value,
             timeline_occupancy: payload
                 .timeline_occupancy_raw
                 .map(PlayerInterstitialEventTimelineOccupancy::from_raw),
@@ -274,8 +275,7 @@ impl TryFrom<PlayerInterstitialEventInfoPayload> for PlayerInterstitialEventInfo
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerInterstitialMonitorStatePayload {
     events: Vec<PlayerInterstitialEventInfoPayload>,
     current_event: Option<PlayerInterstitialEventInfoPayload>,
@@ -318,8 +318,7 @@ impl TryFrom<PlayerInterstitialMonitorStatePayload> for PlayerInterstitialEventM
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerInterstitialMonitorEventPayload {
     event: String,
     interstitial_event: Option<PlayerInterstitialEventInfoPayload>,
@@ -383,7 +382,7 @@ impl PlayerInterstitialEvent {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(primary_item: &PlayerItem, time: Time) -> Result<Self, AVPlayerError> {
         let (value, timescale, kind) = time.to_raw();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_interstitial_event_create_with_time(
                 primary_item.ptr,
@@ -401,15 +400,15 @@ impl PlayerInterstitialEvent {
 
     /// Calls the `AVPlayer` framework counterpart for `info`.
     pub fn info(&self) -> Result<PlayerInterstitialEventInfo, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_interstitial_event_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_player_interstitial_event_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        PlayerInterstitialEventInfo::try_from(parse_json_and_free::<
+        PlayerInterstitialEventInfo::try_from(parse_value_and_free::<
             PlayerInterstitialEventInfoPayload,
-        >(json_ptr)?)
+        >(value_ptr)?)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `set_identifier`.
@@ -510,7 +509,7 @@ retain_release_wrapper!(
 impl PlayerInterstitialEventMonitor {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(player: &Player) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr =
             unsafe { ffi::av_player_interstitial_event_monitor_create(player.ptr, &raw mut err) };
         if ptr.is_null() {
@@ -521,15 +520,15 @@ impl PlayerInterstitialEventMonitor {
 
     /// Calls the `AVPlayer` framework counterpart for `state`.
     pub fn state(&self) -> Result<PlayerInterstitialEventMonitorState, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_interstitial_event_monitor_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_player_interstitial_event_monitor_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        PlayerInterstitialEventMonitorState::try_from(parse_json_and_free::<
+        PlayerInterstitialEventMonitorState::try_from(parse_value_and_free::<
             PlayerInterstitialMonitorStatePayload,
-        >(json_ptr)?)
+        >(value_ptr)?)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `observe`.
@@ -572,7 +571,7 @@ retain_release_wrapper!(
 impl PlayerInterstitialEventController {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(player: &Player) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_interstitial_event_controller_create(player.ptr, &raw mut err)
         };
@@ -584,21 +583,21 @@ impl PlayerInterstitialEventController {
 
     /// Calls the `AVPlayer` framework counterpart for `state`.
     pub fn state(&self) -> Result<PlayerInterstitialEventMonitorState, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_player_interstitial_event_controller_info_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_player_interstitial_event_controller_info_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        PlayerInterstitialEventMonitorState::try_from(parse_json_and_free::<
+        PlayerInterstitialEventMonitorState::try_from(parse_value_and_free::<
             PlayerInterstitialMonitorStatePayload,
-        >(json_ptr)?)
+        >(value_ptr)?)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `set_events`.
     pub fn set_events(&self, events: &[&PlayerInterstitialEvent]) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let event_ptrs = events.iter().map(|event| event.ptr).collect::<Vec<_>>();
         let status = unsafe {
             ffi::av_player_interstitial_event_controller_set_events(
@@ -648,33 +647,21 @@ unsafe impl Send for PlayerInterstitialEventMonitorObserver {}
 
 /// Calls the `AVPlayer` framework counterpart for `player_waiting_during_interstitial_event_reason`.
 pub fn player_waiting_during_interstitial_event_reason() -> Result<String, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let string_ptr =
         unsafe { ffi::av_player_waiting_during_interstitial_event_reason(&raw mut err) };
     if string_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
-    parse_json_and_free::<String>(string_ptr)
-}
-
-fn parse_json_value(value: Option<String>) -> Result<Option<Value>, AVPlayerError> {
-    value
-        .map(|value| {
-            serde_json::from_str::<Value>(&value).map_err(|error| {
-                AVPlayerError::OperationFailed(format!(
-                    "failed to decode interstitial event JSON payload: {error}"
-                ))
-            })
-        })
-        .transpose()
+    parse_value_and_free::<String>(string_ptr)
 }
 
 unsafe extern "C" fn player_interstitial_event_monitor_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
     let Some(payload) =
-        (unsafe { json_payload::<PlayerInterstitialMonitorEventPayload>(payload_json) })
+        (unsafe { value_payload::<PlayerInterstitialMonitorEventPayload>(payload_value) })
     else {
         return;
     };
@@ -735,10 +722,60 @@ unsafe extern "C" fn player_interstitial_event_monitor_event_trampoline(
     }
 }
 
+impl crate::binary::FromValue for PlayerInterstitialEventInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            identifier: value.field(0)?,
+            time: value.field(1)?,
+            date: value.field(2)?,
+            template_item_count: value.field(3)?,
+            restrictions: value.field(4)?,
+            resumption_offset: value.field(5)?,
+            playout_limit: value.field(6)?,
+            aligns_start_with_primary_segment_boundary: value.field(7)?,
+            aligns_resumption_with_primary_segment_boundary: value.field(8)?,
+            cue: value.field(9)?,
+            will_play_once: value.field(10)?,
+            user_defined_attributes_value: value.field(11)?,
+            asset_list_response_value: value.field(12)?,
+            timeline_occupancy_raw: value.field(13)?,
+            supplements_primary_content: value.field(14)?,
+            content_may_vary: value.field(15)?,
+            has_primary_item: value.field(16)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerInterstitialMonitorStatePayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            events: value.field(0)?,
+            current_event: value.field(1)?,
+            current_event_skippable_state_raw: value.field(2)?,
+            current_event_skip_control_label: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerInterstitialMonitorEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            interstitial_event: value.field(1)?,
+            asset_list_response_status_raw: value.field(2)?,
+            skippable_state_raw: value.field(3)?,
+            skip_control_label: value.field(4)?,
+            error_message: value.field(5)?,
+            playout_time: value.field(6)?,
+            did_play_entire_event: value.field(7)?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use crate::binary::{FromValue, Value};
 
     #[test]
     fn restrictions_support_bitwise_composition_and_contains() {
@@ -792,25 +829,26 @@ mod tests {
     }
 
     #[test]
-    fn parse_json_value_decodes_json_objects() {
-        let value = parse_json_value(Some(r#"{"kind":"midroll"}"#.into())).unwrap();
+    fn property_values_preserve_dictionaries() {
+        let expected = PropertyValue::Dictionary(
+            [("kind".into(), PropertyValue::String("midroll".into()))].into(),
+        );
+        let input = crate::binary::InputValue::new(&expected).unwrap();
+        let value = unsafe { crate::binary::read_value(input.as_ptr()) }.unwrap();
 
-        assert_eq!(value, Some(json!({"kind": "midroll"})));
+        assert_eq!(PropertyValue::from_value(&value).unwrap(), expected);
     }
 
     #[test]
-    fn parse_json_value_rejects_invalid_json() {
-        let error = parse_json_value(Some("{".into())).unwrap_err();
+    fn property_values_reject_object_handles() {
+        let value = Value::Object(1);
+        let error = PropertyValue::from_value(&value).unwrap_err();
 
-        assert!(matches!(
-            error,
-            AVPlayerError::OperationFailed(ref message)
-                if message.starts_with("failed to decode interstitial event JSON payload:")
-        ));
+        assert!(matches!(error, AVPlayerError::OperationFailed(_)));
     }
 
     #[test]
-    fn payload_conversion_maps_json_and_enum_fields() {
+    fn payload_conversion_maps_value_and_enum_fields() {
         let payload = PlayerInterstitialEventInfoPayload {
             identifier: "midroll".into(),
             time: Time::new(90, 1),
@@ -825,8 +863,12 @@ mod tests {
             aligns_resumption_with_primary_segment_boundary: false,
             cue: Some("join_cue".into()),
             will_play_once: true,
-            user_defined_attributes_json: Some(r#"{"kind":"midroll"}"#.into()),
-            asset_list_response_json: Some(r#"{"status":"available"}"#.into()),
+            user_defined_attributes_value: Some(PropertyValue::Dictionary(
+                [("kind".into(), PropertyValue::String("midroll".into()))].into(),
+            )),
+            asset_list_response_value: Some(PropertyValue::Dictionary(
+                [("status".into(), PropertyValue::String("available".into()))].into(),
+            )),
             timeline_occupancy_raw: Some(1),
             supplements_primary_content: Some(true),
             content_may_vary: Some(false),
@@ -844,11 +886,15 @@ mod tests {
         assert_eq!(info.cue, Some(PlayerInterstitialEventCue::JoinCue));
         assert_eq!(
             info.user_defined_attributes,
-            Some(json!({"kind": "midroll"}))
+            Some(PropertyValue::Dictionary(
+                [("kind".into(), PropertyValue::String("midroll".into()))].into(),
+            ))
         );
         assert_eq!(
             info.asset_list_response,
-            Some(json!({"status": "available"})),
+            Some(PropertyValue::Dictionary(
+                [("status".into(), PropertyValue::String("available".into()))].into(),
+            )),
         );
         assert_eq!(
             info.timeline_occupancy,

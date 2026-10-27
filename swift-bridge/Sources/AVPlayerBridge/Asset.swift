@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
@@ -7,35 +8,35 @@ public func av_asset_release(_ assetPtr: UnsafeMutableRawPointer?) {
     Unmanaged<AVAsset>.fromOpaque(assetPtr).release()
 }
 
-@_cdecl("av_asset_info_json")
-public func av_asset_info_json(
+@_cdecl("av_asset_info_value")
+public func av_asset_info_value(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     switch avpAwait(label: "AVAsset duration and metadata", work: { try await makeAssetInfo(asset: asset) }) {
     case .success(let payload):
-        guard let json = try? avpEncodeJSON(payload) else {
+        guard let value = try? avpEncodeValue(payload) else {
             outErrorMessage?.pointee = ffiString("failed to encode asset info payload")
             return nil
         }
-        return ffiString(json)
+        return value
     case .failure(let error):
         avpWriteError(error, outErrorMessage)
         return nil
     }
 }
 
-@_cdecl("av_asset_load_values_json")
-public func av_asset_load_values_json(
+@_cdecl("av_asset_load_values_value")
+public func av_asset_load_values_value(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ keysJson: UnsafePointer<CChar>,
+    _ keysValue: UnsafePointer<AVPValue>,
     _ timeoutSeconds: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     do {
-        let keys = try avpDecodeJSON(keysJson, as: [String].self)
+        let keys = try avpDecodeValue(keysValue, as: [String].self)
         let semaphore = DispatchSemaphore(value: 0)
         asset.loadValuesAsynchronously(forKeys: keys) {
             semaphore.signal()
@@ -55,7 +56,7 @@ public func av_asset_load_values_json(
                 errorMessage: error?.localizedDescription
             )
         }
-        return ffiString(try avpEncodeJSON(statuses))
+        return try avpEncodeValue(statuses)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -65,11 +66,11 @@ public func av_asset_load_values_json(
 @_cdecl("av_asset_status_of_value")
 public func av_asset_status_of_value(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ keyPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ keyPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
-    let key = String(cString: keyPtr)
+    let key = String(bridge: keyPtr)
     var error: NSError?
     let status = asset.statusOfValue(forKey: key, error: &error)
     if let error, status == .failed {
@@ -82,7 +83,7 @@ public func av_asset_status_of_value(
 public func av_asset_load_tracks(
     _ assetPtr: UnsafeMutableRawPointer,
     _ outStatus: UnsafeMutablePointer<Int32>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     switch avpAwait(label: "AVAsset tracks", work: { try await asset.load(.tracks) }) {
@@ -102,19 +103,19 @@ public func av_asset_track_release(_ trackPtr: UnsafeMutableRawPointer?) {
     Unmanaged<AVAssetTrack>.fromOpaque(trackPtr).release()
 }
 
-@_cdecl("av_asset_track_info_json")
-public func av_asset_track_info_json(
+@_cdecl("av_asset_track_info_value")
+public func av_asset_track_info_value(
     _ trackPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let track = Unmanaged<AVAssetTrack>.fromOpaque(trackPtr).takeUnretainedValue()
     switch avpAwait(label: "AVAssetTrack properties", work: { try await makeTrackInfo(track: track) }) {
     case .success(let payload):
-        guard let json = try? avpEncodeJSON(payload) else {
+        guard let value = try? avpEncodeValue(payload) else {
             outErrorMessage?.pointee = ffiString("failed to encode track info payload")
             return nil
         }
-        return ffiString(json)
+        return value
     case .failure(let error):
         avpWriteError(error, outErrorMessage)
         return nil
@@ -139,7 +140,7 @@ private func makeTrackInfo(track: AVAssetTrack) async throws -> TrackInfoPayload
         trackId: track.trackID,
         mediaType: avpMediaTypeString(track.mediaType),
         naturalSize: encodeSize(naturalSize),
-        nominalFrameRate: String(nominalFrameRate),
-        estimatedDataRate: String(estimatedDataRate)
+        nominalFrameRate: nominalFrameRate,
+        estimatedDataRate: estimatedDataRate
     )
 }

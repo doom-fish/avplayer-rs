@@ -1,20 +1,18 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CString;
-
-use serde::Deserialize;
 
 use crate::asset::AssetTrack;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::PlayerItem;
 use crate::retained::retain_release_wrapper;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerItemTrackInfoPayload {
     enabled: bool,
     current_video_frame_rate: f32,
@@ -62,12 +60,12 @@ unsafe impl Send for PlayerItemTrack {}
 
 impl PlayerItemTrack {
     fn info(&self) -> Result<PlayerItemTrackInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_item_track_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_player_item_track_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `is_enabled`.
@@ -116,7 +114,7 @@ impl PlayerItemTrack {
     ) -> Result<(), AVPlayerError> {
         let mode = video_field_mode
             .map(|mode| {
-                CString::new(mode).map_err(|error| {
+                InputString::new(mode).map_err(|error| {
                     AVPlayerError::InvalidArgument(format!(
                         "video field mode contains NUL byte: {error}"
                     ))
@@ -126,7 +124,8 @@ impl PlayerItemTrack {
         unsafe {
             ffi::av_player_item_track_set_video_field_mode(
                 self.ptr,
-                mode.as_ref().map_or(ptr::null(), |mode| mode.as_ptr()),
+                mode.as_ref()
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         }
         Ok(())
@@ -181,5 +180,16 @@ impl PlayerItem {
             tracks.push(PlayerItemTrack { ptr });
         }
         Ok(tracks)
+    }
+}
+
+impl crate::binary::FromValue for PlayerItemTrackInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            enabled: value.field(0)?,
+            current_video_frame_rate: value.field(1)?,
+            video_field_mode: value.field(2)?,
+            has_asset_track: value.field(3)?,
+        })
     }
 }

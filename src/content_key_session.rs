@@ -5,21 +5,21 @@
     clippy::struct_excessive_bools
 )]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CString;
 use std::path::Path;
 
 use doom_fish_utils::stream::{BoundedAsyncStream, NextItem};
-use serde::{Deserialize, Serialize};
 
 use crate::asset::UrlAsset;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::retained::retain_release_wrapper;
 use crate::util::{
-    deliver_bool, json_cstring, json_payload, maybe_json_cstring, parse_json_and_free, to_cstring,
-    validate_capacity, BoolHandler, Registration,
+    deliver_bool, maybe_value_buffer, parse_value_and_free, to_cstring, validate_capacity,
+    value_buffer, value_payload, BoolHandler, Registration,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,8 +120,7 @@ impl ContentKeyIdentifier {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ContentKeyIdentifierPayload {
     kind: String,
     value: Option<String>,
@@ -129,10 +128,8 @@ struct ContentKeyIdentifierPayload {
     number_value: Option<i64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ContentKeyRequestOptions {
-    #[serde(default)]
     pub protocol_versions: Vec<i32>,
     pub should_randomize_device_identifier: Option<bool>,
     pub random_device_identifier_seed: Option<Vec<u8>>,
@@ -213,8 +210,7 @@ impl ExternalContentProtectionStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ContentKeySessionInfoPayload {
     key_system: String,
     storage_url: Option<String>,
@@ -222,8 +218,7 @@ struct ContentKeySessionInfoPayload {
     recipient_count: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ContentKeyRequestInfoPayload {
     status: i32,
     error_message: Option<String>,
@@ -236,33 +231,29 @@ struct ContentKeyRequestInfoPayload {
     has_content_key: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ContentKeySpecifierInfoPayload {
     key_system: String,
     identifier: Option<ContentKeyIdentifierPayload>,
     options: Option<ContentKeyRequestOptions>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ContentKeyInfoPayload {
     external_content_protection_status: Option<i32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ContentKeyBytesPayload {
     bytes: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ContentKeySessionEventPayload {
     event: String,
-    request_ptr: Option<u64>,
-    key_request_ptrs: Option<Vec<u64>>,
-    content_key_ptr: Option<u64>,
+    request_ptr: Option<crate::binary::ObjectHandle>,
+    key_request_ptrs: Option<Vec<crate::binary::ObjectHandle>>,
+    content_key_ptr: Option<crate::binary::ObjectHandle>,
     initialization_data: Option<Vec<u8>>,
     persistable_content_key: Option<Vec<u8>>,
     key_identifier: Option<ContentKeyIdentifierPayload>,
@@ -392,10 +383,10 @@ impl UrlAsset {
 
 impl ContentKeySession {
     pub fn new(key_system: &ContentKeySystem) -> Result<Self, AVPlayerError> {
-        let key_system = CString::new(key_system.as_raw()).map_err(|error| {
+        let key_system = InputString::new(key_system.as_raw()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("key system contains NUL byte: {error}"))
         })?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe { ffi::av_content_key_session_create(key_system.as_ptr(), &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -407,7 +398,7 @@ impl ContentKeySession {
         key_system: &ContentKeySystem,
         path: impl AsRef<Path>,
     ) -> Result<Self, AVPlayerError> {
-        let key_system = CString::new(key_system.as_raw()).map_err(|error| {
+        let key_system = InputString::new(key_system.as_raw()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("key system contains NUL byte: {error}"))
         })?;
         let path = path
@@ -415,7 +406,7 @@ impl ContentKeySession {
             .to_str()
             .ok_or_else(|| AVPlayerError::InvalidArgument("path is not valid UTF-8".into()))?;
         let path = to_cstring(path, "content-key storage directory")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_content_key_session_create_with_storage_directory(
                 key_system.as_ptr(),
@@ -430,12 +421,12 @@ impl ContentKeySession {
     }
 
     fn info(&self) -> Result<ContentKeySessionInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_content_key_session_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_content_key_session_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn key_system(&self) -> Result<ContentKeySystem, AVPlayerError> {
@@ -496,27 +487,27 @@ impl ContentKeySession {
             }
         }
 
-        let identifier_json = identifier
-            .map(|identifier| json_cstring(&identifier.to_payload(), "content-key identifier"))
+        let identifier_value = identifier
+            .map(|identifier| value_buffer(&identifier.to_payload(), "content-key identifier"))
             .transpose()?;
-        let options_json = maybe_json_cstring(options, "content-key request options")?;
+        let options_value = maybe_value_buffer(options, "content-key request options")?;
         let initialization_data = initialization_data.unwrap_or_default();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_content_key_session_process_content_key_request(
                 self.ptr,
-                identifier_json
+                identifier_value
                     .as_ref()
-                    .map_or(ptr::null(), |json| json.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 if initialization_data.is_empty() {
                     ptr::null()
                 } else {
                     initialization_data.as_ptr()
                 },
                 initialization_data.len(),
-                options_json
+                options_value
                     .as_ref()
-                    .map_or(ptr::null(), |json| json.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -535,7 +526,7 @@ impl ContentKeySession {
                 "content-key renewal requires the FairPlay Streaming key system".into(),
             ));
         }
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_content_key_session_renew_expiring_response_data_for_request(
                 self.ptr,
@@ -613,7 +604,7 @@ impl ContentKeyResponse {
         bytes: impl AsRef<[u8]>,
     ) -> Result<Self, AVPlayerError> {
         let bytes = bytes.as_ref();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_content_key_response_create_fair_play_streaming(
                 if bytes.is_empty() {
@@ -637,7 +628,7 @@ impl ContentKeyResponse {
     ) -> Result<Self, AVPlayerError> {
         let key_data = key_data.as_ref();
         let initialization_vector = initialization_vector.unwrap_or_default();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_content_key_response_create_clear_key(
                 if key_data.is_empty() {
@@ -663,7 +654,7 @@ impl ContentKeyResponse {
 
     pub fn authorization_token_data(bytes: impl AsRef<[u8]>) -> Result<Self, AVPlayerError> {
         let bytes = bytes.as_ref();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_content_key_response_create_authorization_token(
                 if bytes.is_empty() {
@@ -689,14 +680,16 @@ impl ContentKeySpecifier {
         options: Option<&ContentKeyRequestOptions>,
     ) -> Result<Self, AVPlayerError> {
         let key_system = to_cstring(key_system.as_raw(), "content-key system")?;
-        let identifier = json_cstring(&identifier.to_payload(), "content-key identifier")?;
-        let options = maybe_json_cstring(options, "content-key specifier options")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let identifier = value_buffer(&identifier.to_payload(), "content-key identifier")?;
+        let options = maybe_value_buffer(options, "content-key specifier options")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_content_key_specifier_create(
                 key_system.as_ptr(),
                 identifier.as_ptr(),
-                options.as_ref().map_or(ptr::null(), |value| value.as_ptr()),
+                options
+                    .as_ref()
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -707,12 +700,12 @@ impl ContentKeySpecifier {
     }
 
     fn info(&self) -> Result<ContentKeySpecifierInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_content_key_specifier_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_content_key_specifier_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn key_system(&self) -> Result<ContentKeySystem, AVPlayerError> {
@@ -733,12 +726,12 @@ impl ContentKeySpecifier {
 
 impl ContentKey {
     fn info(&self) -> Result<ContentKeyInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_content_key_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_content_key_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn content_key_specifier(&self) -> Option<ContentKeySpecifier> {
@@ -760,7 +753,7 @@ impl ContentKey {
     }
 
     pub fn revoke(&self) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe { ffi::av_content_key_revoke(self.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -989,10 +982,10 @@ impl PersistableContentKeyRequest {
         key_vendor_response: &[u8],
         options: Option<&ContentKeyRequestOptions>,
     ) -> Result<Vec<u8>, AVPlayerError> {
-        let options = maybe_json_cstring(options, "persistable content-key options")?;
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_persistable_content_key_request_persistable_content_key_json(
+        let options = maybe_value_buffer(options, "persistable content-key options")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_persistable_content_key_request_persistable_content_key_value(
                 self.ptr,
                 if key_vendor_response.is_empty() {
                     ptr::null()
@@ -1000,26 +993,28 @@ impl PersistableContentKeyRequest {
                     key_vendor_response.as_ptr()
                 },
                 key_vendor_response.len(),
-                options.as_ref().map_or(ptr::null(), |value| value.as_ptr()),
+                options
+                    .as_ref()
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        Ok(parse_json_and_free::<ContentKeyBytesPayload>(json_ptr)?
+        Ok(parse_value_and_free::<ContentKeyBytesPayload>(value_ptr)?
             .bytes
             .unwrap_or_default())
     }
 }
 
 fn request_info(ptr: *mut c_void) -> Result<ContentKeyRequestInfoPayload, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
-    let json_ptr = unsafe { ffi::av_content_key_request_info_json(ptr, &raw mut err) };
-    if json_ptr.is_null() {
+    let mut err: *mut AVPValue = ptr::null_mut();
+    let value_ptr = unsafe { ffi::av_content_key_request_info_value(ptr, &raw mut err) };
+    if value_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
-    parse_json_and_free(json_ptr)
+    parse_value_and_free(value_ptr)
 }
 
 fn copy_content_key_request_specifier(ptr: *mut c_void) -> Option<ContentKeySpecifier> {
@@ -1046,11 +1041,11 @@ fn request_make_streaming_content_key_request_data(
     content_identifier: Option<&[u8]>,
     options: Option<&ContentKeyRequestOptions>,
 ) -> Result<Option<Vec<u8>>, AVPlayerError> {
-    let options = maybe_json_cstring(options, "streaming content-key request options")?;
+    let options = maybe_value_buffer(options, "streaming content-key request options")?;
     let content_identifier = content_identifier.unwrap_or_default();
-    let mut err: *mut c_char = ptr::null_mut();
-    let json_ptr = unsafe {
-        ffi::av_content_key_request_make_streaming_content_key_request_data_json(
+    let mut err: *mut AVPValue = ptr::null_mut();
+    let value_ptr = unsafe {
+        ffi::av_content_key_request_make_streaming_content_key_request_data_value(
             ptr,
             if app_identifier.is_empty() {
                 ptr::null()
@@ -1064,21 +1059,23 @@ fn request_make_streaming_content_key_request_data(
                 content_identifier.as_ptr()
             },
             content_identifier.len(),
-            options.as_ref().map_or(ptr::null(), |value| value.as_ptr()),
+            options
+                .as_ref()
+                .map_or(ptr::null(), super::binary::InputValue::as_ptr),
             &raw mut err,
         )
     };
-    if json_ptr.is_null() {
+    if value_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
-    Ok(parse_json_and_free::<ContentKeyBytesPayload>(json_ptr)?.bytes)
+    Ok(parse_value_and_free::<ContentKeyBytesPayload>(value_ptr)?.bytes)
 }
 
 fn request_process_response(
     request_ptr: *mut c_void,
     response: &ContentKeyResponse,
 ) -> Result<(), AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let status = unsafe {
         ffi::av_content_key_request_process_content_key_response(
             request_ptr,
@@ -1096,12 +1093,12 @@ fn request_process_response_error(
     request_ptr: *mut c_void,
     message: &str,
 ) -> Result<(), AVPlayerError> {
-    let message = CString::new(message).map_err(|error| {
+    let message = InputString::new(message).map_err(|error| {
         AVPlayerError::InvalidArgument(format!(
             "content-key response error message contains NUL byte: {error}"
         ))
     })?;
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let status = unsafe {
         ffi::av_content_key_request_process_content_key_response_error(
             request_ptr,
@@ -1116,7 +1113,7 @@ fn request_process_response_error(
 }
 
 fn request_request_persistable_content_key(request_ptr: *mut c_void) -> Result<(), AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let status = unsafe {
         ffi::av_content_key_request_request_persistable_content_key(request_ptr, &raw mut err)
     };
@@ -1131,14 +1128,14 @@ fn content_key_session_event_from_payload(
 ) -> Option<ContentKeySessionEvent> {
     match payload.event.as_str() {
         "requested" => Some(ContentKeySessionEvent::Requested(ContentKeyRequest {
-            ptr: retained_from_u64(payload.request_ptr?)?,
+            ptr: retained_from_handle(payload.request_ptr?)?,
         })),
         "renewing" => Some(ContentKeySessionEvent::Renewing(ContentKeyRequest {
-            ptr: retained_from_u64(payload.request_ptr?)?,
+            ptr: retained_from_handle(payload.request_ptr?)?,
         })),
         "persistable" => Some(ContentKeySessionEvent::Persistable(
             PersistableContentKeyRequest {
-                ptr: retained_from_u64(payload.request_ptr?)?,
+                ptr: retained_from_handle(payload.request_ptr?)?,
             },
         )),
         "updated_persistable_content_key" => {
@@ -1151,20 +1148,20 @@ fn content_key_session_event_from_payload(
         }
         "failed" => Some(ContentKeySessionEvent::Failed {
             request: ContentKeyRequest {
-                ptr: retained_from_u64(payload.request_ptr?)?,
+                ptr: retained_from_handle(payload.request_ptr?)?,
             },
             error_message: payload.error_message.unwrap_or_default(),
         }),
         "retry_requested" => Some(ContentKeySessionEvent::RetryRequested {
             request: ContentKeyRequest {
-                ptr: retained_from_u64(payload.request_ptr?)?,
+                ptr: retained_from_handle(payload.request_ptr?)?,
             },
             reason: ContentKeyRequestRetryReason::from_raw(
                 payload.retry_reason.as_deref().unwrap_or_default(),
             ),
         }),
         "succeeded" => Some(ContentKeySessionEvent::Succeeded(ContentKeyRequest {
-            ptr: retained_from_u64(payload.request_ptr?)?,
+            ptr: retained_from_handle(payload.request_ptr?)?,
         })),
         "content_protection_session_identifier_did_change" => {
             Some(ContentKeySessionEvent::ContentProtectionSessionIdentifierDidChange)
@@ -1174,14 +1171,14 @@ fn content_key_session_event_from_payload(
         }
         "external_protection_status_did_change" => Some(
             ContentKeySessionEvent::ExternalProtectionStatusDidChange(ContentKey {
-                ptr: retained_from_u64(payload.content_key_ptr?)?,
+                ptr: retained_from_handle(payload.content_key_ptr?)?,
             }),
         ),
         "requested_collection" => {
             let mut requests = payload
                 .key_request_ptrs?
                 .into_iter()
-                .filter_map(|raw| retained_from_u64(raw).map(|ptr| ContentKeyRequest { ptr }))
+                .filter_map(|raw| retained_from_handle(raw).map(|ptr| ContentKeyRequest { ptr }))
                 .collect::<Vec<_>>();
             if requests.len() == 1 && payload.initialization_data.is_none() {
                 return requests.pop().map(ContentKeySessionEvent::Requested);
@@ -1195,17 +1192,19 @@ fn content_key_session_event_from_payload(
     }
 }
 
-fn retained_from_u64(raw: u64) -> Option<*mut c_void> {
-    let address = usize::try_from(raw).ok().filter(|address| *address != 0)?;
-    let ptr = unsafe { ffi::av_ns_object_retain(address as *mut c_void) };
-    (!ptr.is_null()).then_some(ptr)
+fn retained_from_handle(raw: crate::binary::ObjectHandle) -> Option<*mut c_void> {
+    if raw.0.is_null() {
+        return None;
+    }
+    let pointer = unsafe { ffi::av_ns_object_retain(raw.0) };
+    (!pointer.is_null()).then_some(pointer)
 }
 
 unsafe extern "C" fn content_key_session_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) -> bool {
-    let Some(event) = (unsafe { json_payload::<ContentKeySessionEventPayload>(payload_json) })
+    let Some(event) = (unsafe { value_payload::<ContentKeySessionEventPayload>(payload_value) })
         .and_then(content_key_session_event_from_payload)
     else {
         return false;
@@ -1224,19 +1223,132 @@ unsafe impl Send for ContentKeySpecifier {}
 unsafe impl Send for ContentKey {}
 unsafe impl Send for ContentKeySessionObserver {}
 
+impl crate::binary::FromValue for ContentKeyIdentifierPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            kind: value.field(0)?,
+            value: value.field(1)?,
+            bytes: value.field(2)?,
+            number_value: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::ToValue for ContentKeyIdentifierPayload {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.kind),
+            crate::binary::ToValue::to_value(&self.value),
+            crate::binary::ToValue::to_value(&self.bytes),
+            crate::binary::ToValue::to_value(&self.number_value),
+        ])
+    }
+}
+
+impl crate::binary::FromValue for ContentKeyRequestOptions {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            protocol_versions: value.field_or_default(0)?,
+            should_randomize_device_identifier: value.field(1)?,
+            random_device_identifier_seed: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::ToValue for ContentKeyRequestOptions {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.protocol_versions),
+            crate::binary::ToValue::to_value(&self.should_randomize_device_identifier),
+            crate::binary::ToValue::to_value(&self.random_device_identifier_seed),
+        ])
+    }
+}
+
+impl crate::binary::FromValue for ContentKeySessionInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            key_system: value.field(0)?,
+            storage_url: value.field(1)?,
+            content_protection_session_identifier_base64: value.field(2)?,
+            recipient_count: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for ContentKeyRequestInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            status: value.field(0)?,
+            error_message: value.field(1)?,
+            identifier: value.field(2)?,
+            initialization_data: value.field(3)?,
+            options: value.field(4)?,
+            can_provide_persistable_content_key: value.field(5)?,
+            renews_expiring_response_data: value.field(6)?,
+            has_content_key_specifier: value.field(7)?,
+            has_content_key: value.field(8)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for ContentKeySpecifierInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            key_system: value.field(0)?,
+            identifier: value.field(1)?,
+            options: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for ContentKeyInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            external_content_protection_status: value.field(0)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for ContentKeyBytesPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            bytes: value.field(0)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for ContentKeySessionEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            request_ptr: value.field(1)?,
+            key_request_ptrs: value.field(2)?,
+            content_key_ptr: value.field(3)?,
+            initialization_data: value.field(4)?,
+            persistable_content_key: value.field(5)?,
+            key_identifier: value.field(6)?,
+            error_message: value.field(7)?,
+            retry_reason: value.field(8)?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn null_event_pointers_are_not_adopted() {
-        assert!(retained_from_u64(0).is_none());
+        assert!(retained_from_handle(crate::binary::ObjectHandle(ptr::null_mut())).is_none());
     }
 
     #[test]
     fn events_missing_their_request_pointer_are_dropped() {
-        let payload: ContentKeySessionEventPayload =
-            serde_json::from_str(r#"{"event":"requested"}"#).unwrap();
+        let payload = <ContentKeySessionEventPayload as crate::binary::FromValue>::from_value(
+            &crate::binary::Value::Array(vec![crate::binary::Value::String("requested".into())]),
+        )
+        .unwrap();
         assert!(content_key_session_event_from_payload(payload).is_none());
     }
 }

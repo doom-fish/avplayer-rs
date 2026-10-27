@@ -1,10 +1,10 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
 
 use apple_cf::cv::CVPixelBuffer;
-use serde::Deserialize;
 
 use crate::asset::Size;
 use crate::error::{from_swift, AVPlayerError};
@@ -13,19 +13,17 @@ use crate::player::PlayerItem;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::{
-    borrowed_objects, deliver, json_payload, parse_json_and_free, Handler, Registration,
+    borrowed_objects, deliver, parse_value_and_free, value_payload, Handler, Registration,
 };
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct RenderedLegibleOutputInfoPayload {
     suppresses_player_rendering: bool,
     advance_interval_for_delegate_invocation: f64,
     video_display_size: Size,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct RenderedCaptionImagePayload {
     x: f64,
     y: f64,
@@ -62,8 +60,7 @@ impl RenderedCaptionImage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct RenderedLegibleOutputEventPayload {
     event: String,
     item_time: Option<Time>,
@@ -97,7 +94,7 @@ retain_release_wrapper!(
 impl PlayerItemRenderedLegibleOutput {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(video_display_size: Size) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_rendered_legible_output_create(
                 video_display_size.width,
@@ -112,14 +109,14 @@ impl PlayerItemRenderedLegibleOutput {
     }
 
     fn info(&self) -> Result<RenderedLegibleOutputInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_player_item_rendered_legible_output_info_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_player_item_rendered_legible_output_info_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `suppresses_player_rendering`.
@@ -181,7 +178,7 @@ impl PlayerItemRenderedLegibleOutput {
                     self.ptr,
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(rendered_legible_output_event_trampoline),
                     userdata,
                     drop_userdata,
@@ -210,7 +207,7 @@ impl PlayerItem {
         &self,
         output: &PlayerItemRenderedLegibleOutput,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe { ffi::av_player_item_add_output(self.ptr, output.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -226,12 +223,12 @@ impl PlayerItem {
 
 unsafe extern "C" fn rendered_legible_output_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
     objects: *const *mut c_void,
     count: usize,
 ) {
     let Some(payload) =
-        (unsafe { json_payload::<RenderedLegibleOutputEventPayload>(payload_json) })
+        (unsafe { value_payload::<RenderedLegibleOutputEventPayload>(payload_value) })
     else {
         return;
     };
@@ -267,14 +264,45 @@ unsafe extern "C" fn rendered_legible_output_event_trampoline(
     unsafe { deliver(userdata, "rendered_legible_output_event_trampoline", event) };
 }
 
+impl crate::binary::FromValue for RenderedLegibleOutputInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            suppresses_player_rendering: value.field(0)?,
+            advance_interval_for_delegate_invocation: value.field(1)?,
+            video_display_size: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for RenderedCaptionImagePayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            x: value.field(0)?,
+            y: value.field(1)?,
+            width: value.field(2)?,
+            height: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for RenderedLegibleOutputEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            item_time: value.field(1)?,
+            caption_images: value.field(2)?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::ffi::CString;
     use std::sync::{Arc, Mutex};
 
     use doom_fish_utils::callback_context::CallbackContext;
 
     use super::*;
+    use crate::binary::{InputValue, ToValue, Value};
 
     const BGRA: u32 = u32::from_be_bytes(*b"BGRA");
 
@@ -286,9 +314,16 @@ mod tests {
             Box::new(move |event| sink.lock().unwrap().push(event));
         let context = CallbackContext::new(handler);
         let pixel_buffer = CVPixelBuffer::create(16, 8, BGRA).unwrap();
-        let payload = CString::new(
-            r#"{"event":"rendered_caption_images","itemTime":{"kind":"numeric","value":3,"timescale":1},"captionImages":[{"x":1.0,"y":2.0,"width":16,"height":8}]}"#,
-        )
+        let payload = InputValue::new(&Value::Array(vec![
+            Value::String("rendered_caption_images".into()),
+            Time::new(3, 1).to_value(),
+            Value::Array(vec![Value::Array(vec![
+                Value::Real(1.0),
+                Value::Real(2.0),
+                Value::Unsigned(16),
+                Value::Unsigned(8),
+            ])]),
+        ]))
         .unwrap();
         let objects = [pixel_buffer.as_ptr()];
 
@@ -325,7 +360,12 @@ mod tests {
             Box::new(move |event| sink.lock().unwrap().push(event));
         let context = CallbackContext::new(handler);
         context.deactivate();
-        let payload = CString::new(r#"{"event":"sequence_was_flushed"}"#).unwrap();
+        let payload = InputValue::new(&Value::Array(vec![
+            Value::String("sequence_was_flushed".into()),
+            Value::Null,
+            Value::Null,
+        ]))
+        .unwrap();
         unsafe {
             rendered_legible_output_event_trampoline(
                 context.as_ptr(),

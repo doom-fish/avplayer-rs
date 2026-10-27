@@ -1,7 +1,8 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-private struct AssetCacheInfoPayload: Codable {
+private struct AssetCacheInfoPayload: AVPBridge {
     let playableOffline: Bool
 }
 
@@ -16,14 +17,14 @@ public func av_url_asset_copy_asset_cache(
     return Unmanaged.passRetained(cache).toOpaque()
 }
 
-@_cdecl("av_asset_cache_info_json")
-public func av_asset_cache_info_json(
+@_cdecl("av_asset_cache_info_value")
+public func av_asset_cache_info_value(
     _ cachePtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let cache = Unmanaged<AVAssetCache>.fromOpaque(cachePtr).takeUnretainedValue()
     do {
-        return ffiString(try avpEncodeJSON(AssetCacheInfoPayload(playableOffline: cache.isPlayableOffline)))
+        return try avpEncodeValue(AssetCacheInfoPayload(playableOffline: cache.isPlayableOffline))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -51,4 +52,18 @@ public func av_asset_cache_copy_media_selection_option_at_index(
     let options = cache.mediaSelectionOptions(in: group)
     guard index >= 0, Int(index) < options.count else { return nil }
     return Unmanaged.passRetained(options[Int(index)]).toOpaque()
+}
+
+extension AssetCacheInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            playableOffline.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            playableOffline: try binaryValue.field(0)
+        )
+    }
 }

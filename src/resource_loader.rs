@@ -4,32 +4,30 @@
     clippy::struct_excessive_bools
 )]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
 use std::collections::BTreeMap;
-use std::ffi::{CStr, CString};
 
 use doom_fish_utils::stream::{BoundedAsyncStream, NextItem};
-use serde::Deserialize;
 
 use crate::asset::UrlAsset;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::retained::retain_release_wrapper;
 use crate::util::{
-    deliver_bool, parse_json_and_free, to_cstring, validate_capacity, BoolHandler, Registration,
+    deliver_bool, parse_value_and_free, to_cstring, validate_capacity, BoolHandler, Registration,
 };
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetResourceLoaderInfoPayload {
     has_delegate: bool,
     preloads_eligible_content_keys: bool,
     sends_common_media_client_data_as_http_headers: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetResourceLoadingRequestPayload {
     request_url: Option<String>,
     request_method: Option<String>,
@@ -41,8 +39,7 @@ struct AssetResourceLoadingRequestPayload {
     has_requestor: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetResourceLoadingContentInformationRequestPayload {
     content_type: Option<String>,
     allowed_content_types: Option<Vec<String>>,
@@ -52,8 +49,7 @@ struct AssetResourceLoadingContentInformationRequestPayload {
     entire_length_available_on_demand: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetResourceLoadingDataRequestPayload {
     requested_offset: i64,
     requested_length: i64,
@@ -61,8 +57,7 @@ struct AssetResourceLoadingDataRequestPayload {
     current_offset: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct AssetResourceLoadingRequestorPayload {
     provides_expired_session_reports: bool,
 }
@@ -183,12 +178,12 @@ impl UrlAsset {
 
 impl AssetResourceLoader {
     fn info(&self) -> Result<AssetResourceLoaderInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_resource_loader_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_resource_loader_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn has_delegate(&self) -> Result<bool, AVPlayerError> {
@@ -215,7 +210,7 @@ impl AssetResourceLoader {
         &self,
         enabled: bool,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_asset_resource_loader_set_sends_common_media_client_data_as_http_headers(
                 self.ptr,
@@ -249,7 +244,7 @@ impl AssetResourceLoader {
                     self.ptr,
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(asset_resource_loader_event_trampoline),
                     userdata,
                     drop_userdata,
@@ -351,7 +346,7 @@ impl AssetResourceLoadingRequest {
     }
 
     pub fn finish_loading_with_error(&self, message: impl AsRef<str>) -> Result<(), AVPlayerError> {
-        let message = CString::new(message.as_ref()).map_err(|error| {
+        let message = InputString::new(message.as_ref()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!(
                 "resource-loading error message contains NUL byte: {error}"
             ))
@@ -410,7 +405,7 @@ impl AssetResourceRenewalRequest {
     }
 
     pub fn finish_loading_with_error(&self, message: impl AsRef<str>) -> Result<(), AVPlayerError> {
-        let message = CString::new(message.as_ref()).map_err(|error| {
+        let message = InputString::new(message.as_ref()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!(
                 "resource-renewal error message contains NUL byte: {error}"
             ))
@@ -427,17 +422,17 @@ impl AssetResourceRenewalRequest {
 
 impl AssetResourceLoadingContentInformationRequest {
     fn info(&self) -> Result<AssetResourceLoadingContentInformationRequestPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_asset_resource_loading_content_information_request_info_json(
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_asset_resource_loading_content_information_request_info_value(
                 self.ptr,
                 &raw mut err,
             )
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn content_type(&self) -> Result<Option<String>, AVPlayerError> {
@@ -473,7 +468,7 @@ impl AssetResourceLoadingContentInformationRequest {
                 self.ptr,
                 content_type
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         }
         Ok(())
@@ -503,7 +498,9 @@ impl AssetResourceLoadingContentInformationRequest {
         unsafe {
             ffi::av_asset_resource_loading_content_information_request_set_renewal_date_iso8601(
                 self.ptr,
-                value.as_ref().map_or(ptr::null(), |value| value.as_ptr()),
+                value
+                    .as_ref()
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         }
         Ok(())
@@ -513,7 +510,7 @@ impl AssetResourceLoadingContentInformationRequest {
         &self,
         available: bool,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_asset_resource_loading_content_information_request_set_entire_length_available_on_demand(
                 self.ptr,
@@ -530,14 +527,14 @@ impl AssetResourceLoadingContentInformationRequest {
 
 impl AssetResourceLoadingDataRequest {
     fn info(&self) -> Result<AssetResourceLoadingDataRequestPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_asset_resource_loading_data_request_info_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_asset_resource_loading_data_request_info_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn requested_offset(&self) -> Result<i64, AVPlayerError> {
@@ -569,13 +566,13 @@ impl AssetResourceLoadingDataRequest {
 
 impl AssetResourceLoadingRequestor {
     fn info(&self) -> Result<AssetResourceLoadingRequestorPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_asset_resource_loading_requestor_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_asset_resource_loading_requestor_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn provides_expired_session_reports(&self) -> Result<bool, AVPlayerError> {
@@ -586,12 +583,12 @@ impl AssetResourceLoadingRequestor {
 fn resource_loading_request_info(
     ptr: *mut c_void,
 ) -> Result<AssetResourceLoadingRequestPayload, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
-    let json_ptr = unsafe { ffi::av_asset_resource_loading_request_info_json(ptr, &raw mut err) };
-    if json_ptr.is_null() {
+    let mut err: *mut AVPValue = ptr::null_mut();
+    let value_ptr = unsafe { ffi::av_asset_resource_loading_request_info_value(ptr, &raw mut err) };
+    if value_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
-    parse_json_and_free(json_ptr)
+    parse_value_and_free(value_ptr)
 }
 
 fn copy_content_information_request(
@@ -626,7 +623,7 @@ fn copy_requestor(ptr: *mut c_void) -> Option<AssetResourceLoadingRequestor> {
 
 unsafe extern "C" fn asset_resource_loader_event_trampoline(
     userdata: *mut c_void,
-    event_name: *const c_char,
+    event_name: *const AVPValue,
     object_ptr: *mut c_void,
 ) -> bool {
     if object_ptr.is_null() {
@@ -635,9 +632,9 @@ unsafe extern "C" fn asset_resource_loader_event_trampoline(
     let event_name = if event_name.is_null() {
         None
     } else {
-        unsafe { CStr::from_ptr(event_name) }.to_str().ok()
+        unsafe { crate::binary::read_string(event_name) }.ok()
     };
-    let event = match event_name {
+    let event = match event_name.as_deref() {
         Some("loading_requested") => {
             AssetResourceLoaderEvent::LoadingRequested(AssetResourceLoadingRequest {
                 ptr: object_ptr,
@@ -670,3 +667,60 @@ unsafe impl Send for AssetResourceLoadingContentInformationRequest {}
 unsafe impl Send for AssetResourceLoadingDataRequest {}
 unsafe impl Send for AssetResourceLoadingRequestor {}
 unsafe impl Send for AssetResourceLoaderObserver {}
+
+impl crate::binary::FromValue for AssetResourceLoaderInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            has_delegate: value.field(0)?,
+            preloads_eligible_content_keys: value.field(1)?,
+            sends_common_media_client_data_as_http_headers: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetResourceLoadingRequestPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            request_url: value.field(0)?,
+            request_method: value.field(1)?,
+            request_headers: value.field(2)?,
+            finished: value.field(3)?,
+            cancelled: value.field(4)?,
+            has_content_information_request: value.field(5)?,
+            has_data_request: value.field(6)?,
+            has_requestor: value.field(7)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetResourceLoadingContentInformationRequestPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            content_type: value.field(0)?,
+            allowed_content_types: value.field(1)?,
+            content_length: value.field(2)?,
+            byte_range_access_supported: value.field(3)?,
+            renewal_date_iso8601: value.field(4)?,
+            entire_length_available_on_demand: value.field(5)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetResourceLoadingDataRequestPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            requested_offset: value.field(0)?,
+            requested_length: value.field(1)?,
+            requests_all_data_to_end_of_resource: value.field(2)?,
+            current_offset: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetResourceLoadingRequestorPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            provides_expired_session_reports: value.field(0)?,
+        })
+    }
+}

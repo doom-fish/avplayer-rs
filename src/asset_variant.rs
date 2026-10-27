@@ -1,27 +1,24 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-
-use serde::Deserialize;
 
 use crate::asset::{Asset, Size, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::media_selection::MediaSelectionOption;
 use crate::retained::retain_release_wrapper;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetVariantPayload {
     peak_bit_rate: Option<f64>,
     average_bit_rate: Option<f64>,
     url: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetVariantVideoAttributesPayload {
     video_range: String,
     codec_types: Vec<u32>,
@@ -29,21 +26,18 @@ struct AssetVariantVideoAttributesPayload {
     nominal_frame_rate: Option<f64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetVariantVideoLayoutAttributesPayload {
     stereo_view_components: u32,
     projection_type: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetVariantAudioAttributesPayload {
     format_ids: Vec<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetVariantAudioRenditionPayload {
     channel_count: Option<i64>,
     binaural: Option<bool>,
@@ -61,12 +55,12 @@ retain_release_wrapper!(AssetVariant, release = ffi::av_ns_object_release);
 
 impl AssetVariant {
     fn info(&self) -> Result<AssetVariantPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_variant_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_variant_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn peak_bit_rate(&self) -> Result<Option<f64>, AVPlayerError> {
@@ -113,13 +107,13 @@ retain_release_wrapper!(
 
 impl AssetVariantVideoAttributes {
     fn info(&self) -> Result<AssetVariantVideoAttributesPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_asset_variant_video_attributes_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_asset_variant_video_attributes_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn video_range(&self) -> Result<String, AVPlayerError> {
@@ -177,14 +171,14 @@ retain_release_wrapper!(
 
 impl AssetVariantVideoLayoutAttributes {
     fn info(&self) -> Result<AssetVariantVideoLayoutAttributesPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_asset_variant_video_layout_attributes_info_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_asset_variant_video_layout_attributes_info_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn stereo_view_components(&self) -> Result<u32, AVPlayerError> {
@@ -209,13 +203,13 @@ retain_release_wrapper!(
 
 impl AssetVariantAudioAttributes {
     fn info(&self) -> Result<AssetVariantAudioAttributesPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_asset_variant_audio_attributes_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_asset_variant_audio_attributes_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn format_ids(&self) -> Result<Vec<u32>, AVPlayerError> {
@@ -253,13 +247,13 @@ retain_release_wrapper!(
 
 impl AssetVariantAudioRenditionSpecificAttributes {
     fn info(&self) -> Result<AssetVariantAudioRenditionPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_asset_variant_audio_rendition_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_asset_variant_audio_rendition_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn channel_count(&self) -> Result<Option<i64>, AVPlayerError> {
@@ -289,7 +283,7 @@ retain_release_wrapper!(AssetVariantQualifier, release = ffi::av_ns_object_relea
 
 impl AssetVariantQualifier {
     pub fn from_variant(variant: &AssetVariant) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_asset_variant_qualifier_create_with_variant(variant.ptr, &raw mut err)
         };
@@ -339,3 +333,52 @@ unsafe impl Send for AssetVariantVideoLayoutAttributes {}
 unsafe impl Send for AssetVariantAudioAttributes {}
 unsafe impl Send for AssetVariantAudioRenditionSpecificAttributes {}
 unsafe impl Send for AssetVariantQualifier {}
+
+impl crate::binary::FromValue for AssetVariantPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            peak_bit_rate: value.field(0)?,
+            average_bit_rate: value.field(1)?,
+            url: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetVariantVideoAttributesPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            video_range: value.field(0)?,
+            codec_types: value.field(1)?,
+            presentation_size: value.field(2)?,
+            nominal_frame_rate: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetVariantVideoLayoutAttributesPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            stereo_view_components: value.field(0)?,
+            projection_type: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetVariantAudioAttributesPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            format_ids: value.field(0)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetVariantAudioRenditionPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            channel_count: value.field(0)?,
+            binaural: value.field(1)?,
+            immersive: value.field(2)?,
+            downmix: value.field(3)?,
+        })
+    }
+}

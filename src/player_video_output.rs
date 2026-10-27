@@ -4,12 +4,12 @@
     clippy::must_use_candidate
 )]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
 
 use apple_cf::cm::CMSampleBuffer;
 use apple_cf::cv::CVPixelBuffer;
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
@@ -17,7 +17,7 @@ use crate::player::Player;
 use crate::reader::VideoOutputSettings;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
-use crate::util::{maybe_json_cstring, parse_json_and_free, take_object_array};
+use crate::util::{maybe_value_buffer, parse_value_and_free, take_object_array};
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutputSettings`.
 pub type PlayerVideoOutputSettings = VideoOutputSettings;
@@ -40,15 +40,13 @@ impl PlayerVideoOutputTagCollectionPreset {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PlayerVideoOutputTagCollectionPayload {
     tags: Vec<String>,
 }
 
 /// Mirrors the `AVPlayer` framework counterpart for `AffineTransform`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AffineTransform {
     /// Mirrors the `AVPlayer` framework property for `a`.
     pub a: f64,
@@ -65,8 +63,7 @@ pub struct AffineTransform {
 }
 
 /// Mirrors the `AVPlayer` framework counterpart for `PlayerVideoOutputConfiguration`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlayerVideoOutputConfiguration {
     /// Mirrors the `AVPlayer` framework property for `has_source_player_item`.
     pub has_source_player_item: bool,
@@ -100,8 +97,7 @@ impl PlayerVideoTaggedBufferKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerVideoTaggedBufferPayload {
     tags: Vec<String>,
     buffer_kind: String,
@@ -168,8 +164,7 @@ fn release_object(object: *mut c_void) {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerVideoOutputSamplePayload {
     tagged_buffers: Vec<PlayerVideoTaggedBufferPayload>,
     presentation_time: Time,
@@ -228,7 +223,7 @@ impl PlayerVideoOutputTagCollection {
     pub fn from_preset(
         preset: PlayerVideoOutputTagCollectionPreset,
     ) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_video_output_tag_collection_create_with_preset(
                 preset.raw(),
@@ -242,13 +237,14 @@ impl PlayerVideoOutputTagCollection {
     }
 
     fn info(&self) -> Result<PlayerVideoOutputTagCollectionPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_video_output_tag_collection_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_player_video_output_tag_collection_info_value(self.ptr, &raw mut err)
+        };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `tags`.
@@ -276,7 +272,7 @@ impl VideoOutputSpecification {
                 "video output specifications require at least one tag collection".into(),
             ));
         }
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptrs = tag_collections
             .iter()
             .map(|collection| collection.ptr)
@@ -293,13 +289,13 @@ impl VideoOutputSpecification {
     fn preferred_tag_collection_payloads(
         &self,
     ) -> Result<Vec<PlayerVideoOutputTagCollectionPayload>, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_video_output_specification_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_video_output_specification_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `preferred_tag_collections`.
@@ -316,14 +312,14 @@ impl VideoOutputSpecification {
         &self,
         settings: Option<&PlayerVideoOutputSettings>,
     ) -> Result<(), AVPlayerError> {
-        let settings = maybe_json_cstring(settings, "default video output settings")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let settings = maybe_value_buffer(settings, "default video output settings")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_video_output_specification_set_default_output_settings(
                 self.ptr,
                 settings
                     .as_ref()
-                    .map_or(ptr::null(), |settings| settings.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -339,14 +335,14 @@ impl VideoOutputSpecification {
         tag_collection: &PlayerVideoOutputTagCollection,
         settings: Option<&PlayerVideoOutputSettings>,
     ) -> Result<(), AVPlayerError> {
-        let settings = maybe_json_cstring(settings, "video output tag collection settings")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let settings = maybe_value_buffer(settings, "video output tag collection settings")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_video_output_specification_set_output_settings_for_tag_collection(
                 self.ptr,
                 settings
                     .as_ref()
-                    .map_or(ptr::null(), |settings| settings.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 tag_collection.ptr,
                 &raw mut err,
             )
@@ -378,7 +374,7 @@ unsafe impl Send for PlayerVideoOutput {}
 impl PlayerVideoOutput {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(specification: &VideoOutputSpecification) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe { ffi::av_player_video_output_create(specification.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -393,9 +389,9 @@ impl PlayerVideoOutput {
     ) -> Result<Option<PlayerVideoOutputSample>, AVPlayerError> {
         let (value, timescale, kind) = host_time.to_raw();
         let mut buffers: *mut c_void = ptr::null_mut();
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_player_video_output_sample_json(
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_player_video_output_sample_value(
                 self.ptr,
                 value,
                 timescale,
@@ -404,11 +400,11 @@ impl PlayerVideoOutput {
                 &raw mut err,
             )
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
         let retained_buffers = unsafe { take_object_array(buffers) };
-        match parse_json_and_free::<Option<PlayerVideoOutputSamplePayload>>(json_ptr) {
+        match parse_value_and_free::<Option<PlayerVideoOutputSamplePayload>>(value_ptr) {
             Ok(payload) => Ok(payload
                 .map(|payload| PlayerVideoOutputSample::from_payload(payload, retained_buffers))),
             Err(error) => {
@@ -434,6 +430,59 @@ impl Player {
     pub fn video_output(&self) -> Option<PlayerVideoOutput> {
         let ptr = unsafe { ffi::av_player_copy_video_output(self.ptr) };
         (!ptr.is_null()).then_some(PlayerVideoOutput { ptr })
+    }
+}
+
+impl crate::binary::FromValue for PlayerVideoOutputTagCollectionPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            tags: value.field(0)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AffineTransform {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            a: value.field(0)?,
+            b: value.field(1)?,
+            c: value.field(2)?,
+            d: value.field(3)?,
+            tx: value.field(4)?,
+            ty: value.field(5)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerVideoOutputConfiguration {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            has_source_player_item: value.field(0)?,
+            data_channel_descriptions: value.field(1)?,
+            preferred_transform: value.field(2)?,
+            activation_time: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerVideoTaggedBufferPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            tags: value.field(0)?,
+            buffer_kind: value.field(1)?,
+            pixel_buffer_width: value.field(2)?,
+            pixel_buffer_height: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerVideoOutputSamplePayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            tagged_buffers: value.field(0)?,
+            presentation_time: value.field(1)?,
+            active_configuration: value.field(2)?,
+        })
     }
 }
 

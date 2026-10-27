@@ -1,12 +1,13 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-struct PlayerItemIntegratedTimelineInfoPayload: Codable {
+struct PlayerItemIntegratedTimelineInfoPayload: AVPBridge {
     let currentTime: TimePayload
     let currentDate: String?
 }
 
-struct PlayerItemIntegratedTimelineSegmentPayload: Codable {
+struct PlayerItemIntegratedTimelineSegmentPayload: AVPBridge {
     let segmentTypeRaw: Int
     let timeMappingSource: TimeRangePayload
     let timeMappingTarget: TimeRangePayload
@@ -15,7 +16,7 @@ struct PlayerItemIntegratedTimelineSegmentPayload: Codable {
     let interstitialEvent: PlayerInterstitialEventInfoPayload?
 }
 
-struct PlayerItemIntegratedTimelineSnapshotPayload: Codable {
+struct PlayerItemIntegratedTimelineSnapshotPayload: AVPBridge {
     let duration: TimePayload
     let currentTime: TimePayload
     let currentDate: String?
@@ -23,12 +24,12 @@ struct PlayerItemIntegratedTimelineSnapshotPayload: Codable {
     let segments: [PlayerItemIntegratedTimelineSegmentPayload]
 }
 
-struct PlayerItemIntegratedTimelineSegmentOffsetPayload: Codable {
+struct PlayerItemIntegratedTimelineSegmentOffsetPayload: AVPBridge {
     let segment: PlayerItemIntegratedTimelineSegmentPayload
     let offset: TimePayload
 }
 
-struct PlayerIntegratedTimelineOutOfSyncPayload: Codable {
+struct PlayerIntegratedTimelineOutOfSyncPayload: AVPBridge {
     let reason: String
 }
 
@@ -127,7 +128,7 @@ private func avpDeliverIntegratedTimelineTime(
             context,
             encoded.value ?? 0,
             encoded.timescale ?? 0,
-            avpIntegratedTimelineKind(from: encoded)
+            encoded.kind
         )
         return true
     }
@@ -139,7 +140,7 @@ final class AVPPlayerItemIntegratedTimelineNotificationObserverBox: AVPPlayerIte
 
     init(
         timeline: AVPlayerItemIntegratedTimeline,
-        callback: @escaping AVPJsonCallback,
+        callback: @escaping AVPValueCallback,
         gate: AVPCallbackGate
     ) {
         super.init(gate: gate)
@@ -149,7 +150,7 @@ final class AVPPlayerItemIntegratedTimelineNotificationObserverBox: AVPPlayerIte
             queue: nil
         ) { [gate] notification in
             let reason = notification.userInfo?[AVPlayerItemIntegratedTimeline.snapshotsOutOfSyncReasonKey] as? String
-            gate.deliverJSON(PlayerIntegratedTimelineOutOfSyncPayload(reason: reason ?? ""), to: callback)
+            gate.deliverValue(PlayerIntegratedTimelineOutOfSyncPayload(reason: reason ?? ""), to: callback)
         }
     }
 
@@ -162,7 +163,7 @@ final class AVPPlayerItemIntegratedTimelineNotificationObserverBox: AVPPlayerIte
 }
 
 private func avpIntegratedTimelineUnavailable(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) {
     outErrorMessage?.pointee = ffiString(
         "AVPlayerItemIntegratedTimeline requires macOS 15.0 or newer"
@@ -173,27 +174,10 @@ private func avpParseIntegratedTimelineDate(_ string: String) -> Date? {
     ISO8601DateFormatter().date(from: string)
 }
 
-private func avpIntegratedTimelineKind(from payload: TimePayload) -> Int32 {
-    switch payload.kind {
-    case "numeric":
-        return 0
-    case "invalid":
-        return 1
-    case "indefinite":
-        return 2
-    case "positive_infinity":
-        return 3
-    case "negative_infinity":
-        return 4
-    default:
-        return 1
-    }
-}
-
 @_cdecl("av_player_item_copy_integrated_timeline")
 public func av_player_item_copy_integrated_timeline(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
@@ -210,23 +194,21 @@ public func av_player_item_integrated_timeline_release(_ timelinePtr: UnsafeMuta
     Unmanaged<AVPPlayerItemIntegratedTimelineBox>.fromOpaque(timelinePtr).release()
 }
 
-@_cdecl("av_player_item_integrated_timeline_info_json")
-public func av_player_item_integrated_timeline_info_json(
+@_cdecl("av_player_item_integrated_timeline_info_value")
+public func av_player_item_integrated_timeline_info_value(
     _ timelinePtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
     }
     let timeline = Unmanaged<AVPPlayerItemIntegratedTimelineBox>.fromOpaque(timelinePtr).takeUnretainedValue().timeline
     do {
-        return ffiString(
-            try avpEncodeJSON(
-                PlayerItemIntegratedTimelineInfoPayload(
-                    currentTime: encodeTime(timeline.currentTime),
-                    currentDate: avpISO8601String(timeline.currentDate)
-                )
+        return try avpEncodeValue(
+            PlayerItemIntegratedTimelineInfoPayload(
+                currentTime: encodeTime(timeline.currentTime),
+                currentDate: avpISO8601String(timeline.currentDate)
             )
         )
     } catch {
@@ -238,7 +220,7 @@ public func av_player_item_integrated_timeline_info_json(
 @_cdecl("av_player_item_integrated_timeline_copy_current_snapshot")
 public func av_player_item_integrated_timeline_copy_current_snapshot(
     _ timelinePtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
@@ -261,7 +243,7 @@ public func av_player_item_integrated_timeline_seek_to_time(
     _ afterTimescale: Int32,
     _ afterKind: Int32,
     _ outSuccess: UnsafeMutablePointer<Bool>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
@@ -294,16 +276,16 @@ public func av_player_item_integrated_timeline_seek_to_time(
 @_cdecl("av_player_item_integrated_timeline_seek_to_date")
 public func av_player_item_integrated_timeline_seek_to_date(
     _ timelinePtr: UnsafeMutableRawPointer,
-    _ datePtr: UnsafePointer<CChar>,
+    _ datePtr: UnsafePointer<AVPValue>,
     _ outSuccess: UnsafeMutablePointer<Bool>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return AVP_OPERATION_FAILED
     }
     let timeline = Unmanaged<AVPPlayerItemIntegratedTimelineBox>.fromOpaque(timelinePtr).takeUnretainedValue().timeline
-    guard let date = avpParseIntegratedTimelineDate(String(cString: datePtr)) else {
+    guard let date = avpParseIntegratedTimelineDate(String(bridge: datePtr)) else {
         outErrorMessage?.pointee = ffiString("invalid ISO-8601 date string")
         return AVP_INVALID_ARGUMENT
     }
@@ -330,7 +312,7 @@ public func av_player_item_integrated_timeline_add_periodic_time_observer(
     _ callback: AVPPeriodicTimeCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 15.0, *) else {
@@ -356,11 +338,11 @@ public func av_player_item_integrated_timeline_add_periodic_time_observer(
 public func av_player_item_integrated_timeline_add_boundary_time_observer(
     _ timelinePtr: UnsafeMutableRawPointer,
     _ segmentPtr: UnsafeMutableRawPointer,
-    _ offsetsJSON: UnsafePointer<CChar>,
+    _ offsetsValue: UnsafePointer<AVPValue>,
     _ callback: AVPPeriodicTimeCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 15.0, *) else {
@@ -373,10 +355,9 @@ public func av_player_item_integrated_timeline_add_boundary_time_observer(
     }
     let timeline = Unmanaged<AVPPlayerItemIntegratedTimelineBox>.fromOpaque(timelinePtr).takeUnretainedValue().timeline
     let segment = Unmanaged<AVPPlayerItemIntegratedTimelineSegmentBox>.fromOpaque(segmentPtr).takeUnretainedValue().segment
-    let payload = String(cString: offsetsJSON)
     let offsetsPayload: [TimePayload]
     do {
-        offsetsPayload = try avpDecodeJSON(payload, as: [TimePayload].self)
+        offsetsPayload = try avpDecodeValue(offsetsValue, as: [TimePayload].self)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -393,10 +374,10 @@ public func av_player_item_integrated_timeline_add_boundary_time_observer(
 @_cdecl("av_player_item_integrated_timeline_add_out_of_sync_observer")
 public func av_player_item_integrated_timeline_add_out_of_sync_observer(
     _ timelinePtr: UnsafeMutableRawPointer,
-    _ callback: AVPJsonCallback?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 15.0, *) else {
@@ -432,18 +413,18 @@ public func av_player_item_integrated_timeline_snapshot_release(_ snapshotPtr: U
     Unmanaged<AVPPlayerItemIntegratedTimelineSnapshotBox>.fromOpaque(snapshotPtr).release()
 }
 
-@_cdecl("av_player_item_integrated_timeline_snapshot_info_json")
-public func av_player_item_integrated_timeline_snapshot_info_json(
+@_cdecl("av_player_item_integrated_timeline_snapshot_info_value")
+public func av_player_item_integrated_timeline_snapshot_info_value(
     _ snapshotPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
     }
     let snapshot = Unmanaged<AVPPlayerItemIntegratedTimelineSnapshotBox>.fromOpaque(snapshotPtr).takeUnretainedValue().snapshot
     do {
-        return ffiString(try avpEncodeJSON(encodeIntegratedTimelineSnapshot(snapshot)))
+        return try avpEncodeValue(encodeIntegratedTimelineSnapshot(snapshot))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -480,14 +461,14 @@ public func av_player_item_integrated_timeline_snapshot_copy_segment_at_index(
     return Unmanaged.passRetained(AVPPlayerItemIntegratedTimelineSegmentBox(segment: snapshot.segments[index])).toOpaque()
 }
 
-@_cdecl("av_player_item_integrated_timeline_snapshot_segment_and_offset_json")
-public func av_player_item_integrated_timeline_snapshot_segment_and_offset_json(
+@_cdecl("av_player_item_integrated_timeline_snapshot_segment_and_offset_value")
+public func av_player_item_integrated_timeline_snapshot_segment_and_offset_value(
     _ snapshotPtr: UnsafeMutableRawPointer,
     _ value: Int64,
     _ timescale: Int32,
     _ kind: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
@@ -495,12 +476,10 @@ public func av_player_item_integrated_timeline_snapshot_segment_and_offset_json(
     let snapshot = Unmanaged<AVPPlayerItemIntegratedTimelineSnapshotBox>.fromOpaque(snapshotPtr).takeUnretainedValue().snapshot
     do {
         let (segment, offset) = snapshot.segmentAndOffsetIntoSegment(forTimelineTime: cmTime(value: value, timescale: timescale, kind: kind))
-        return ffiString(
-            try avpEncodeJSON(
-                PlayerItemIntegratedTimelineSegmentOffsetPayload(
-                    segment: encodeIntegratedTimelineSegment(segment),
-                    offset: encodeTime(offset)
-                )
+        return try avpEncodeValue(
+            PlayerItemIntegratedTimelineSegmentOffsetPayload(
+                segment: encodeIntegratedTimelineSegment(segment),
+                offset: encodeTime(offset)
             )
         )
     } catch {
@@ -516,18 +495,18 @@ public func av_player_item_integrated_timeline_segment_release(_ segmentPtr: Uns
     Unmanaged<AVPPlayerItemIntegratedTimelineSegmentBox>.fromOpaque(segmentPtr).release()
 }
 
-@_cdecl("av_player_item_integrated_timeline_segment_info_json")
-public func av_player_item_integrated_timeline_segment_info_json(
+@_cdecl("av_player_item_integrated_timeline_segment_info_value")
+public func av_player_item_integrated_timeline_segment_info_value(
     _ segmentPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
     }
     let segment = Unmanaged<AVPPlayerItemIntegratedTimelineSegmentBox>.fromOpaque(segmentPtr).takeUnretainedValue().segment
     do {
-        return ffiString(try avpEncodeJSON(encodeIntegratedTimelineSegment(segment)))
+        return try avpEncodeValue(encodeIntegratedTimelineSegment(segment))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -536,14 +515,14 @@ public func av_player_item_integrated_timeline_segment_info_json(
 
 @_cdecl("av_player_integrated_timeline_snapshots_out_of_sync_notification")
 public func av_player_integrated_timeline_snapshots_out_of_sync_notification(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
     }
     do {
-        return ffiString(try avpEncodeJSON(AVPlayerItemIntegratedTimeline.snapshotsOutOfSyncNotification.rawValue))
+        return try avpEncodeValue(AVPlayerItemIntegratedTimeline.snapshotsOutOfSyncNotification.rawValue)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -552,14 +531,14 @@ public func av_player_integrated_timeline_snapshots_out_of_sync_notification(
 
 @_cdecl("av_player_integrated_timeline_snapshots_out_of_sync_reason_key")
 public func av_player_integrated_timeline_snapshots_out_of_sync_reason_key(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
     }
     do {
-        return ffiString(try avpEncodeJSON(AVPlayerItemIntegratedTimeline.snapshotsOutOfSyncReasonKey))
+        return try avpEncodeValue(AVPlayerItemIntegratedTimeline.snapshotsOutOfSyncReasonKey)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -568,14 +547,14 @@ public func av_player_integrated_timeline_snapshots_out_of_sync_reason_key(
 
 @_cdecl("av_player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed")
 public func av_player_integrated_timeline_snapshots_out_of_sync_reason_segments_changed(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
     }
     do {
-        return ffiString(try avpEncodeJSON(AVPlayerIntegratedTimelineSnapshotsOutOfSyncReason.segmentsChanged.rawValue))
+        return try avpEncodeValue(AVPlayerIntegratedTimelineSnapshotsOutOfSyncReason.segmentsChanged.rawValue)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -584,14 +563,14 @@ public func av_player_integrated_timeline_snapshots_out_of_sync_reason_segments_
 
 @_cdecl("av_player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed")
 public func av_player_integrated_timeline_snapshots_out_of_sync_reason_current_segment_changed(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
     }
     do {
-        return ffiString(try avpEncodeJSON(AVPlayerIntegratedTimelineSnapshotsOutOfSyncReason.currentSegmentChanged.rawValue))
+        return try avpEncodeValue(AVPlayerIntegratedTimelineSnapshotsOutOfSyncReason.currentSegmentChanged.rawValue)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -600,14 +579,14 @@ public func av_player_integrated_timeline_snapshots_out_of_sync_reason_current_s
 
 @_cdecl("av_player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_ranges_changed")
 public func av_player_integrated_timeline_snapshots_out_of_sync_reason_loaded_time_ranges_changed(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 15.0, *) else {
         avpIntegratedTimelineUnavailable(outErrorMessage)
         return nil
     }
     do {
-        return ffiString(try avpEncodeJSON(AVPlayerIntegratedTimelineSnapshotsOutOfSyncReason.loadedTimeRangesChanged.rawValue))
+        return try avpEncodeValue(AVPlayerIntegratedTimelineSnapshotsOutOfSyncReason.loadedTimeRangesChanged.rawValue)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -643,4 +622,96 @@ private func encodeIntegratedTimelineSegment(
         startDate: avpISO8601String(segment.startDate),
         interstitialEvent: segment.interstitialEvent.map { encodeInterstitialEventSummary($0) }
     )
+}
+
+extension PlayerItemIntegratedTimelineInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            currentTime.binaryValue,
+            currentDate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            currentTime: try binaryValue.field(0),
+            currentDate: try binaryValue.field(1)
+        )
+    }
+}
+
+extension PlayerItemIntegratedTimelineSegmentPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            segmentTypeRaw.binaryValue,
+            timeMappingSource.binaryValue,
+            timeMappingTarget.binaryValue,
+            loadedTimeRanges.binaryValue,
+            startDate.binaryValue,
+            interstitialEvent.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            segmentTypeRaw: try binaryValue.field(0),
+            timeMappingSource: try binaryValue.field(1),
+            timeMappingTarget: try binaryValue.field(2),
+            loadedTimeRanges: try binaryValue.field(3),
+            startDate: try binaryValue.field(4),
+            interstitialEvent: try binaryValue.field(5)
+        )
+    }
+}
+
+extension PlayerItemIntegratedTimelineSnapshotPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            duration.binaryValue,
+            currentTime.binaryValue,
+            currentDate.binaryValue,
+            currentSegmentIndex.binaryValue,
+            segments.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            duration: try binaryValue.field(0),
+            currentTime: try binaryValue.field(1),
+            currentDate: try binaryValue.field(2),
+            currentSegmentIndex: try binaryValue.field(3),
+            segments: try binaryValue.field(4)
+        )
+    }
+}
+
+extension PlayerItemIntegratedTimelineSegmentOffsetPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            segment.binaryValue,
+            offset.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            segment: try binaryValue.field(0),
+            offset: try binaryValue.field(1)
+        )
+    }
+}
+
+extension PlayerIntegratedTimelineOutOfSyncPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            reason.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            reason: try binaryValue.field(0)
+        )
+    }
 }

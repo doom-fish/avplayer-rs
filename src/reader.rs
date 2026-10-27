@@ -1,22 +1,21 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use crate::util::parse_value_and_free;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::{CStr, CString};
 
 use apple_cf::cm::CMSampleBuffer;
 use apple_cf::cv::CVPixelBuffer;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 
 use crate::asset::{Asset, AssetTrack, MediaType};
+use crate::binary::ToValue;
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct ReaderInfoPayload {
     status: i32,
     error_message: Option<String>,
@@ -55,8 +54,7 @@ impl AssetReaderStatus {
 }
 
 /// Builder for uncompressed video `AVAssetReader` output settings.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VideoOutputSettings {
     pixel_format: u32,
     width: Option<i32>,
@@ -90,8 +88,7 @@ impl VideoOutputSettings {
 }
 
 /// Builder for linear-PCM audio `AVAssetReader` output settings.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AudioOutputSettings {
     sample_rate: Option<f64>,
     channel_count: Option<u32>,
@@ -156,7 +153,7 @@ retain_release_wrapper!(AssetReader, release = ffi::av_reader_release);
 impl AssetReader {
     /// Calls the `AVPlayer` framework counterpart for `new`.
     pub fn new(asset: &Asset) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe { ffi::av_reader_create(asset.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::READER_CREATE_FAILED, err) });
@@ -165,12 +162,12 @@ impl AssetReader {
     }
 
     fn info(&self) -> Result<ReaderInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_reader_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_reader_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `status`.
@@ -197,7 +194,7 @@ impl AssetReader {
     pub fn set_time_range(&self, time_range: TimeRange) -> Result<(), AVPlayerError> {
         let (start_value, start_timescale, start_kind) = time_range.start.to_raw();
         let (duration_value, duration_timescale, duration_kind) = time_range.duration.to_raw();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_reader_set_time_range(
                 self.ptr,
@@ -218,7 +215,7 @@ impl AssetReader {
 
     /// Calls the `AVPlayer` framework counterpart for `start_reading`.
     pub fn start_reading(&self) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe { ffi::av_reader_start(self.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -271,7 +268,7 @@ impl AssetReader {
     }
 
     fn add_output_ptr(&self, output_ptr: *mut c_void) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe { ffi::av_reader_add_output(self.ptr, output_ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -312,7 +309,7 @@ impl AssetReaderTrackOutput {
 
     /// Calls the `AVPlayer` framework counterpart for `passthrough`.
     pub fn passthrough(track: &AssetTrack) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr =
             unsafe { ffi::av_reader_track_output_create_passthrough(track.ptr, &raw mut err) };
         if ptr.is_null() {
@@ -359,16 +356,16 @@ impl AssetReaderAudioMixOutput {
         tracks: &[AssetTrack],
         settings: Option<&AudioOutputSettings>,
     ) -> Result<Self, AVPlayerError> {
-        let settings = settings_json(settings)?;
+        let settings = settings_value(settings)?;
         let track_ptrs = track_ptrs(tracks);
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_reader_audio_mix_output_create(
                 track_ptrs.as_ptr(),
                 track_ptrs.len(),
                 settings
                     .as_ref()
-                    .map_or(ptr::null(), |settings| settings.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -418,16 +415,16 @@ impl AssetReaderVideoCompositionOutput {
         tracks: &[AssetTrack],
         settings: Option<&VideoOutputSettings>,
     ) -> Result<Self, AVPlayerError> {
-        let settings = settings_json(settings)?;
+        let settings = settings_value(settings)?;
         let track_ptrs = track_ptrs(tracks);
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_reader_video_composition_output_create(
                 track_ptrs.as_ptr(),
                 track_ptrs.len(),
                 settings
                     .as_ref()
-                    .map_or(ptr::null(), |settings| settings.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -458,23 +455,23 @@ impl AssetReaderVideoCompositionOutput {
     }
 }
 
-fn create_track_output<T: Serialize>(
+fn create_track_output<T: ToValue>(
     constructor: unsafe extern "C" fn(
         track: *mut c_void,
-        settings_json: *const c_char,
-        out_error_message: *mut *mut c_char,
+        settings_value: *const AVPValue,
+        out_error_message: *mut *mut AVPValue,
     ) -> *mut c_void,
     track: &AssetTrack,
     settings: Option<&T>,
 ) -> Result<*mut c_void, AVPlayerError> {
-    let settings = settings_json(settings)?;
-    let mut err: *mut c_char = ptr::null_mut();
+    let settings = settings_value(settings)?;
+    let mut err: *mut AVPValue = ptr::null_mut();
     let ptr = unsafe {
         constructor(
             track.ptr,
             settings
                 .as_ref()
-                .map_or(ptr::null(), |settings| settings.as_ptr()),
+                .map_or(ptr::null(), super::binary::InputValue::as_ptr),
             &raw mut err,
         )
     };
@@ -484,27 +481,18 @@ fn create_track_output<T: Serialize>(
     Ok(ptr)
 }
 
-fn settings_json<T: Serialize>(settings: Option<&T>) -> Result<Option<CString>, AVPlayerError> {
+fn settings_value<T: ToValue>(
+    settings: Option<&T>,
+) -> Result<Option<crate::binary::InputValue>, AVPlayerError> {
     settings
-        .map(|settings| serde_json::to_string(settings))
-        .transpose()
-        .map_err(|error| {
-            AVPlayerError::InvalidArgument(format!("failed to encode reader settings: {error}"))
-        })?
-        .map(|json| {
-            CString::new(json).map_err(|error| {
-                AVPlayerError::InvalidArgument(format!(
-                    "reader settings JSON contains NUL byte: {error}"
-                ))
-            })
-        })
+        .map(|settings| crate::util::value_buffer(settings, "reader settings"))
         .transpose()
 }
 
 pub fn output_copy_next_sample_buffer(
     output: *mut c_void,
 ) -> Result<Option<CMSampleBuffer>, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let ptr = unsafe { ffi::av_reader_output_copy_next_sample_buffer(output, &raw mut err) };
     if !err.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -515,7 +503,7 @@ pub fn output_copy_next_sample_buffer(
 pub fn output_copy_next_video_pixel_buffer(
     output: *mut c_void,
 ) -> Result<Option<CVPixelBuffer>, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let ptr = unsafe { ffi::av_reader_output_copy_next_video_pixel_buffer(output, &raw mut err) };
     if !err.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -527,7 +515,7 @@ pub fn output_set_always_copies_sample_data(
     output: *mut c_void,
     always_copies: bool,
 ) -> Result<(), AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let status = unsafe {
         ffi::av_reader_output_set_always_copies_sample_data(output, always_copies, &raw mut err)
     };
@@ -544,10 +532,8 @@ pub fn output_media_type(output: *mut c_void) -> Result<MediaType, AVPlayerError
             "reader output did not return a media type".into(),
         ));
     }
-    let media_type = unsafe { CStr::from_ptr(raw) }
-        .to_string_lossy()
-        .into_owned();
-    unsafe { ffi::avp_string_free(raw) };
+    let media_type = unsafe { crate::binary::read_string(raw) }.unwrap_or_default();
+    unsafe { ffi::avp_value_free(raw) };
     Ok(MediaType::from_raw(&media_type))
 }
 
@@ -555,12 +541,35 @@ fn track_ptrs(tracks: &[AssetTrack]) -> Vec<*mut c_void> {
     tracks.iter().map(|track| track.ptr).collect()
 }
 
-fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, AVPlayerError> {
-    let json = unsafe { CStr::from_ptr(json_ptr) }
-        .to_string_lossy()
-        .into_owned();
-    unsafe { ffi::avp_string_free(json_ptr) };
-    serde_json::from_str::<T>(&json).map_err(|error| {
-        AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}"))
-    })
+impl crate::binary::FromValue for ReaderInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            status: value.field(0)?,
+            error_message: value.field(1)?,
+            time_range: value.field(2)?,
+            output_count: value.field(3)?,
+        })
+    }
+}
+
+impl crate::binary::ToValue for VideoOutputSettings {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.pixel_format),
+            crate::binary::ToValue::to_value(&self.width),
+            crate::binary::ToValue::to_value(&self.height),
+        ])
+    }
+}
+
+impl crate::binary::ToValue for AudioOutputSettings {
+    fn to_value(&self) -> crate::binary::Value {
+        crate::binary::Value::Array(vec![
+            crate::binary::ToValue::to_value(&self.sample_rate),
+            crate::binary::ToValue::to_value(&self.channel_count),
+            crate::binary::ToValue::to_value(&self.bits_per_channel),
+            crate::binary::ToValue::to_value(&self.is_float),
+            crate::binary::ToValue::to_value(&self.is_non_interleaved),
+        ])
+    }
 }

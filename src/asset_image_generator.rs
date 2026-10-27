@@ -1,20 +1,18 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CString;
-
-use serde::Deserialize;
 
 use crate::asset::{Asset, Size, UrlAsset};
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetImageGeneratorInfoPayload {
     applies_preferred_track_transform: bool,
     maximum_size: Size,
@@ -26,8 +24,7 @@ struct AssetImageGeneratorInfoPayload {
     custom_video_compositor_class_name: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct AssetImagePayload {
     width: usize,
     height: usize,
@@ -129,12 +126,12 @@ impl UrlAsset {
 
 impl AssetImageGenerator {
     fn info(&self) -> Result<AssetImageGeneratorInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_image_generator_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_image_generator_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn applies_preferred_track_transform(&self) -> Result<bool, AVPlayerError> {
@@ -171,7 +168,7 @@ impl AssetImageGenerator {
     ) -> Result<(), AVPlayerError> {
         let mode = mode
             .map(|mode| {
-                CString::new(mode.as_raw()).map_err(|error| {
+                InputString::new(mode.as_raw()).map_err(|error| {
                     AVPlayerError::InvalidArgument(format!(
                         "aperture mode contains NUL byte: {error}"
                     ))
@@ -181,7 +178,8 @@ impl AssetImageGenerator {
         unsafe {
             ffi::av_asset_image_generator_set_aperture_mode(
                 self.ptr,
-                mode.as_ref().map_or(ptr::null(), |mode| mode.as_ptr()),
+                mode.as_ref()
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         }
         Ok(())
@@ -227,12 +225,12 @@ impl AssetImageGenerator {
         &self,
         policy: &AssetImageGeneratorDynamicRangePolicy,
     ) -> Result<(), AVPlayerError> {
-        let policy = CString::new(policy.as_raw()).map_err(|error| {
+        let policy = InputString::new(policy.as_raw()).map_err(|error| {
             AVPlayerError::InvalidArgument(format!(
                 "dynamic-range policy contains NUL byte: {error}"
             ))
         })?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_asset_image_generator_set_dynamic_range_policy(
                 self.ptr,
@@ -262,7 +260,7 @@ impl AssetImageGenerator {
         let mut actual_value = 0_i64;
         let mut actual_timescale = 0_i32;
         let mut actual_kind = 1_i32;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let image_ptr = unsafe {
             ffi::av_asset_image_generator_copy_image_at_time(
                 self.ptr,
@@ -291,12 +289,12 @@ impl AssetImageGenerator {
 
 impl AssetImage {
     fn info(&self) -> Result<AssetImagePayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_asset_image_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_asset_image_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     pub fn width(&self) -> Result<usize, AVPlayerError> {
@@ -329,5 +327,35 @@ impl AssetImage {
 
     pub fn rendering_intent(&self) -> Result<u32, AVPlayerError> {
         Ok(self.info()?.rendering_intent)
+    }
+}
+
+impl crate::binary::FromValue for AssetImageGeneratorInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            applies_preferred_track_transform: value.field(0)?,
+            maximum_size: value.field(1)?,
+            aperture_mode: value.field(2)?,
+            requested_time_tolerance_before: value.field(3)?,
+            requested_time_tolerance_after: value.field(4)?,
+            dynamic_range_policy: value.field(5)?,
+            has_custom_video_compositor: value.field(6)?,
+            custom_video_compositor_class_name: value.field(7)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for AssetImagePayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            width: value.field(0)?,
+            height: value.field(1)?,
+            bits_per_component: value.field(2)?,
+            bits_per_pixel: value.field(3)?,
+            bytes_per_row: value.field(4)?,
+            alpha_info: value.field(5)?,
+            bitmap_info: value.field(6)?,
+            rendering_intent: value.field(7)?,
+        })
     }
 }

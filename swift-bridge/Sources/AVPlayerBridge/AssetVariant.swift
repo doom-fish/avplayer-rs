@@ -1,29 +1,30 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-private struct AVPAssetVariantPayload: Codable {
+private struct AVPAssetVariantPayload: AVPBridge {
     let peakBitRate: Double?
     let averageBitRate: Double?
     let url: String?
 }
 
-private struct AVPAssetVariantVideoAttributesPayload: Codable {
+private struct AVPAssetVariantVideoAttributesPayload: AVPBridge {
     let videoRange: String
     let codecTypes: [UInt32]
     let presentationSize: SizePayload
     let nominalFrameRate: Double?
 }
 
-private struct AVPAssetVariantVideoLayoutAttributesPayload: Codable {
+private struct AVPAssetVariantVideoLayoutAttributesPayload: AVPBridge {
     let stereoViewComponents: UInt32
     let projectionType: String
 }
 
-private struct AVPAssetVariantAudioAttributesPayload: Codable {
+private struct AVPAssetVariantAudioAttributesPayload: AVPBridge {
     let formatIds: [UInt32]
 }
 
-private struct AVPAssetVariantAudioRenditionPayload: Codable {
+private struct AVPAssetVariantAudioRenditionPayload: AVPBridge {
     let channelCount: Int?
     let binaural: Bool?
     let immersive: Bool?
@@ -48,11 +49,11 @@ public func av_asset_copy_variant_at_index(
     return avpRetained(urlAsset.variants[Int(index)])
 }
 
-@_cdecl("av_asset_variant_info_json")
-public func av_asset_variant_info_json(
+@_cdecl("av_asset_variant_info_value")
+public func av_asset_variant_info_value(
     _ variantPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("asset variants require macOS 12.0")
         return nil
@@ -69,7 +70,7 @@ public func av_asset_variant_info_json(
         }()
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -96,11 +97,11 @@ public func av_asset_variant_copy_audio_attributes(
     return avpRetained(value)
 }
 
-@_cdecl("av_asset_variant_video_attributes_info_json")
-public func av_asset_variant_video_attributes_info_json(
+@_cdecl("av_asset_variant_video_attributes_info_value")
+public func av_asset_variant_video_attributes_info_value(
     _ attributesPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("variant video attributes require macOS 12.0")
         return nil
@@ -113,7 +114,7 @@ public func av_asset_variant_video_attributes_info_json(
         nominalFrameRate: attributes.nominalFrameRate
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -140,11 +141,11 @@ public func av_asset_variant_video_layout_attribute_copy_at_index(
     return avpRetained(attributes.videoLayoutAttributes[Int(index)])
 }
 
-@_cdecl("av_asset_variant_video_layout_attributes_info_json")
-public func av_asset_variant_video_layout_attributes_info_json(
+@_cdecl("av_asset_variant_video_layout_attributes_info_value")
+public func av_asset_variant_video_layout_attributes_info_value(
     _ attributesPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 14.0, *) else {
         outErrorMessage?.pointee = ffiString("variant video layout attributes require macOS 14.0")
         return nil
@@ -155,18 +156,18 @@ public func av_asset_variant_video_layout_attributes_info_json(
         projectionType: String(describing: attributes.projectionType)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
     }
 }
 
-@_cdecl("av_asset_variant_audio_attributes_info_json")
-public func av_asset_variant_audio_attributes_info_json(
+@_cdecl("av_asset_variant_audio_attributes_info_value")
+public func av_asset_variant_audio_attributes_info_value(
     _ attributesPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("variant audio attributes require macOS 12.0")
         return nil
@@ -176,7 +177,7 @@ public func av_asset_variant_audio_attributes_info_json(
         formatIds: attributes.formatIDs.map { $0 }
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -197,11 +198,11 @@ public func av_asset_variant_audio_attributes_copy_rendition_specific_attributes
     return avpRetained(value)
 }
 
-@_cdecl("av_asset_variant_audio_rendition_info_json")
-public func av_asset_variant_audio_rendition_info_json(
+@_cdecl("av_asset_variant_audio_rendition_info_value")
+public func av_asset_variant_audio_rendition_info_value(
     _ attributesPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("variant audio rendition attributes require macOS 12.0")
         return nil
@@ -229,7 +230,7 @@ public func av_asset_variant_audio_rendition_info_json(
         }()
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -239,7 +240,7 @@ public func av_asset_variant_audio_rendition_info_json(
 @_cdecl("av_asset_variant_qualifier_create_with_variant")
 public func av_asset_variant_qualifier_create_with_variant(
     _ variantPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("asset variant qualifiers require macOS 12.0")
@@ -247,4 +248,92 @@ public func av_asset_variant_qualifier_create_with_variant(
     }
     let variant = Unmanaged<AVAssetVariant>.fromOpaque(variantPtr).takeUnretainedValue()
     return avpRetained(AVAssetVariantQualifier(variant: variant))
+}
+
+extension AVPAssetVariantPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            peakBitRate.binaryValue,
+            averageBitRate.binaryValue,
+            url.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            peakBitRate: try binaryValue.field(0),
+            averageBitRate: try binaryValue.field(1),
+            url: try binaryValue.field(2)
+        )
+    }
+}
+
+extension AVPAssetVariantVideoAttributesPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            videoRange.binaryValue,
+            codecTypes.binaryValue,
+            presentationSize.binaryValue,
+            nominalFrameRate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            videoRange: try binaryValue.field(0),
+            codecTypes: try binaryValue.field(1),
+            presentationSize: try binaryValue.field(2),
+            nominalFrameRate: try binaryValue.field(3)
+        )
+    }
+}
+
+extension AVPAssetVariantVideoLayoutAttributesPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            stereoViewComponents.binaryValue,
+            projectionType.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            stereoViewComponents: try binaryValue.field(0),
+            projectionType: try binaryValue.field(1)
+        )
+    }
+}
+
+extension AVPAssetVariantAudioAttributesPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            formatIds.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            formatIds: try binaryValue.field(0)
+        )
+    }
+}
+
+extension AVPAssetVariantAudioRenditionPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            channelCount.binaryValue,
+            binaural.binaryValue,
+            immersive.binaryValue,
+            downmix.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            channelCount: try binaryValue.field(0),
+            binaural: try binaryValue.field(1),
+            immersive: try binaryValue.field(2),
+            downmix: try binaryValue.field(3)
+        )
+    }
 }

@@ -1,8 +1,9 @@
+import AVPlayerABI
 import AVFoundation
 import CoreGraphics
 import Foundation
 
-private struct AssetImageGeneratorInfoPayload: Codable {
+private struct AssetImageGeneratorInfoPayload: AVPBridge {
     let appliesPreferredTrackTransform: Bool
     let maximumSize: SizePayload
     let apertureMode: String?
@@ -13,7 +14,7 @@ private struct AssetImageGeneratorInfoPayload: Codable {
     let customVideoCompositorClassName: String?
 }
 
-private struct AssetImagePayload: Codable {
+private struct AssetImagePayload: AVPBridge {
     let width: Int
     let height: Int
     let bitsPerComponent: Int
@@ -135,14 +136,14 @@ public func av_asset_image_generator_create(
     return Unmanaged.passRetained(AVAssetImageGenerator(asset: asset)).toOpaque()
 }
 
-@_cdecl("av_asset_image_generator_info_json")
-public func av_asset_image_generator_info_json(
+@_cdecl("av_asset_image_generator_info_value")
+public func av_asset_image_generator_info_value(
     _ generatorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let generator = Unmanaged<AVAssetImageGenerator>.fromOpaque(generatorPtr).takeUnretainedValue()
     do {
-        return ffiString(try avpEncodeJSON(makeAssetImageGeneratorInfoPayload(generator)))
+        return try avpEncodeValue(makeAssetImageGeneratorInfoPayload(generator))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -171,10 +172,10 @@ public func av_asset_image_generator_set_maximum_size(
 @_cdecl("av_asset_image_generator_set_aperture_mode")
 public func av_asset_image_generator_set_aperture_mode(
     _ generatorPtr: UnsafeMutableRawPointer,
-    _ modePtr: UnsafePointer<CChar>?
+    _ modePtr: UnsafePointer<AVPValue>?
 ) {
     let generator = Unmanaged<AVAssetImageGenerator>.fromOpaque(generatorPtr).takeUnretainedValue()
-    generator.apertureMode = modePtr.map { avpAssetImageGeneratorApertureMode(from: String(cString: $0)) }
+    generator.apertureMode = modePtr.map { avpAssetImageGeneratorApertureMode(from: String(bridge: $0)) }
 }
 
 @_cdecl("av_asset_image_generator_set_requested_time_tolerance_before")
@@ -202,15 +203,15 @@ public func av_asset_image_generator_set_requested_time_tolerance_after(
 @_cdecl("av_asset_image_generator_set_dynamic_range_policy")
 public func av_asset_image_generator_set_dynamic_range_policy(
     _ generatorPtr: UnsafeMutableRawPointer,
-    _ policyPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ policyPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 15.0, *) else {
         outErrorMessage?.pointee = ffiString("AVAssetImageGenerator.dynamicRangePolicy requires macOS 15.0")
         return AVP_INVALID_ARGUMENT
     }
     let generator = Unmanaged<AVAssetImageGenerator>.fromOpaque(generatorPtr).takeUnretainedValue()
-    generator.dynamicRangePolicy = avpAssetImageGeneratorDynamicRangePolicy(from: String(cString: policyPtr))
+    generator.dynamicRangePolicy = avpAssetImageGeneratorDynamicRangePolicy(from: String(bridge: policyPtr))
     return AVP_OK
 }
 
@@ -223,7 +224,7 @@ public func av_asset_image_generator_copy_image_at_time(
     _ outActualValue: UnsafeMutablePointer<Int64>?,
     _ outActualTimescale: UnsafeMutablePointer<Int32>?,
     _ outActualKind: UnsafeMutablePointer<Int32>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let generator = Unmanaged<AVAssetImageGenerator>.fromOpaque(generatorPtr).takeUnretainedValue()
     let requestedTime = cmTime(value: value, timescale: timescale, kind: kind)
@@ -251,14 +252,14 @@ public func av_asset_image_generator_cancel_all_image_generation(
     generator.cancelAllCGImageGeneration()
 }
 
-@_cdecl("av_asset_image_info_json")
-public func av_asset_image_info_json(
+@_cdecl("av_asset_image_info_value")
+public func av_asset_image_info_value(
     _ imagePtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let image = Unmanaged<AVPAssetImageBox>.fromOpaque(imagePtr).takeUnretainedValue().image
     do {
-        return ffiString(try avpEncodeJSON(makeAssetImagePayload(image)))
+        return try avpEncodeValue(makeAssetImagePayload(image))
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -272,26 +273,63 @@ private func writeTime(
     kind: UnsafeMutablePointer<Int32>?
 ) {
     let encoded = encodeTime(time)
-    switch encoded.kind {
-    case "numeric":
-        value?.pointee = encoded.value ?? 0
-        timescale?.pointee = encoded.timescale ?? 1
-        kind?.pointee = 0
-    case "indefinite":
-        value?.pointee = 0
-        timescale?.pointee = 0
-        kind?.pointee = 2
-    case "positive_infinity":
-        value?.pointee = 0
-        timescale?.pointee = 0
-        kind?.pointee = 3
-    case "negative_infinity":
-        value?.pointee = 0
-        timescale?.pointee = 0
-        kind?.pointee = 4
-    default:
-        value?.pointee = 0
-        timescale?.pointee = 0
-        kind?.pointee = 1
+    value?.pointee = encoded.value ?? 0
+    timescale?.pointee = encoded.timescale ?? 0
+    kind?.pointee = encoded.kind
+}
+
+extension AssetImageGeneratorInfoPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            appliesPreferredTrackTransform.binaryValue,
+            maximumSize.binaryValue,
+            apertureMode.binaryValue,
+            requestedTimeToleranceBefore.binaryValue,
+            requestedTimeToleranceAfter.binaryValue,
+            dynamicRangePolicy.binaryValue,
+            hasCustomVideoCompositor.binaryValue,
+            customVideoCompositorClassName.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            appliesPreferredTrackTransform: try binaryValue.field(0),
+            maximumSize: try binaryValue.field(1),
+            apertureMode: try binaryValue.field(2),
+            requestedTimeToleranceBefore: try binaryValue.field(3),
+            requestedTimeToleranceAfter: try binaryValue.field(4),
+            dynamicRangePolicy: try binaryValue.field(5),
+            hasCustomVideoCompositor: try binaryValue.field(6),
+            customVideoCompositorClassName: try binaryValue.field(7)
+        )
+    }
+}
+
+extension AssetImagePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            width.binaryValue,
+            height.binaryValue,
+            bitsPerComponent.binaryValue,
+            bitsPerPixel.binaryValue,
+            bytesPerRow.binaryValue,
+            alphaInfo.binaryValue,
+            bitmapInfo.binaryValue,
+            renderingIntent.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            width: try binaryValue.field(0),
+            height: try binaryValue.field(1),
+            bitsPerComponent: try binaryValue.field(2),
+            bitsPerPixel: try binaryValue.field(3),
+            bytesPerRow: try binaryValue.field(4),
+            alphaInfo: try binaryValue.field(5),
+            bitmapInfo: try binaryValue.field(6),
+            renderingIntent: try binaryValue.field(7)
+        )
     }
 }

@@ -1,15 +1,14 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::binary::InputString;
+use crate::ffi::AVPValue;
+use crate::util::parse_value_and_free;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::{CStr, CString};
 use std::path::Path;
 use std::sync::{Mutex, PoisonError};
 
 use doom_fish_utils::callback_context::CallbackContext;
-
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
 
 use crate::asset::{Asset, Size};
 use crate::error::{from_swift, AVPlayerError};
@@ -19,11 +18,10 @@ use crate::player_media_selection_criteria::PlayerTimeControlStatus;
 use crate::retained::retain_release_wrapper;
 use crate::time::Time;
 use crate::util::{
-    deliver, json_payload, validate_seek_time, validate_tolerance, Handler, Registration,
+    deliver, validate_seek_time, validate_tolerance, value_payload, Handler, Registration,
 };
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerInfoPayload {
     status: i32,
     error_message: Option<String>,
@@ -32,8 +30,7 @@ struct PlayerInfoPayload {
     duration: Time,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerItemInfoPayload {
     status: i32,
     error_message: Option<String>,
@@ -42,8 +39,7 @@ struct PlayerItemInfoPayload {
     metadata: Vec<MetadataItem>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerItemEventPayload {
     event: String,
     status: Option<i32>,
@@ -133,8 +129,7 @@ pub enum PlayerItemEvent {
 type PeriodicTimeHandler = Mutex<Box<dyn FnMut(Time) + Send + 'static>>;
 type BoundaryTimeHandler = Mutex<Box<dyn FnMut() + Send + 'static>>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PlayerStatusEventPayload {
     event: String,
     status: Option<i32>,
@@ -199,15 +194,11 @@ impl PlayerItem {
 
     /// Create a player item from an existing asset.
     pub fn from_asset(asset: &Asset) -> Result<Self, AVPlayerError> {
-        let keys_json =
-            CString::new("[\"duration\",\"tracks\",\"metadata\"]").map_err(|error| {
-                AVPlayerError::InvalidArgument(format!("asset-key JSON contains NUL byte: {error}"))
-            })?;
-        let mut err: *mut c_char = ptr::null_mut();
-        // SAFETY: `asset.ptr` is a valid borrowed AVAsset handle, `keys_json` is a
-        // NUL-terminated string, and `err` points to writable storage for the bridge.
+        let keys_value =
+            crate::util::value_buffer(["duration", "tracks", "metadata"].as_slice(), "asset keys")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
-            ffi::av_player_item_create_with_asset(asset.ptr, keys_json.as_ptr(), &raw mut err)
+            ffi::av_player_item_create_with_asset(asset.ptr, keys_value.as_ptr(), &raw mut err)
         };
         if ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
@@ -218,21 +209,17 @@ impl PlayerItem {
     }
 
     fn from_url_internal(url: &str, is_file_url: bool) -> Result<Self, AVPlayerError> {
-        let url = CString::new(url).map_err(|error| {
+        let url = InputString::new(url).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
         })?;
-        let keys_json =
-            CString::new("[\"duration\",\"tracks\",\"metadata\"]").map_err(|error| {
-                AVPlayerError::InvalidArgument(format!("asset-key JSON contains NUL byte: {error}"))
-            })?;
-        let mut err: *mut c_char = ptr::null_mut();
-        // SAFETY: `url` and `keys_json` are NUL-terminated strings owned by this
-        // frame, and `err` points to writable storage for the bridge.
+        let keys_value =
+            crate::util::value_buffer(["duration", "tracks", "metadata"].as_slice(), "asset keys")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_item_create_with_url(
                 url.as_ptr(),
                 is_file_url,
-                keys_json.as_ptr(),
+                keys_value.as_ptr(),
                 &raw mut err,
             )
         };
@@ -245,16 +232,16 @@ impl PlayerItem {
     }
 
     fn info(&self) -> Result<PlayerItemInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         // SAFETY: `self.ptr` is a valid AVPlayerItem handle and `err` points to
         // writable storage for the bridge.
-        let json_ptr = unsafe { ffi::av_player_item_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let value_ptr = unsafe { ffi::av_player_item_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
             // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `status`.
@@ -337,7 +324,7 @@ impl Player {
 
     /// Create a player that plays the supplied asset.
     pub fn from_asset(asset: &Asset) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         // SAFETY: `asset.ptr` is a valid borrowed AVAsset handle and `err` points
         // to writable storage for the bridge.
         let ptr = unsafe { ffi::av_player_create_with_asset(asset.ptr, &raw mut err) };
@@ -351,7 +338,7 @@ impl Player {
 
     /// Create a player from an already-configured item.
     pub fn from_item(item: &PlayerItem) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         // SAFETY: `item.ptr` is a valid borrowed AVPlayerItem handle and `err`
         // points to writable storage for the bridge.
         let ptr = unsafe { ffi::av_player_create_with_item(item.ptr, &raw mut err) };
@@ -364,12 +351,10 @@ impl Player {
     }
 
     fn from_url_internal(url: &str, is_file_url: bool) -> Result<Self, AVPlayerError> {
-        let url = CString::new(url).map_err(|error| {
+        let url = InputString::new(url).map_err(|error| {
             AVPlayerError::InvalidArgument(format!("URL contains NUL byte: {error}"))
         })?;
-        let mut err: *mut c_char = ptr::null_mut();
-        // SAFETY: `url` is a NUL-terminated string owned by this frame and `err`
-        // points to writable storage for the bridge.
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr =
             unsafe { ffi::av_player_create_with_url(url.as_ptr(), is_file_url, &raw mut err) };
         if ptr.is_null() {
@@ -381,16 +366,16 @@ impl Player {
     }
 
     fn info(&self) -> Result<PlayerInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         // SAFETY: `self.ptr` is a valid AVPlayer handle and `err` points to
         // writable storage for the bridge.
-        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let value_ptr = unsafe { ffi::av_player_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             // SAFETY: On failure the bridge initializes `err` to an owned Swift error
             // payload that `from_swift` consumes.
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `status`.
@@ -453,7 +438,7 @@ impl Player {
 
     /// Calls the `AVPlayer` framework counterpart for `seek_to`.
     pub fn seek_to(&self, time: Time) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let (value, timescale, kind) = time.to_raw();
         // SAFETY: `self.ptr` is a valid AVPlayer handle and `err` points to
         // writable storage for the bridge.
@@ -478,7 +463,7 @@ impl Player {
         let (value, timescale, kind) = time.to_raw();
         let (before_value, before_timescale, before_kind) = tolerance_before.to_raw();
         let (after_value, after_timescale, after_kind) = tolerance_after.to_raw();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_seek_with_tolerance(
                 self.ptr,
@@ -508,7 +493,7 @@ impl Player {
     ) -> Result<(), AVPlayerError> {
         let (item_value, item_timescale, item_kind) = item_time.to_raw();
         let (host_value, host_timescale, host_kind) = host_time.to_raw();
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_set_rate_at_host_time(
                 self.ptr,
@@ -573,7 +558,7 @@ impl Player {
                     kind,
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(periodic_time_observer_trampoline),
                     userdata,
                     drop_userdata,
@@ -595,14 +580,7 @@ impl Player {
         F: FnMut() + Send + 'static,
     {
         let queue_label = queue_label_cstring(queue_label)?;
-        let times_json = serde_json::to_string(times).map_err(|error| {
-            AVPlayerError::InvalidArgument(format!("failed to encode boundary times: {error}"))
-        })?;
-        let times_json = CString::new(times_json).map_err(|error| {
-            AVPlayerError::InvalidArgument(format!(
-                "boundary times JSON contains NUL byte: {error}"
-            ))
-        })?;
+        let times_value = crate::util::value_buffer(times, "boundary times")?;
         let handler: BoundaryTimeHandler = Mutex::new(Box::new(callback));
         let inner = Registration::new(
             handler,
@@ -610,10 +588,10 @@ impl Player {
             |userdata, drop_userdata, err| unsafe {
                 ffi::av_player_add_boundary_time_observer(
                     self.ptr,
-                    times_json.as_ptr(),
+                    times_value.as_ptr(),
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(boundary_time_observer_trampoline),
                     userdata,
                     drop_userdata,
@@ -654,9 +632,9 @@ unsafe impl Send for PlayerStatusObserver {}
 
 unsafe extern "C" fn player_item_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
-    let Some(payload) = (unsafe { json_payload::<PlayerItemEventPayload>(payload_json) }) else {
+    let Some(payload) = (unsafe { value_payload::<PlayerItemEventPayload>(payload_value) }) else {
         return;
     };
 
@@ -694,9 +672,9 @@ unsafe extern "C" fn player_item_event_trampoline(
 
 unsafe extern "C" fn player_status_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
-    let Some(event) = (unsafe { json_payload::<PlayerStatusEventPayload>(payload_json) })
+    let Some(event) = (unsafe { value_payload::<PlayerStatusEventPayload>(payload_value) })
         .and_then(PlayerStatusEvent::from_payload)
     else {
         return;
@@ -736,25 +714,61 @@ unsafe extern "C" fn boundary_time_observer_trampoline(userdata: *mut c_void) {
     };
 }
 
-fn queue_label_cstring(queue_label: Option<&str>) -> Result<Option<CString>, AVPlayerError> {
+fn queue_label_cstring(queue_label: Option<&str>) -> Result<Option<InputString>, AVPlayerError> {
     queue_label
         .map(|label| {
-            CString::new(label).map_err(|error| {
+            InputString::new(label).map_err(|error| {
                 AVPlayerError::InvalidArgument(format!("queue label contains NUL byte: {error}"))
             })
         })
         .transpose()
 }
 
-fn parse_json_and_free<T: DeserializeOwned>(json_ptr: *mut c_char) -> Result<T, AVPlayerError> {
-    // SAFETY: `json_ptr` is a non-null, NUL-terminated C string returned by the
-    // bridge; it remains valid until freed with `avp_string_free`.
-    let json = unsafe { CStr::from_ptr(json_ptr) }
-        .to_string_lossy()
-        .into_owned();
-    // SAFETY: `json_ptr` was returned by the FFI and has not been freed yet.
-    unsafe { ffi::avp_string_free(json_ptr) };
-    serde_json::from_str::<T>(&json).map_err(|error| {
-        AVPlayerError::OperationFailed(format!("failed to decode bridge JSON: {error}"))
-    })
+impl crate::binary::FromValue for PlayerInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            status: value.field(0)?,
+            error_message: value.field(1)?,
+            rate: value.field(2)?,
+            current_time: value.field(3)?,
+            duration: value.field(4)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerItemInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            status: value.field(0)?,
+            error_message: value.field(1)?,
+            duration: value.field(2)?,
+            presentation_size: value.field(3)?,
+            metadata: value.field(4)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerItemEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            status: value.field(1)?,
+            error_message: value.field(2)?,
+            presentation_size: value.field(3)?,
+            has_originating_participant: value.field(4)?,
+            recommended_time_offset_from_live: value.field(5)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerStatusEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            event: value.field(0)?,
+            status: value.field(1)?,
+            error_message: value.field(2)?,
+            time_control_status: value.field(3)?,
+            reason_for_waiting_to_play: value.field(4)?,
+        })
+    }
 }

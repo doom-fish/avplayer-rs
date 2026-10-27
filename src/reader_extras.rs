@@ -1,14 +1,13 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::marker::PhantomData;
 use core::ptr;
-use std::ffi::CStr;
 
 use apple_cf::cm::CMSampleBuffer;
 use apple_cf::cv::CVPixelBuffer;
 use doom_fish_utils::stream::{BoundedAsyncStream, NextItem};
-use serde::Deserialize;
 
 use crate::asset::{AssetTrack, MediaType};
 use crate::error::{from_swift, AVPlayerError};
@@ -21,19 +20,17 @@ use crate::reader::{
 use crate::retained::retain_release_wrapper;
 use crate::time::TimeRange;
 use crate::util::{
-    deliver, json_cstring, json_payload, parse_json_and_free, validate_capacity, Handler,
+    deliver, parse_value_and_free, validate_capacity, value_buffer, value_payload, Handler,
     Registration,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptionGroupInfo {
     pub time_range: TimeRange,
     pub captions: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptionValidationEvent {
     pub caption_text: String,
     pub syntax_elements: Vec<String>,
@@ -61,10 +58,8 @@ impl AssetReaderOutput<'_> {
                 "reader output did not return a media type".into(),
             ));
         }
-        let media_type = unsafe { CStr::from_ptr(raw) }
-            .to_string_lossy()
-            .into_owned();
-        unsafe { ffi::avp_string_free(raw) };
+        let media_type = unsafe { crate::binary::read_string(raw) }.unwrap_or_default();
+        unsafe { ffi::avp_value_free(raw) };
         Ok(MediaType::from_raw(&media_type))
     }
 
@@ -80,7 +75,7 @@ impl AssetReaderOutput<'_> {
         &self,
         supports_random_access: bool,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_reader_output_set_supports_random_access(
                 self.ptr,
@@ -98,10 +93,10 @@ impl AssetReaderOutput<'_> {
         &self,
         time_ranges: &[TimeRange],
     ) -> Result<(), AVPlayerError> {
-        let time_ranges = json_cstring(time_ranges, "reader output time ranges")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let time_ranges = value_buffer(time_ranges, "reader output time ranges")?;
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
-            ffi::av_reader_output_reset_for_time_ranges_json(
+            ffi::av_reader_output_reset_for_time_ranges_value(
                 self.ptr,
                 time_ranges.as_ptr(),
                 &raw mut err,
@@ -139,7 +134,7 @@ retain_release_wrapper!(
 
 impl AssetReaderSampleReferenceOutput {
     pub fn new(track: &AssetTrack) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe { ffi::av_reader_sample_reference_output_create(track.ptr, &raw mut err) };
         if ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
@@ -170,7 +165,7 @@ retain_release_wrapper!(
 
 impl AssetReaderOutputMetadataAdaptor {
     pub fn new(track_output: &AssetReaderTrackOutput) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_reader_output_metadata_adaptor_create(track_output.ptr, &raw mut err)
         };
@@ -188,7 +183,7 @@ impl AssetReaderOutputMetadataAdaptor {
     pub fn next_timed_metadata_group(
         &self,
     ) -> Result<Option<TimedMetadataGroupHandle>, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_reader_output_metadata_adaptor_copy_next_timed_metadata_group(
                 self.ptr,
@@ -218,7 +213,7 @@ retain_release_wrapper!(
 
 impl AssetReaderOutputCaptionAdaptor {
     pub fn new(track_output: &AssetReaderTrackOutput) -> Result<Self, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr =
             unsafe { ffi::av_reader_output_caption_adaptor_create(track_output.ptr, &raw mut err) };
         if ptr.is_null() {
@@ -233,17 +228,17 @@ impl AssetReaderOutputCaptionAdaptor {
     }
 
     pub fn next_caption_group(&self) -> Result<Option<CaptionGroupInfo>, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_reader_output_caption_adaptor_next_caption_group_json(self.ptr, &raw mut err)
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_reader_output_caption_adaptor_next_caption_group_value(self.ptr, &raw mut err)
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             if err.is_null() {
                 return Ok(None);
             }
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr).map(Some)
+        parse_value_and_free(value_ptr).map(Some)
     }
 
     pub fn observe_validation<F>(
@@ -355,7 +350,7 @@ impl AssetReader {
         &self,
         output: &AssetReaderSampleReferenceOutput,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe { ffi::av_reader_add_output(self.ptr, output.ptr, &raw mut err) };
         if status != ffi::status::OK {
             return Err(unsafe { from_swift(status, err) });
@@ -372,10 +367,28 @@ impl AssetReaderTrackOutput {
 
 unsafe extern "C" fn caption_validation_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
-    let Some(event) = (unsafe { json_payload::<CaptionValidationEvent>(payload_json) }) else {
+    let Some(event) = (unsafe { value_payload::<CaptionValidationEvent>(payload_value) }) else {
         return;
     };
     unsafe { deliver(userdata, "caption_validation_event_trampoline", event) };
+}
+
+impl crate::binary::FromValue for CaptionGroupInfo {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            time_range: value.field(0)?,
+            captions: value.field(1)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for CaptionValidationEvent {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            caption_text: value.field(0)?,
+            syntax_elements: value.field(1)?,
+        })
+    }
 }

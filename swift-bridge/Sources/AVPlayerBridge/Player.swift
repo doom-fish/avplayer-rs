@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import AVPlayerObjCBridge
 import Foundation
@@ -32,7 +33,7 @@ private final class TimeObserverBox {
     }
 }
 
-private struct PlayerRateDidChangeEventPayload: Codable {
+private struct PlayerRateDidChangeEventPayload: AVPBridge {
     let rate: Float
     let reason: String?
     let hasOriginatingParticipant: Bool
@@ -46,7 +47,7 @@ private final class PlayerRateObserverBox: NSObject {
     init(
         player: AVPlayer,
         queue: DispatchQueue?,
-        callback: @escaping AVPJsonCallback,
+        callback: @escaping AVPValueCallback,
         gate: AVPCallbackGate
     ) {
         self.gate = gate
@@ -63,9 +64,9 @@ private final class PlayerRateObserverBox: NSObject {
                 hasOriginatingParticipant: note.userInfo?[AVPlayer.rateDidChangeOriginatingParticipantKey] != nil
             )
             if let queue {
-                queue.async { gate.deliverJSON(payload, to: callback) }
+                queue.async { gate.deliverValue(payload, to: callback) }
             } else {
-                gate.deliverJSON(payload, to: callback)
+                gate.deliverValue(payload, to: callback)
             }
         }
     }
@@ -84,7 +85,7 @@ private final class PlayerRateObserverBox: NSObject {
     }
 }
 
-private struct PlayerStatusEventPayload: Codable {
+private struct PlayerStatusEventPayload: AVPBridge {
     let event: String
     let status: Int32?
     let errorMessage: String?
@@ -97,11 +98,11 @@ private final class PlayerStatusObserverBox: NSObject {
     private var statusObservation: NSKeyValueObservation?
     private var timeControlStatusObservation: NSKeyValueObservation?
 
-    init(player: AVPlayer, callback: @escaping AVPJsonCallback, gate: AVPCallbackGate) {
+    init(player: AVPlayer, callback: @escaping AVPValueCallback, gate: AVPCallbackGate) {
         self.gate = gate
         super.init()
         statusObservation = player.observe(\.status, options: [.initial, .new]) { [gate] player, _ in
-            gate.deliverJSON(
+            gate.deliverValue(
                 PlayerStatusEventPayload(
                     event: "status_changed",
                     status: Int32(clamping: player.status.rawValue),
@@ -114,7 +115,7 @@ private final class PlayerStatusObserverBox: NSObject {
         }
         timeControlStatusObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) {
             [gate] player, _ in
-            gate.deliverJSON(
+            gate.deliverValue(
                 PlayerStatusEventPayload(
                     event: "time_control_status_changed",
                     status: nil,
@@ -144,10 +145,10 @@ private final class PlayerStatusObserverBox: NSObject {
 @_cdecl("av_player_add_status_observer")
 public func av_player_add_status_observer(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ callback: AVPJsonCallback?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -168,18 +169,18 @@ public func av_player_status_observer_release(_ observerPtr: UnsafeMutableRawPoi
 
 @_cdecl("av_player_create")
 public func av_player_create(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     Unmanaged.passRetained(AVPlayer()).toOpaque()
 }
 
 @_cdecl("av_player_create_with_url")
 public func av_player_create_with_url(
-    _ urlPtr: UnsafePointer<CChar>,
+    _ urlPtr: UnsafePointer<AVPValue>,
     _ isFileURL: Bool,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
-    let urlString = String(cString: urlPtr)
+    let urlString = String(bridge: urlPtr)
     let url = isFileURL ? URL(fileURLWithPath: urlString) : URL(string: urlString)
     guard let url else {
         outErrorMessage?.pointee = ffiString("invalid URL: \(urlString)")
@@ -191,7 +192,7 @@ public func av_player_create_with_url(
 @_cdecl("av_player_create_with_asset")
 public func av_player_create_with_asset(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     let player = AVPlayer(playerItem: AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: ["duration"]))
@@ -201,7 +202,7 @@ public func av_player_create_with_asset(
 @_cdecl("av_player_create_with_item")
 public func av_player_create_with_item(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     var reason: NSString?
@@ -218,11 +219,11 @@ public func av_player_release(_ playerPtr: UnsafeMutableRawPointer?) {
     Unmanaged<AVPlayer>.fromOpaque(playerPtr).release()
 }
 
-@_cdecl("av_player_info_json")
-public func av_player_info_json(
+@_cdecl("av_player_info_value")
+public func av_player_info_value(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let payload = PlayerInfoPayload(
         status: Int32(player.status.rawValue),
@@ -264,7 +265,7 @@ public func av_player_info_json(
         audioOutputDeviceUniqueId: player.audioOutputDeviceUniqueID
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -295,7 +296,7 @@ public func av_player_seek(
     _ value: Int64,
     _ timescale: Int32,
     _ kind: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let time = cmTime(value: value, timescale: timescale, kind: kind)
@@ -319,7 +320,7 @@ public func av_player_seek_with_tolerance(
     _ afterValue: Int64,
     _ afterTimescale: Int32,
     _ afterKind: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let time = cmTime(value: value, timescale: timescale, kind: kind)
@@ -345,7 +346,7 @@ public func av_player_set_rate_at_host_time(
     _ hostValue: Int64,
     _ hostTimescale: Int32,
     _ hostKind: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     guard !player.automaticallyWaitsToMinimizeStalling else {
@@ -375,10 +376,10 @@ public func av_player_set_default_rate(_ playerPtr: UnsafeMutableRawPointer, _ r
 @_cdecl("av_player_set_audio_output_device_unique_id")
 public func av_player_set_audio_output_device_unique_id(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ uniqueIdPtr: UnsafePointer<CChar>?
+    _ uniqueIdPtr: UnsafePointer<AVPValue>?
 ) {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
-    player.audioOutputDeviceUniqueID = uniqueIdPtr.map { String(cString: $0) }
+    player.audioOutputDeviceUniqueID = uniqueIdPtr.map { String(bridge: $0) }
 }
 
 @_cdecl("av_player_copy_current_item")
@@ -392,7 +393,7 @@ public func av_player_copy_current_item(_ playerPtr: UnsafeMutableRawPointer) ->
 public func av_player_replace_current_item(
     _ playerPtr: UnsafeMutableRawPointer,
     _ itemPtr: UnsafeMutableRawPointer?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let item = itemPtr.map { Unmanaged<AVPlayerItem>.fromOpaque($0).takeUnretainedValue() }
@@ -408,7 +409,7 @@ public func av_player_replace_current_item(
 public func av_player_set_action_at_item_end(
     _ playerPtr: UnsafeMutableRawPointer,
     _ rawValue: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     guard let value = AVPlayer.ActionAtItemEnd(rawValue: Int(rawValue)) else {
@@ -457,7 +458,7 @@ public func av_player_set_applies_media_selection_criteria_automatically(
 public func av_player_set_audiovisual_background_playback_policy(
     _ playerPtr: UnsafeMutableRawPointer,
     _ rawValue: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 12.0, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayer.audiovisualBackgroundPlaybackPolicy requires macOS 12.0+")
@@ -476,7 +477,7 @@ public func av_player_set_audiovisual_background_playback_policy(
 public func av_player_set_network_resource_priority(
     _ playerPtr: UnsafeMutableRawPointer,
     _ rawValue: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayer.networkResourcePriority requires macOS 26.0+")
@@ -494,11 +495,11 @@ public func av_player_set_network_resource_priority(
 @_cdecl("av_player_add_rate_observer")
 public func av_player_add_rate_observer(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ queueLabel: UnsafePointer<CChar>?,
-    _ callback: AVPJsonCallback?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard #available(macOS 12.0, *) else {
@@ -531,8 +532,8 @@ public func av_player_rate_observer_release(_ observerPtr: UnsafeMutableRawPoint
 
 @_cdecl("av_player_eligible_for_hdr_playback_did_change_notification_name")
 public func av_player_eligible_for_hdr_playback_did_change_notification_name(
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 10.15, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerEligibleForHDRPlaybackDidChangeNotification requires macOS 10.15+")
         return nil
@@ -543,12 +544,12 @@ public func av_player_eligible_for_hdr_playback_did_change_notification_name(
 @_cdecl("av_player_set_media_selection_criteria")
 public func av_player_set_media_selection_criteria(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ mediaCharacteristicPtr: UnsafePointer<CChar>,
+    _ mediaCharacteristicPtr: UnsafePointer<AVPValue>,
     _ criteriaPtr: UnsafeMutableRawPointer?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
-    let mediaCharacteristic = avpMediaCharacteristic(from: String(cString: mediaCharacteristicPtr))
+    let mediaCharacteristic = avpMediaCharacteristic(from: String(bridge: mediaCharacteristicPtr))
     let criteria = criteriaPtr.map {
         Unmanaged<AVPlayerMediaSelectionCriteria>.fromOpaque($0).takeUnretainedValue()
     }
@@ -559,11 +560,11 @@ public func av_player_set_media_selection_criteria(
 @_cdecl("av_player_copy_media_selection_criteria")
 public func av_player_copy_media_selection_criteria(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ mediaCharacteristicPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ mediaCharacteristicPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
-    let mediaCharacteristic = avpMediaCharacteristic(from: String(cString: mediaCharacteristicPtr))
+    let mediaCharacteristic = avpMediaCharacteristic(from: String(bridge: mediaCharacteristicPtr))
     guard let criteria = player.mediaSelectionCriteria(forMediaCharacteristic: mediaCharacteristic) else {
         return nil
     }
@@ -576,11 +577,11 @@ public func av_player_add_periodic_time_observer(
     _ intervalValue: Int64,
     _ intervalTimescale: Int32,
     _ intervalKind: Int32,
-    _ queueLabel: UnsafePointer<CChar>?,
+    _ queueLabel: UnsafePointer<AVPValue>?,
     _ callback: AVPPeriodicTimeCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -601,7 +602,7 @@ public func av_player_add_periodic_time_observer(
                 context,
                 encoded.value ?? 0,
                 encoded.timescale ?? 0,
-                kindFromEncodedTime(encoded)
+                encoded.kind
             )
         }
     }
@@ -612,12 +613,12 @@ public func av_player_add_periodic_time_observer(
 @_cdecl("av_player_add_boundary_time_observer")
 public func av_player_add_boundary_time_observer(
     _ playerPtr: UnsafeMutableRawPointer,
-    _ timesJson: UnsafePointer<CChar>,
-    _ queueLabel: UnsafePointer<CChar>?,
+    _ timesValue: UnsafePointer<AVPValue>,
+    _ queueLabel: UnsafePointer<AVPValue>?,
     _ callback: AVPSimpleCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -626,7 +627,7 @@ public func av_player_add_boundary_time_observer(
     }
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     do {
-        let payloads = try avpDecodeJSON(timesJson, as: [TimePayload].self)
+        let payloads = try avpDecodeValue(timesValue, as: [TimePayload].self)
         let times = payloads.map { cmTime(from: $0) }
         guard !times.isEmpty else {
             outErrorMessage?.pointee = ffiString("boundary time observers need at least one time")
@@ -657,19 +658,42 @@ public func av_player_time_observer_release(_ observerPtr: UnsafeMutableRawPoint
     observer.release()
 }
 
-private func kindFromEncodedTime(_ payload: TimePayload) -> Int32 {
-    switch payload.kind {
-    case "numeric":
-        return 0
-    case "invalid":
-        return 1
-    case "indefinite":
-        return 2
-    case "positive_infinity":
-        return 3
-    case "negative_infinity":
-        return 4
-    default:
-        return 1
+extension PlayerRateDidChangeEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            rate.binaryValue,
+            reason.binaryValue,
+            hasOriginatingParticipant.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            rate: try binaryValue.field(0),
+            reason: try binaryValue.field(1),
+            hasOriginatingParticipant: try binaryValue.field(2)
+        )
+    }
+}
+
+extension PlayerStatusEventPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            event.binaryValue,
+            status.binaryValue,
+            errorMessage.binaryValue,
+            timeControlStatus.binaryValue,
+            reasonForWaitingToPlay.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            event: try binaryValue.field(0),
+            status: try binaryValue.field(1),
+            errorMessage: try binaryValue.field(2),
+            timeControlStatus: try binaryValue.field(3),
+            reasonForWaitingToPlay: try binaryValue.field(4)
+        )
     }
 }

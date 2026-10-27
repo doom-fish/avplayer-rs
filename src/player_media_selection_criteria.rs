@@ -1,29 +1,25 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CStr;
-
-use serde::Deserialize;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::player::{Player, PlayerItem};
 use crate::retained::retain_release_wrapper;
 use crate::util::{
-    deliver, json_cstring, json_payload, parse_json_and_free, to_cstring, Handler, Registration,
+    deliver, parse_value_and_free, to_cstring, value_buffer, value_payload, Handler, Registration,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct CriteriaPayload {
     preferred_languages: Option<Vec<String>>,
     preferred_media_characteristics: Option<Vec<String>>,
     principal_media_characteristics: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerInfoPayload {
     time_control_status: Option<i32>,
     reason_for_waiting_to_play: Option<String>,
@@ -308,8 +304,7 @@ impl PlayerRateDidChangeReason {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 struct PlayerRateDidChangeEventPayload {
     rate: f32,
     reason: Option<String>,
@@ -370,28 +365,28 @@ impl PlayerMediaSelectionCriteria {
             .map(MediaCharacteristic::as_raw)
             .collect::<Vec<_>>();
 
-        let preferred_languages = json_cstring(&preferred_languages, "preferred languages")?;
-        let preferred_media_characteristics = json_cstring(
+        let preferred_languages = value_buffer(&preferred_languages, "preferred languages")?;
+        let preferred_media_characteristics = value_buffer(
             &preferred_media_characteristics,
             "preferred media characteristics",
         )?;
         let principal_media_characteristics = if principal_media_characteristics.is_empty() {
             None
         } else {
-            Some(json_cstring(
+            Some(value_buffer(
                 &principal_media_characteristics,
                 "principal media characteristics",
             )?)
         };
 
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_media_selection_criteria_create(
                 preferred_languages.as_ptr(),
                 preferred_media_characteristics.as_ptr(),
                 principal_media_characteristics
                     .as_ref()
-                    .map_or(ptr::null(), |value| value.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputValue::as_ptr),
                 &raw mut err,
             )
         };
@@ -402,13 +397,13 @@ impl PlayerMediaSelectionCriteria {
     }
 
     fn info(&self) -> Result<CriteriaPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr =
-            unsafe { ffi::av_player_media_selection_criteria_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr =
+            unsafe { ffi::av_player_media_selection_criteria_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `preferred_languages`.
@@ -445,12 +440,12 @@ impl PlayerMediaSelectionCriteria {
 
 impl Player {
     fn info_for_media_selection(&self) -> Result<PlayerInfoPayload, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe { ffi::av_player_info_json(self.ptr, &raw mut err) };
-        if json_ptr.is_null() {
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe { ffi::av_player_info_value(self.ptr, &raw mut err) };
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `time_control_status`.
@@ -490,7 +485,7 @@ impl Player {
         &self,
         action: PlayerActionAtItemEnd,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_set_action_at_item_end(self.ptr, action.as_raw(), &raw mut err)
         };
@@ -537,14 +532,14 @@ impl Player {
                 self.ptr,
                 unique_id
                     .as_ref()
-                    .map_or(ptr::null(), |unique_id| unique_id.as_ptr()),
+                    .map_or(ptr::null(), super::binary::InputString::as_ptr),
             );
         }
         Ok(())
     }
 
     pub fn replace_current_item(&self, item: Option<&PlayerItem>) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_replace_current_item(
                 self.ptr,
@@ -631,7 +626,7 @@ impl Player {
         &self,
         policy: PlayerAudiovisualBackgroundPlaybackPolicy,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_set_audiovisual_background_playback_policy(
                 self.ptr,
@@ -661,7 +656,7 @@ impl Player {
         &self,
         priority: PlayerNetworkResourcePriority,
     ) -> Result<(), AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_set_network_resource_priority(self.ptr, priority.as_raw(), &raw mut err)
         };
@@ -692,7 +687,7 @@ impl Player {
                     self.ptr,
                     queue_label
                         .as_ref()
-                        .map_or(ptr::null(), |label| label.as_ptr()),
+                        .map_or(ptr::null(), super::binary::InputString::as_ptr),
                     Some(player_rate_event_trampoline),
                     userdata,
                     drop_userdata,
@@ -711,7 +706,7 @@ impl Player {
     ) -> Result<(), AVPlayerError> {
         let media_characteristic =
             to_cstring(media_characteristic.as_raw(), "media characteristic")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let status = unsafe {
             ffi::av_player_set_media_selection_criteria(
                 self.ptr,
@@ -733,7 +728,7 @@ impl Player {
     ) -> Result<Option<PlayerMediaSelectionCriteria>, AVPlayerError> {
         let media_characteristic =
             to_cstring(media_characteristic.as_raw(), "media characteristic")?;
-        let mut err: *mut c_char = ptr::null_mut();
+        let mut err: *mut AVPValue = ptr::null_mut();
         let ptr = unsafe {
             ffi::av_player_copy_media_selection_criteria(
                 self.ptr,
@@ -764,25 +759,24 @@ unsafe impl Send for PlayerRateDidChangeObserver {}
 
 /// Calls the `AVPlayer` framework counterpart for `player_eligible_for_hdr_playback_did_change_notification`.
 pub fn player_eligible_for_hdr_playback_did_change_notification() -> Result<String, AVPlayerError> {
-    let mut err: *mut c_char = ptr::null_mut();
+    let mut err: *mut AVPValue = ptr::null_mut();
     let string_ptr = unsafe {
         ffi::av_player_eligible_for_hdr_playback_did_change_notification_name(&raw mut err)
     };
     if string_ptr.is_null() {
         return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
     }
-    let value = unsafe { CStr::from_ptr(string_ptr) }
-        .to_string_lossy()
-        .into_owned();
-    unsafe { ffi::avp_string_free(string_ptr) };
+    let value = unsafe { crate::binary::read_string(string_ptr) }.unwrap_or_default();
+    unsafe { ffi::avp_value_free(string_ptr) };
     Ok(value)
 }
 
 unsafe extern "C" fn player_rate_event_trampoline(
     userdata: *mut c_void,
-    payload_json: *const c_char,
+    payload_value: *const AVPValue,
 ) {
-    let Some(payload) = (unsafe { json_payload::<PlayerRateDidChangeEventPayload>(payload_json) })
+    let Some(payload) =
+        (unsafe { value_payload::<PlayerRateDidChangeEventPayload>(payload_value) })
     else {
         return;
     };
@@ -801,6 +795,45 @@ unsafe extern "C" fn player_rate_event_trampoline(
 
 fn availability_error(symbol: &str, macos_version: &str) -> AVPlayerError {
     AVPlayerError::OperationFailed(format!("{symbol} requires macOS {macos_version}+"))
+}
+
+impl crate::binary::FromValue for CriteriaPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            preferred_languages: value.field(0)?,
+            preferred_media_characteristics: value.field(1)?,
+            principal_media_characteristics: value.field(2)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerInfoPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            time_control_status: value.field(5)?,
+            reason_for_waiting_to_play: value.field(6)?,
+            action_at_item_end: value.field(7)?,
+            volume: value.field(8)?,
+            muted: value.field(9)?,
+            automatically_waits_to_minimize_stalling: value.field(10)?,
+            applies_media_selection_criteria_automatically: value.field(11)?,
+            eligible_for_hdr_playback: value.field(12)?,
+            audiovisual_background_playback_policy: value.field(13)?,
+            network_resource_priority: value.field(14)?,
+            default_rate: value.field(15)?,
+            audio_output_device_unique_id: value.field(16)?,
+        })
+    }
+}
+
+impl crate::binary::FromValue for PlayerRateDidChangeEventPayload {
+    fn from_value(value: &crate::binary::Value) -> Result<Self, AVPlayerError> {
+        Ok(Self {
+            rate: value.field(0)?,
+            reason: value.field(1)?,
+            has_originating_participant: value.field(2)?,
+        })
+    }
 }
 
 #[cfg(test)]

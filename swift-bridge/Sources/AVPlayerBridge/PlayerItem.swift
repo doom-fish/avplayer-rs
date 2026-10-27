@@ -1,3 +1,4 @@
+import AVPlayerABI
 import AVFoundation
 import AVPlayerObjCBridge
 import Foundation
@@ -36,7 +37,7 @@ private func encodePlayerItemVideoCompositor(
 
 private final class PlayerItemObserverBox: NSObject {
     private let item: AVPlayerItem
-    private let callback: AVPJsonCallback
+    private let callback: AVPValueCallback
     private let gate: AVPCallbackGate
     private var statusObservation: NSKeyValueObservation?
     private var presentationSizeObservation: NSKeyValueObservation?
@@ -51,7 +52,7 @@ private final class PlayerItemObserverBox: NSObject {
 
     init(
         item: AVPlayerItem,
-        callback: @escaping AVPJsonCallback,
+        callback: @escaping AVPValueCallback,
         gate: AVPCallbackGate
     ) {
         self.item = item
@@ -266,18 +267,18 @@ private final class PlayerItemObserverBox: NSObject {
     }
 
     private func send(_ payload: PlayerItemEventPayload) {
-        gate.deliverJSON(payload, to: callback)
+        gate.deliverValue(payload, to: callback)
     }
 }
 
 @_cdecl("av_player_item_create_with_url")
 public func av_player_item_create_with_url(
-    _ urlPtr: UnsafePointer<CChar>,
+    _ urlPtr: UnsafePointer<AVPValue>,
     _ isFileURL: Bool,
-    _ assetKeysJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ assetKeysValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
-    let urlString = String(cString: urlPtr)
+    let urlString = String(bridge: urlPtr)
     let url = isFileURL ? URL(fileURLWithPath: urlString) : URL(string: urlString)
     guard let url else {
         outErrorMessage?.pointee = ffiString("invalid URL: \(urlString)")
@@ -285,7 +286,7 @@ public func av_player_item_create_with_url(
     }
 
     do {
-        let assetKeys = try avpDecodeJSON(assetKeysJson, as: [String].self)
+        let assetKeys = try avpDecodeValue(assetKeysValue, as: [String].self)
         let asset = AVURLAsset(url: url)
         let item = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: assetKeys)
         return Unmanaged.passRetained(item).toOpaque()
@@ -298,12 +299,12 @@ public func av_player_item_create_with_url(
 @_cdecl("av_player_item_create_with_asset")
 public func av_player_item_create_with_asset(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ assetKeysJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ assetKeysValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     do {
-        let assetKeys = try avpDecodeJSON(assetKeysJson, as: [String].self)
+        let assetKeys = try avpDecodeValue(assetKeysValue, as: [String].self)
         let item = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: assetKeys)
         return Unmanaged.passRetained(item).toOpaque()
     } catch {
@@ -318,11 +319,11 @@ public func av_player_item_release(_ itemPtr: UnsafeMutableRawPointer?) {
     Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).release()
 }
 
-@_cdecl("av_player_item_info_json")
-public func av_player_item_info_json(
+@_cdecl("av_player_item_info_value")
+public func av_player_item_info_value(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let payload = PlayerItemInfoPayload(
         status: Int32(item.status.rawValue),
@@ -361,7 +362,7 @@ public func av_player_item_info_json(
         hasAudioMix: item.audioMix != nil
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -371,10 +372,10 @@ public func av_player_item_info_json(
 @_cdecl("av_player_item_add_observer")
 public func av_player_item_add_observer(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ callback: AVPJsonCallback?,
+    _ callback: AVPValueCallback?,
     _ userData: UnsafeMutableRawPointer?,
     _ dropUserData: AVPDropCallback?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let gate = AVPCallbackGate(context: userData, release: dropUserData)
     guard let callback else {
@@ -457,17 +458,17 @@ public func av_player_item_set_preferred_maximum_resolution_for_expensive_networ
 @_cdecl("av_player_item_set_audio_time_pitch_algorithm")
 public func av_player_item_set_audio_time_pitch_algorithm(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ algorithmPtr: UnsafePointer<CChar>
+    _ algorithmPtr: UnsafePointer<AVPValue>
 ) {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
-    item.audioTimePitchAlgorithm = avpAudioTimePitchAlgorithm(from: String(cString: algorithmPtr))
+    item.audioTimePitchAlgorithm = avpAudioTimePitchAlgorithm(from: String(bridge: algorithmPtr))
 }
 
 @_cdecl("av_player_item_set_variant_preferences")
 public func av_player_item_set_variant_preferences(
     _ itemPtr: UnsafeMutableRawPointer,
     _ rawValue: UInt64,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 11.3, *) else {
         outErrorMessage?.pointee = ffiString("AVPlayerItem.variantPreferences requires macOS 11.3+")
@@ -512,7 +513,7 @@ public func av_player_item_copy_error_log(_ itemPtr: UnsafeMutableRawPointer) ->
 public func av_player_item_add_output(
     _ itemPtr: UnsafeMutableRawPointer,
     _ outputPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let outputBox = Unmanaged<AVPPlayerItemOutputBox>.fromOpaque(outputPtr).takeUnretainedValue()
@@ -562,7 +563,7 @@ public func av_player_item_step_by_count(_ itemPtr: UnsafeMutableRawPointer, _ c
 public func av_player_item_set_video_composition_from_asset(
     _ itemPtr: UnsafeMutableRawPointer,
     _ assetPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 13.0, *) else {
         outErrorMessage?.pointee = ffiString("video composition from asset properties requires macOS 13.0 or later")
@@ -593,20 +594,20 @@ public func av_player_item_clear_video_composition(_ itemPtr: UnsafeMutableRawPo
     item.videoComposition = nil
 }
 
-private struct AudioMixTrackVolumePayload: Codable {
+private struct AudioMixTrackVolumePayload: AVPBridge {
     let trackId: Int32
     let volume: Float
 }
 
-@_cdecl("av_player_item_set_audio_mix_volumes_json")
-public func av_player_item_set_audio_mix_volumes_json(
+@_cdecl("av_player_item_set_audio_mix_volumes_value")
+public func av_player_item_set_audio_mix_volumes_value(
     _ itemPtr: UnsafeMutableRawPointer,
-    _ volumesJson: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ volumesValue: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     do {
-        let volumes = try avpDecodeJSON(volumesJson, as: [AudioMixTrackVolumePayload].self)
+        let volumes = try avpDecodeValue(volumesValue, as: [AudioMixTrackVolumePayload].self)
         let mix = AVMutableAudioMix()
         mix.inputParameters = volumes.map { entry in
             let parameters = AVMutableAudioMixInputParameters()
@@ -626,4 +627,20 @@ public func av_player_item_set_audio_mix_volumes_json(
 public func av_player_item_clear_audio_mix(_ itemPtr: UnsafeMutableRawPointer) {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     item.audioMix = nil
+}
+
+extension AudioMixTrackVolumePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            trackId.binaryValue,
+            volume.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            trackId: try binaryValue.field(0),
+            volume: try binaryValue.field(1)
+        )
+    }
 }

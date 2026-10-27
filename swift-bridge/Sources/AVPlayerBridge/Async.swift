@@ -1,10 +1,11 @@
+import AVPlayerABI
 import AVFoundation
 import AVPlayerObjCBridge
 import Foundation
 
 // ── avp_asset_load_properties_async ──────────────────────────────────────────
 
-private struct AsyncAssetPropertiesPayload: Codable {
+private struct AsyncAssetPropertiesPayload: AVPBridge {
     let duration: TimePayload
     let metadata: [MetadataItemPayload]
     let isPlayable: Bool
@@ -18,7 +19,7 @@ private struct AsyncAssetPropertiesPayload: Codable {
 @_cdecl("avp_asset_load_properties_async")
 public func avp_asset_load_properties_async(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
@@ -39,14 +40,10 @@ public func avp_asset_load_properties_async(
                 hasProtectedContent: hasProtectedContent,
                 preferredRate: preferredRate
             )
-            let json = try avpEncodeJSON(payload)
-            guard let cstr = ffiString(json) else {
-                "failed to allocate JSON string".withCString { cb(nil, $0, ctx) }
-                return
-            }
-            cb(UnsafeRawPointer(cstr), nil, ctx)
+            let value = try avpEncodeValue(payload)
+            cb(value, nil, ctx)
         } catch {
-            error.localizedDescription.withCString { cb(nil, $0, ctx) }
+            error.localizedDescription.withBridgeString { cb(nil, $0, ctx) }
         }
     }
 }
@@ -56,7 +53,7 @@ public func avp_asset_load_properties_async(
 @_cdecl("avp_asset_load_tracks_async")
 public func avp_asset_load_tracks_async(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
@@ -64,14 +61,10 @@ public func avp_asset_load_tracks_async(
         do {
             let tracks = try await asset.load(.tracks)
             let payloads = try await encodeTracksAsync(tracks)
-            let json = try avpEncodeJSON(payloads)
-            guard let cstr = ffiString(json) else {
-                "failed to allocate JSON string".withCString { cb(nil, $0, ctx) }
-                return
-            }
-            cb(UnsafeRawPointer(cstr), nil, ctx)
+            let value = try avpEncodeValue(payloads)
+            cb(value, nil, ctx)
         } catch {
-            error.localizedDescription.withCString { cb(nil, $0, ctx) }
+            error.localizedDescription.withBridgeString { cb(nil, $0, ctx) }
         }
     }
 }
@@ -81,24 +74,20 @@ public func avp_asset_load_tracks_async(
 @_cdecl("avp_asset_load_tracks_with_media_type_async")
 public func avp_asset_load_tracks_with_media_type_async(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ mediaTypePtr: UnsafePointer<CChar>,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ mediaTypePtr: UnsafePointer<AVPValue>,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
-    let mediaType = AVMediaType(rawValue: String(cString: mediaTypePtr))
+    let mediaType = avpMediaType(from: String(bridge: mediaTypePtr))
     Task {
         do {
             let tracks = try await asset.loadTracks(withMediaType: mediaType)
             let payloads = try await encodeTracksAsync(tracks)
-            let json = try avpEncodeJSON(payloads)
-            guard let cstr = ffiString(json) else {
-                "failed to allocate JSON string".withCString { cb(nil, $0, ctx) }
-                return
-            }
-            cb(UnsafeRawPointer(cstr), nil, ctx)
+            let value = try avpEncodeValue(payloads)
+            cb(value, nil, ctx)
         } catch {
-            error.localizedDescription.withCString { cb(nil, $0, ctx) }
+            error.localizedDescription.withBridgeString { cb(nil, $0, ctx) }
         }
     }
 }
@@ -109,37 +98,29 @@ public func avp_asset_load_tracks_with_media_type_async(
 public func avp_asset_load_track_with_id_async(
     _ assetPtr: UnsafeMutableRawPointer,
     _ trackID: Int32,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     Task {
         do {
             guard let track = try await asset.loadTrack(withTrackID: CMPersistentTrackID(trackID)) else {
-                // No track with that ID — return JSON null
-                guard let cstr = ffiString("null") else {
-                    "failed to allocate null payload".withCString { cb(nil, $0, ctx) }
-                    return
-                }
-                cb(UnsafeRawPointer(cstr), nil, ctx)
+                let value = try avpEncodeValue(AVPBinaryValue.null)
+                cb(value, nil, ctx)
                 return
             }
             let payload = try await encodeTrackAsync(track)
-            let json = try avpEncodeJSON(payload)
-            guard let cstr = ffiString(json) else {
-                "failed to allocate JSON string".withCString { cb(nil, $0, ctx) }
-                return
-            }
-            cb(UnsafeRawPointer(cstr), nil, ctx)
+            let value = try avpEncodeValue(payload)
+            cb(value, nil, ctx)
         } catch {
-            error.localizedDescription.withCString { cb(nil, $0, ctx) }
+            error.localizedDescription.withBridgeString { cb(nil, $0, ctx) }
         }
     }
 }
 
 // ── avp_player_item_seek_async ────────────────────────────────────────────────
 
-private typealias AVPAsyncCallback = @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void
+private typealias AVPAsyncCallback = @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void
 
 private func avpFinishedCallback(
     _ cb: AVPAsyncCallback,
@@ -148,7 +129,7 @@ private func avpFinishedCallback(
     let once = AVPOnceFlag()
     return { finished in
         guard once.claim() else { return }
-        cb(UnsafeRawPointer(bitPattern: finished ? 1 : 0), nil, ctx)
+        cb(try? avpEncodeValue(finished), nil, ctx)
     }
 }
 
@@ -171,13 +152,13 @@ public func avp_player_item_seek_async(
     _ value: Int64,
     _ timescale: Int32,
     _ kind: Int32,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let time = cmTime(value: value, timescale: timescale, kind: kind)
     if let message = avpSeekArgumentsError(time: time, before: nil, after: nil) {
-        message.withCString { cb(nil, $0, ctx) }
+        message.withBridgeString { cb(nil, $0, ctx) }
         return
     }
     item.seek(to: time, completionHandler: avpFinishedCallback(cb, ctx))
@@ -195,7 +176,7 @@ public func avp_player_item_seek_with_tolerance_async(
     _ afterValue: Int64,
     _ afterTimescale: Int32,
     _ afterKind: Int32,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
@@ -203,7 +184,7 @@ public func avp_player_item_seek_with_tolerance_async(
     let before = cmTime(value: beforeValue, timescale: beforeTimescale, kind: beforeKind)
     let after = cmTime(value: afterValue, timescale: afterTimescale, kind: afterKind)
     if let message = avpSeekArgumentsError(time: time, before: before, after: after) {
-        message.withCString { cb(nil, $0, ctx) }
+        message.withBridgeString { cb(nil, $0, ctx) }
         return
     }
     item.seek(
@@ -222,13 +203,13 @@ public func avp_player_seek_async(
     _ value: Int64,
     _ timescale: Int32,
     _ kind: Int32,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     let time = cmTime(value: value, timescale: timescale, kind: kind)
     if let message = avpSeekArgumentsError(time: time, before: nil, after: nil) {
-        message.withCString { cb(nil, $0, ctx) }
+        message.withBridgeString { cb(nil, $0, ctx) }
         return
     }
     player.seek(to: time, completionHandler: avpFinishedCallback(cb, ctx))
@@ -246,7 +227,7 @@ public func avp_player_seek_with_tolerance_async(
     _ afterValue: Int64,
     _ afterTimescale: Int32,
     _ afterKind: Int32,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
@@ -254,7 +235,7 @@ public func avp_player_seek_with_tolerance_async(
     let before = cmTime(value: beforeValue, timescale: beforeTimescale, kind: beforeKind)
     let after = cmTime(value: afterValue, timescale: afterTimescale, kind: afterKind)
     if let message = avpSeekArgumentsError(time: time, before: before, after: after) {
-        message.withCString { cb(nil, $0, ctx) }
+        message.withBridgeString { cb(nil, $0, ctx) }
         return
     }
     player.seek(
@@ -271,22 +252,22 @@ public func avp_player_seek_with_tolerance_async(
 public func avp_player_preroll_async(
     _ playerPtr: UnsafeMutableRawPointer,
     _ rate: Float,
-    _ cb: @convention(c) (UnsafeRawPointer?, UnsafePointer<CChar>?, UnsafeMutableRawPointer) -> Void,
+    _ cb: @convention(c) (UnsafeMutablePointer<AVPValue>?, UnsafePointer<AVPValue>?, UnsafeMutableRawPointer) -> Void,
     _ ctx: UnsafeMutableRawPointer
 ) {
     let player = Unmanaged<AVPlayer>.fromOpaque(playerPtr).takeUnretainedValue()
     guard player.status == .readyToPlay else {
-        "preroll requires the player status to be ReadyToPlay".withCString { cb(nil, $0, ctx) }
+        "preroll requires the player status to be ReadyToPlay".withBridgeString { cb(nil, $0, ctx) }
         return
     }
     let once = AVPOnceFlag()
     var reason: NSString?
     let started = AVPTryPreroll(player, rate, { finished in
         guard once.claim() else { return }
-        cb(UnsafeRawPointer(bitPattern: finished ? 1 : 0), nil, ctx)
+        cb(try? avpEncodeValue(finished), nil, ctx)
     }, &reason)
     if !started, once.claim() {
-        ((reason as String?) ?? "prerollAtRate(_:completionHandler:) failed").withCString { cb(nil, $0, ctx) }
+        ((reason as String?) ?? "prerollAtRate(_:completionHandler:) failed").withBridgeString { cb(nil, $0, ctx) }
     }
 }
 
@@ -300,8 +281,8 @@ private func encodeTrackAsync(_ track: AVAssetTrack) async throws -> TrackInfoPa
         trackId: track.trackID,
         mediaType: avpMediaTypeString(track.mediaType),
         naturalSize: encodeSize(naturalSize),
-        nominalFrameRate: String(nominalFrameRate),
-        estimatedDataRate: String(estimatedDataRate)
+        nominalFrameRate: nominalFrameRate,
+        estimatedDataRate: estimatedDataRate
     )
 }
 
@@ -312,4 +293,28 @@ private func encodeTracksAsync(_ tracks: [AVAssetTrack]) async throws -> [TrackI
         payloads.append(try await encodeTrackAsync(track))
     }
     return payloads
+}
+
+extension AsyncAssetPropertiesPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            duration.binaryValue,
+            metadata.binaryValue,
+            isPlayable.binaryValue,
+            isExportable.binaryValue,
+            hasProtectedContent.binaryValue,
+            preferredRate.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            duration: try binaryValue.field(0),
+            metadata: try binaryValue.field(1),
+            isPlayable: try binaryValue.field(2),
+            isExportable: try binaryValue.field(3),
+            hasProtectedContent: try binaryValue.field(4),
+            preferredRate: try binaryValue.field(5)
+        )
+    }
 }

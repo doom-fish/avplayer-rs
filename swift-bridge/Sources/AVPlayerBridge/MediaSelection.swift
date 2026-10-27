@@ -1,7 +1,8 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
-private struct AVPMediaSelectionOptionPayload: Codable {
+private struct AVPMediaSelectionOptionPayload: AVPBridge {
     let mediaType: String
     let mediaSubTypes: [UInt32]
     let playable: Bool
@@ -12,17 +13,15 @@ private struct AVPMediaSelectionOptionPayload: Codable {
     let availableMetadataFormats: [String]
 }
 
-@_cdecl("av_asset_available_media_selection_characteristics_json")
-public func av_asset_available_media_selection_characteristics_json(
+@_cdecl("av_asset_available_media_selection_characteristics_value")
+public func av_asset_available_media_selection_characteristics_value(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     do {
-        return ffiString(
-            try avpEncodeJSON(
-                asset.availableMediaCharacteristicsWithMediaSelectionOptions.map(avpMediaCharacteristicString)
-            )
+        return try avpEncodeValue(
+            asset.availableMediaCharacteristicsWithMediaSelectionOptions.map(avpMediaCharacteristicString)
         )
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
@@ -33,11 +32,11 @@ public func av_asset_available_media_selection_characteristics_json(
 @_cdecl("av_asset_copy_media_selection_group_for_characteristic")
 public func av_asset_copy_media_selection_group_for_characteristic(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ characteristicPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ characteristicPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
-    let characteristic = avpMediaCharacteristic(from: String(cString: characteristicPtr))
+    let characteristic = avpMediaCharacteristic(from: String(bridge: characteristicPtr))
     guard let group = asset.mediaSelectionGroup(forMediaCharacteristic: characteristic) else {
         return nil
     }
@@ -47,7 +46,7 @@ public func av_asset_copy_media_selection_group_for_characteristic(
 @_cdecl("av_asset_copy_preferred_media_selection")
 public func av_asset_copy_preferred_media_selection(
     _ assetPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     return avpRetained(asset.preferredMediaSelection)
@@ -93,7 +92,7 @@ public func av_media_selection_can_apply_automatically(
 @_cdecl("av_media_selection_mutable_copy")
 public func av_media_selection_mutable_copy(
     _ selectionPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     let selection = Unmanaged<AVMediaSelection>.fromOpaque(selectionPtr).takeUnretainedValue()
     guard let copy = selection.mutableCopy() as? AVMutableMediaSelection else {
@@ -151,7 +150,7 @@ public func av_media_selection_group_allows_empty_selection(
 @_cdecl("av_media_selection_group_copy_custom_media_selection_scheme")
 public func av_media_selection_group_copy_custom_media_selection_scheme(
     _ groupPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("custom media selection schemes require macOS 26.0")
@@ -162,11 +161,11 @@ public func av_media_selection_group_copy_custom_media_selection_scheme(
     return avpRetained(scheme)
 }
 
-@_cdecl("av_media_selection_option_info_json")
-public func av_media_selection_option_info_json(
+@_cdecl("av_media_selection_option_info_value")
+public func av_media_selection_option_info_value(
     _ optionPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let option = Unmanaged<AVMediaSelectionOption>.fromOpaque(optionPtr).takeUnretainedValue()
     let payload = AVPMediaSelectionOptionPayload(
         mediaType: avpMediaTypeString(option.mediaType),
@@ -179,7 +178,7 @@ public func av_media_selection_option_info_json(
         availableMetadataFormats: option.availableMetadataFormats
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -189,10 +188,10 @@ public func av_media_selection_option_info_json(
 @_cdecl("av_media_selection_option_has_media_characteristic")
 public func av_media_selection_option_has_media_characteristic(
     _ optionPtr: UnsafeMutableRawPointer,
-    _ characteristicPtr: UnsafePointer<CChar>
+    _ characteristicPtr: UnsafePointer<AVPValue>
 ) -> Bool {
     let option = Unmanaged<AVMediaSelectionOption>.fromOpaque(optionPtr).takeUnretainedValue()
-    return option.hasMediaCharacteristic(avpMediaCharacteristic(from: String(cString: characteristicPtr)))
+    return option.hasMediaCharacteristic(avpMediaCharacteristic(from: String(bridge: characteristicPtr)))
 }
 
 @_cdecl("av_media_selection_option_copy_associated_option")
@@ -209,18 +208,18 @@ public func av_media_selection_option_copy_associated_option(
 @_cdecl("av_media_selection_option_display_name_for_locale_identifier")
 public func av_media_selection_option_display_name_for_locale_identifier(
     _ optionPtr: UnsafeMutableRawPointer,
-    _ localeIdentifierPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ localeIdentifierPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let option = Unmanaged<AVMediaSelectionOption>.fromOpaque(optionPtr).takeUnretainedValue()
-    let locale = Locale(identifier: String(cString: localeIdentifierPtr))
+    let locale = Locale(identifier: String(bridge: localeIdentifierPtr))
     return ffiString(option.displayName(with: locale))
 }
 
 @_cdecl("av_custom_media_selection_scheme_should_offer_language_selection")
 public func av_custom_media_selection_scheme_should_offer_language_selection(
     _ schemePtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Bool {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("custom media selection schemes require macOS 26.0")
@@ -230,18 +229,18 @@ public func av_custom_media_selection_scheme_should_offer_language_selection(
     return scheme.shouldOfferLanguageSelection
 }
 
-@_cdecl("av_custom_media_selection_scheme_available_languages_json")
-public func av_custom_media_selection_scheme_available_languages_json(
+@_cdecl("av_custom_media_selection_scheme_available_languages_value")
+public func av_custom_media_selection_scheme_available_languages_value(
     _ schemePtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("custom media selection schemes require macOS 26.0")
         return nil
     }
     let scheme = Unmanaged<AVCustomMediaSelectionScheme>.fromOpaque(schemePtr).takeUnretainedValue()
     do {
-        return ffiString(try avpEncodeJSON(scheme.availableLanguages))
+        return try avpEncodeValue(scheme.availableLanguages)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
@@ -251,7 +250,7 @@ public func av_custom_media_selection_scheme_available_languages_json(
 @_cdecl("av_custom_media_selection_scheme_selector_count")
 public func av_custom_media_selection_scheme_selector_count(
     _ schemePtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("custom media selection schemes require macOS 26.0")
@@ -265,7 +264,7 @@ public func av_custom_media_selection_scheme_selector_count(
 public func av_custom_media_selection_scheme_copy_selector_at_index(
     _ schemePtr: UnsafeMutableRawPointer,
     _ index: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("custom media selection schemes require macOS 26.0")
@@ -279,8 +278,8 @@ public func av_custom_media_selection_scheme_copy_selector_at_index(
 @_cdecl("av_media_presentation_selector_identifier")
 public func av_media_presentation_selector_identifier(
     _ selectorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("media presentation selectors require macOS 26.0")
         return nil
@@ -292,21 +291,21 @@ public func av_media_presentation_selector_identifier(
 @_cdecl("av_media_presentation_selector_display_name_for_locale_identifier")
 public func av_media_presentation_selector_display_name_for_locale_identifier(
     _ selectorPtr: UnsafeMutableRawPointer,
-    _ localeIdentifierPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ localeIdentifierPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("media presentation selectors require macOS 26.0")
         return nil
     }
     let selector = Unmanaged<AVMediaPresentationSelector>.fromOpaque(selectorPtr).takeUnretainedValue()
-    return ffiString(selector.displayName(forLocaleIdentifier: String(cString: localeIdentifierPtr)))
+    return ffiString(selector.displayName(forLocaleIdentifier: String(bridge: localeIdentifierPtr)))
 }
 
 @_cdecl("av_media_presentation_selector_setting_count")
 public func av_media_presentation_selector_setting_count(
     _ selectorPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> Int32 {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("media presentation selectors require macOS 26.0")
@@ -320,7 +319,7 @@ public func av_media_presentation_selector_setting_count(
 public func av_media_presentation_selector_copy_setting_at_index(
     _ selectorPtr: UnsafeMutableRawPointer,
     _ index: Int32,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("media presentation selectors require macOS 26.0")
@@ -334,8 +333,8 @@ public func av_media_presentation_selector_copy_setting_at_index(
 @_cdecl("av_media_presentation_setting_media_characteristic")
 public func av_media_presentation_setting_media_characteristic(
     _ settingPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("media presentation settings require macOS 26.0")
         return nil
@@ -347,13 +346,41 @@ public func av_media_presentation_setting_media_characteristic(
 @_cdecl("av_media_presentation_setting_display_name_for_locale_identifier")
 public func av_media_presentation_setting_display_name_for_locale_identifier(
     _ settingPtr: UnsafeMutableRawPointer,
-    _ localeIdentifierPtr: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ localeIdentifierPtr: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     guard #available(macOS 26.0, *) else {
         outErrorMessage?.pointee = ffiString("media presentation settings require macOS 26.0")
         return nil
     }
     let setting = Unmanaged<AVMediaPresentationSetting>.fromOpaque(settingPtr).takeUnretainedValue()
-    return ffiString(setting.displayName(forLocaleIdentifier: String(cString: localeIdentifierPtr)))
+    return ffiString(setting.displayName(forLocaleIdentifier: String(bridge: localeIdentifierPtr)))
+}
+
+extension AVPMediaSelectionOptionPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            mediaType.binaryValue,
+            mediaSubTypes.binaryValue,
+            playable.binaryValue,
+            extendedLanguageTag.binaryValue,
+            localeIdentifier.binaryValue,
+            displayName.binaryValue,
+            commonMetadata.binaryValue,
+            availableMetadataFormats.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            mediaType: try binaryValue.field(0),
+            mediaSubTypes: try binaryValue.field(1),
+            playable: try binaryValue.field(2),
+            extendedLanguageTag: try binaryValue.field(3),
+            localeIdentifier: try binaryValue.field(4),
+            displayName: try binaryValue.field(5),
+            commonMetadata: try binaryValue.field(6),
+            availableMetadataFormats: try binaryValue.field(7)
+        )
+    }
 }

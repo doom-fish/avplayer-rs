@@ -1,20 +1,21 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
 @_cdecl("av_player_media_selection_criteria_create")
 public func av_player_media_selection_criteria_create(
-    _ preferredLanguagesJson: UnsafePointer<CChar>?,
-    _ preferredMediaCharacteristicsJson: UnsafePointer<CChar>?,
-    _ principalMediaCharacteristicsJson: UnsafePointer<CChar>?,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ preferredLanguagesValue: UnsafePointer<AVPValue>?,
+    _ preferredMediaCharacteristicsValue: UnsafePointer<AVPValue>?,
+    _ principalMediaCharacteristicsValue: UnsafePointer<AVPValue>?,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
     do {
-        let preferredLanguages = try preferredLanguagesJson.map { try avpDecodeJSON($0, as: [String].self) }
-        let preferredMediaCharacteristics = try preferredMediaCharacteristicsJson.map {
-            try avpDecodeJSON($0, as: [String].self).map(avpMediaCharacteristic(from:))
+        let preferredLanguages = try preferredLanguagesValue.map { try avpDecodeValue($0, as: [String].self) }
+        let preferredMediaCharacteristics = try preferredMediaCharacteristicsValue.map {
+            try avpDecodeValue($0, as: [String].self).map(avpMediaCharacteristic(from:))
         }
-        let principalMediaCharacteristics = try principalMediaCharacteristicsJson.map {
-            try avpDecodeJSON($0, as: [String].self).map(avpMediaCharacteristic(from:))
+        let principalMediaCharacteristics = try principalMediaCharacteristicsValue.map {
+            try avpDecodeValue($0, as: [String].self).map(avpMediaCharacteristic(from:))
         }
         let criteria = if let principalMediaCharacteristics {
             AVPlayerMediaSelectionCriteria(
@@ -41,11 +42,11 @@ public func av_player_media_selection_criteria_release(_ criteriaPtr: UnsafeMuta
     Unmanaged<AVPlayerMediaSelectionCriteria>.fromOpaque(criteriaPtr).release()
 }
 
-@_cdecl("av_player_media_selection_criteria_info_json")
-public func av_player_media_selection_criteria_info_json(
+@_cdecl("av_player_media_selection_criteria_info_value")
+public func av_player_media_selection_criteria_info_value(
     _ criteriaPtr: UnsafeMutableRawPointer,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
+) -> UnsafeMutablePointer<AVPValue>? {
     let criteria = Unmanaged<AVPlayerMediaSelectionCriteria>.fromOpaque(criteriaPtr).takeUnretainedValue()
     let payload = MediaSelectionCriteriaPayload(
         preferredLanguages: criteria.preferredLanguages,
@@ -53,7 +54,7 @@ public func av_player_media_selection_criteria_info_json(
         principalMediaCharacteristics: criteria.principalMediaCharacteristics?.map(avpMediaCharacteristicString)
     )
     do {
-        return ffiString(try avpEncodeJSON(payload))
+        return try avpEncodeValue(payload)
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil

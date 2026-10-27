@@ -1,14 +1,15 @@
+import AVPlayerABI
 import AVFoundation
 import Foundation
 
 @_cdecl("av_url_asset_create")
 public func av_url_asset_create(
-    _ urlPtr: UnsafePointer<CChar>,
+    _ urlPtr: UnsafePointer<AVPValue>,
     _ isFileURL: Bool,
     _ preferPreciseDuration: Bool,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
-    let urlString = String(cString: urlPtr)
+    let urlString = String(bridge: urlPtr)
     let url = isFileURL ? URL(fileURLWithPath: urlString) : URL(string: urlString)
     guard let url else {
         outErrorMessage?.pointee = ffiString("invalid URL: \(urlString)")
@@ -22,7 +23,7 @@ public func av_url_asset_create(
     return Unmanaged.passRetained(asset).toOpaque()
 }
 
-private struct UrlAssetHTTPCookiePayload: Codable {
+private struct UrlAssetHTTPCookiePayload: AVPBridge {
     let name: String
     let value: String
     let domain: String
@@ -30,7 +31,7 @@ private struct UrlAssetHTTPCookiePayload: Codable {
     let secure: Bool?
 }
 
-private struct UrlAssetOptionsPayload: Codable {
+private struct UrlAssetOptionsPayload: AVPBridge {
     let preferPreciseDurationAndTiming: Bool?
     let overrideMimeType: String?
     let referenceRestrictions: UInt?
@@ -118,24 +119,82 @@ private func avpURLAssetOptions(from payload: UrlAssetOptionsPayload) throws -> 
     return options
 }
 
-@_cdecl("av_url_asset_create_with_options_json")
-public func av_url_asset_create_with_options_json(
-    _ urlPtr: UnsafePointer<CChar>,
+@_cdecl("av_url_asset_create_with_options_value")
+public func av_url_asset_create_with_options_value(
+    _ urlPtr: UnsafePointer<AVPValue>,
     _ isFileURL: Bool,
-    _ optionsJson: UnsafePointer<CChar>,
-    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ optionsValue: UnsafePointer<AVPValue>,
+    _ outErrorMessage: UnsafeMutablePointer<UnsafeMutablePointer<AVPValue>?>?
 ) -> UnsafeMutableRawPointer? {
-    let urlString = String(cString: urlPtr)
+    let urlString = String(bridge: urlPtr)
     let url = isFileURL ? URL(fileURLWithPath: urlString) : URL(string: urlString)
     guard let url else {
         outErrorMessage?.pointee = ffiString("invalid URL: \(urlString)")
         return nil
     }
     do {
-        let options = try avpURLAssetOptions(from: avpDecodeJSON(optionsJson, as: UrlAssetOptionsPayload.self))
+        let options = try avpURLAssetOptions(from: avpDecodeValue(optionsValue, as: UrlAssetOptionsPayload.self))
         return Unmanaged.passRetained(AVURLAsset(url: url, options: options)).toOpaque()
     } catch {
         outErrorMessage?.pointee = ffiString(error.localizedDescription)
         return nil
+    }
+}
+
+extension UrlAssetHTTPCookiePayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            name.binaryValue,
+            value.binaryValue,
+            domain.binaryValue,
+            path.binaryValue,
+            secure.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            name: try binaryValue.field(0),
+            value: try binaryValue.field(1),
+            domain: try binaryValue.field(2),
+            path: try binaryValue.field(3),
+            secure: try binaryValue.field(4)
+        )
+    }
+}
+
+extension UrlAssetOptionsPayload {
+    var binaryValue: AVPBinaryValue {
+        .array([
+            preferPreciseDurationAndTiming.binaryValue,
+            overrideMimeType.binaryValue,
+            referenceRestrictions.binaryValue,
+            httpCookies.binaryValue,
+            allowsCellularAccess.binaryValue,
+            allowsExpensiveNetworkAccess.binaryValue,
+            allowsConstrainedNetworkAccess.binaryValue,
+            shouldSupportAliasDataReferences.binaryValue,
+            urlRequestAttribution.binaryValue,
+            httpUserAgent.binaryValue,
+            primarySessionIdentifier.binaryValue,
+            shouldParseExternalSphericalTags.binaryValue,
+        ])
+    }
+
+    init(binaryValue: AVPBinaryValue) throws {
+        self.init(
+            preferPreciseDurationAndTiming: try binaryValue.field(0),
+            overrideMimeType: try binaryValue.field(1),
+            referenceRestrictions: try binaryValue.field(2),
+            httpCookies: try binaryValue.field(3),
+            allowsCellularAccess: try binaryValue.field(4),
+            allowsExpensiveNetworkAccess: try binaryValue.field(5),
+            allowsConstrainedNetworkAccess: try binaryValue.field(6),
+            shouldSupportAliasDataReferences: try binaryValue.field(7),
+            urlRequestAttribution: try binaryValue.field(8),
+            httpUserAgent: try binaryValue.field(9),
+            primarySessionIdentifier: try binaryValue.field(10),
+            shouldParseExternalSphericalTags: try binaryValue.field(11)
+        )
     }
 }

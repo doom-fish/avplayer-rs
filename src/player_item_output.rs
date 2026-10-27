@@ -1,13 +1,14 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate)]
 
-use core::ffi::{c_char, c_void};
+use crate::ffi::AVPValue;
+use core::ffi::c_void;
 use core::marker::PhantomData;
 use core::ptr;
 
 use crate::error::{from_swift, AVPlayerError};
 use crate::ffi;
 use crate::time::Time;
-use crate::util::parse_json_and_free;
+use crate::util::parse_value_and_free;
 
 /// Borrowed view of the abstract `AVPlayerItemOutput` base class.
 #[derive(Debug, Clone, Copy)]
@@ -41,18 +42,18 @@ impl PlayerItemOutput<'_> {
 
     /// Calls the `AVPlayer` framework counterpart for `item_time_for_host_time`.
     pub fn item_time_for_host_time(&self, host_time_seconds: f64) -> Result<Time, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_player_item_output_item_time_for_host_time_json(
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_player_item_output_item_time_for_host_time_value(
                 self.ptr,
                 host_time_seconds,
                 &raw mut err,
             )
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 
     /// Calls the `AVPlayer` framework counterpart for `item_time_for_mach_absolute_time`.
@@ -60,17 +61,17 @@ impl PlayerItemOutput<'_> {
         &self,
         mach_absolute_time: i64,
     ) -> Result<Time, AVPlayerError> {
-        let mut err: *mut c_char = ptr::null_mut();
-        let json_ptr = unsafe {
-            ffi::av_player_item_output_item_time_for_mach_absolute_time_json(
+        let mut err: *mut AVPValue = ptr::null_mut();
+        let value_ptr = unsafe {
+            ffi::av_player_item_output_item_time_for_mach_absolute_time_value(
                 self.ptr,
                 mach_absolute_time,
                 &raw mut err,
             )
         };
-        if json_ptr.is_null() {
+        if value_ptr.is_null() {
             return Err(unsafe { from_swift(ffi::status::OPERATION_FAILED, err) });
         }
-        parse_json_and_free(json_ptr)
+        parse_value_and_free(value_ptr)
     }
 }
