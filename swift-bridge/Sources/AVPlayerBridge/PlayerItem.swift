@@ -572,7 +572,17 @@ public func av_player_item_set_video_composition_from_asset(
     let item = Unmanaged<AVPlayerItem>.fromOpaque(itemPtr).takeUnretainedValue()
     let asset = Unmanaged<AVAsset>.fromOpaque(assetPtr).takeUnretainedValue()
     let result = avpAwait(label: "AVVideoComposition from asset properties") {
-        try await AVVideoComposition.videoComposition(withPropertiesOf: asset)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AVVideoComposition, Error>) in
+            AVVideoComposition.videoComposition(withPropertiesOf: asset) { composition, error in
+                if let composition {
+                    continuation.resume(returning: composition)
+                } else {
+                    continuation.resume(
+                        throwing: error ?? BridgeError.message("AVFoundation returned neither a result nor an error")
+                    )
+                }
+            }
+        }
     }
     switch result {
     case .success(let composition):

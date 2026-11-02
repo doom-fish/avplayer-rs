@@ -234,7 +234,20 @@ public func av_asset_image_generator_copy_image_at_time(
         return nil
     }
 
-    switch avpAwait(label: "AVAssetImageGenerator image", work: { try await generator.image(at: requestedTime) }) {
+    let generated = avpAwait(label: "AVAssetImageGenerator image") {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(image: CGImage, actualTime: CMTime), Error>) in
+            generator.generateCGImageAsynchronously(for: requestedTime) { image, actualTime, error in
+                if let image {
+                    continuation.resume(returning: (image, actualTime))
+                } else {
+                    continuation.resume(
+                        throwing: error ?? BridgeError.message("AVFoundation returned neither a result nor an error")
+                    )
+                }
+            }
+        }
+    }
+    switch generated {
     case .success(let result):
         writeTime(result.actualTime, value: outActualValue, timescale: outActualTimescale, kind: outActualKind)
         return Unmanaged.passRetained(AVPAssetImageBox(image: result.image)).toOpaque()

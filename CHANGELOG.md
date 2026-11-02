@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `AssetImageGenerator::copy_image_at_time` and `PlayerItem::set_video_composition_from_asset` return an error when AVFoundation gives no result and no error. Before this change, the process stopped with a trap. The Swift bridge now calls the completion-handler forms of these AVFoundation methods.
+
 ## [0.10.0] - 2026-10-27
 
 ### Changed
